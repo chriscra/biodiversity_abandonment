@@ -1,0 +1,2312 @@
+---
+title: "PREDICTS"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+```{r start}
+source("scripts/0_start.R")
+library(predictsFunctions) # Tim Newbold's R package for accessing and working with PREDICTS data.
+library(StatisticalModels) # Tim Newbold's R package for calculating statistical models from PREDICTS data.
+# note, there is a strange error somewhere in these packages, that causes the error:
+# In addition: Warning message:
+# Unknown or uninitialised column: `geometry`. 
+
+
+env_size(ls())
+```
+
+```{r load-data}
+predicts <- readRDS(paste0(p_dat, "Bd/PREDICTS/database.rds")) # PREDICTS itself
+
+# predicts_dt <- fread(paste0(p_dat, "Bd/PREDICTS/database.csv")) # PREDICTS as a data.table
+sites <- readRDS(paste0(p_dat, "Bd/PREDICTS/sites.rds")) # Site-level summaries
+columns <- read.csv(paste0(p_dat, "Bd/PREDICTS/columns.csv")) # meta-data on variables, column names, etc.
+references <- read.csv(paste0(p_dat, "Bd/PREDICTS/references.csv")) # references
+
+# how many records are there?
+nrow(predicts) # 3.25 M rows
+names(predicts)
+# note, about sites, studies, etc.:
+predicts$Source_ID # is the unique id for the original source (e.g. publication, etc.)
+# > Studies (separated by different taxa, methods, geographic areas) within a particular Source
+# >> Sites & Taxa (within a particular Study)
+# >>> Measurements (abundance or occurrence, for a specific taxon, at a specific site)
+
+predicts$Study_number
+predicts$Site_number
+predicts$Block 
+
+predicts$SS # Concatenation of Source_ID and Study_number.
+predicts$SSS # Concatenation of Source_ID, Study_number and Site_number.
+predicts$SSB # Concatenation of Source_ID, Study_number and Block.
+predicts$SSBS # Concatenation of Source_ID, Study_number, Block and Site_number.
+# (1|SS)+(1|SSB)+(1|SSBS)
+
+
+# how many records have time data associated with them?
+predicts %>% filter(!is.na(Years_since_fragmentation_or_conversion)) %>% nrow()
+
+# summarize that subset, for a select number of variables
+predicts %>%
+  filter(!is.na(Years_since_fragmentation_or_conversion)) %>%
+  select(Diversity_metric, Sampling_method, Sampling_effort,
+         Sample_start_earliest, Sample_end_latest, 
+         Habitat_patch_area_square_metres,
+         Predominant_land_use, Habitat_as_described, Use_intensity,
+         Years_since_fragmentation_or_conversion,
+         Km_to_nearest_edge_of_habitat, Country, Ecoregion, Biome, 
+         Kingdom, Phylum
+         ) %>% 
+  summary()
+
+class(predicts)
+str(sites)
+
+str(predicts)
+length(predicts) # 67 variables
+names(predicts) # variable names
+
+
+as_tibble(predicts)
+head(predicts)
+
+sites
+head(sites)
+names(sites)
+```
+
+```{r explore-predicts}
+head(predicts)
+predicts %>%
+  filter(Country == "Brazil")
+
+class(predicts)
+names(predicts)
+
+# data.table
+predicts_dt[,"Country"]
+levels(as.factor(predicts_dt[,"Country"]))
+summary(predicts_dt$Country)
+
+# exploring the variables:
+names(predicts)
+levels(predicts$Diversity_metric)
+levels(drop.levels(predicts$Country))
+levels(predicts$Biome)
+levels(predicts$Predominant_land_use)
+levels(drop.levels(as.factor(predicts$Years_since_fragmentation_or_conversion)))
+table(predicts$Years_since_fragmentation_or_conversion)
+
+
+# --------------------------------------------------------------- #
+# secondary vegetation, subset
+# --------------------------------------------------------------- #
+levels(predicts$Predominant_land_use)
+summary(predicts$Years_since_fragmentation_or_conversion)
+nrow(predicts) - 2636413 # 613,991 records with information on the years since fragmentation
+predicts %>% filter(!is.na(Years_since_fragmentation_or_conversion)) %>% nrow() # how many records have time data associated with them?
+
+# --------------------------------------------------------------- #
+
+predicts_2nd <- predicts %>% filter(Predominant_land_use %in% c("Primary vegetation", "Young secondary vegetation", "Intermediate secondary vegetation", "Mature secondary vegetation", "Secondary vegetation (indeterminate age)"))
+levels(drop.levels(predicts_2nd$Predominant_land_use))
+hist(predicts_2nd$Years_since_fragmentation_or_conversion, xlim = c(0,150), breaks = 100, main = "Years since fragmentation or conversion", xlab = "Years since fragmentation or conversion")
+
+
+dev.off()
+par(oma = c(10, 2,0,0))
+plot(predicts$Predominant_land_use, las = 2, main = "Predominant land use")#, xlim = c(0,150), breaks = 100, main = "Years since fragmentation or conversion", xlab = "Years since fragmentation or conversion")
+
+
+levels(predicts$UN_subregion)
+levels(predicts$Site_name) # not useful
+levels(drop.levels(predicts$Ecoregion)) # there are 814 levels, for all 814 ecoregions, but according to the article (Hudson et al. 2017), only 281 have data.
+
+levels(drop.levels(predicts$Hotspot))
+levels(predicts$Realm)
+levels(predicts$Class)
+levels(drop.levels(predicts$Class))
+levels(drop.levels(predicts$Higher_taxon))
+levels(drop.levels(predicts$Class))
+levels(drop.levels(predicts$Order))
+levels(drop.levels(predicts$Phylum))
+levels(drop.levels(predicts$Kingdom))
+
+
+summary(predicts$Habitat_patch_area_square_metres)
+levels(drop.levels(predicts$Study_common_taxon))
+
+summary(predicts$Best_guess_binomial)
+
+predicts %>%
+  filter(Ecoregion == "Zambezian Halophytics") %>% # example of an ecoregion with no data associated with it. 
+  as_tibble()
+
+
+levels(predicts$Best_guess_binomial)
+
+predicts[, 64]
+names(predicts)
+
+predicts %>% 
+  filter(Class == "Insecta") %>%
+  .$Best_guess_binomial %>%
+  drop.levels() %>%
+  levels()
+# this means, 3164 species of birds included in the database.
+
+predicts %>% 
+  filter(Class == "Mammalia" #, Country == "Brazil"
+         ) %>%
+  .$Best_guess_binomial %>%
+  drop.levels() %>%
+  levels()
+
+names(predicts)
+levels(drop.levels(predicts$Class))
+"Magnoliopsida" #8285
+
+predicts %>% filter(Kingdom == "Plantae") %>% .$Higher_taxon %>% drop.levels() %>% levels()
+
+log10(8285)
+log10(562)
+
+log10(3164)
+
+predicts %>% select(Diversity_metric_type, Diversity_metric_unit, Measurement, Parsed_name, Taxon_name_entered, Best_guess_binomial, Higher_taxon) %>% head()
+
+levels(predicts$Study_name)
+
+10^3.5
+log10(3162)
+nrow(predicts)
+predicts[1,]
+
+
+names(predicts)
+select(predicts, c(6:8, 11, 13:14, 67)) %>% head()
+
+
+
+include_columns <- c(
+  "Country",
+  "Class",
+  "Ecoregion",
+  "Diversity_metric", 
+  "Measurement", 
+  "Effort_corrected_measurement",
+  "Predominant_land_use",
+  "Years_since_fragmentation_or_conversion",
+  "Use_intensity",
+  "Taxon_name_entered", 
+  "Higher_taxon",
+  "Genus",
+  "Biome"
+
+  )
+predicts %>%
+  select(include_columns) %>% 
+  head()
+
+predicts %>%
+  filter(!is.na(Years_since_fragmentation_or_conversion)) %>%
+  nrow() # 613991 records 
+
+nrow(predicts$Years_since_fragmentation_or_conversion[!is.na(predicts$Years_since_fragmentation_or_conversion)])
+
+
+# --------------------------------------------------------------- #
+# sites
+# --------------------------------------------------------------- #
+names(sites)
+names(predicts)
+levels(drop.levels(sites$Study_number))
+head(sites$N_samples)
+head(sites)
+
+sites
+nrow(predicts) #3,250,404
+
+nrow(sites) #26,114 (125x fewer than PREDICTS)
+
+str(sites)
+names(sites)
+levels()
+```
+
+```{r load-ecoregions}
+ecoregions_wwf <- st_read(paste0(p_dat, "Habitats/TEOW/wwf_terr_ecos.shp"))
+
+# use this version to match to PREDICTS
+tic()
+ecoregions <- st_read(paste0(p_dat, "Habitats/terr-ecoregions-TNC/tnc_terr_ecoregions.shp")) %>%
+  st_make_valid()
+toc() # 20 seconds about. (making the geometries valid is quick!)
+
+
+
+
+# old old old
+
+length(ecoregions)
+ecoregions %>% st_drop_geometry() %>%
+  select(WWF_MHTNAM) %>% # unlist(use.names = FALSE) %>% as_factor() %>% levels()
+  unique()
+
+
+names(ecoregions)
+names(ecoregions_wwf)
+levels(as.factor(ecoregions_wwf$ECO_NAME)) # 827 ecoregions. (this is the WWF file)
+length(as.factor(ecoregions$ECO_NAME)) # 814 ecoregions. (this is the TNC file)
+levels(as.factor(ecoregions$WWF_MHTNAM)) # 16 biomes, but without "rock and ice" and "inland water," it's 14 like Hudson et al. 2014 states.
+# MHT stands for Major Habitat Types
+
+mapView(ecoregions)
+mapView(biomes)
+plot(ecoregions["WWF_MHTNAM"])
+
+
+levels(as.factor(ecoregions$BIOME)) # 14 levels of regions. 
+
+object_size(ecoregions)
+
+
+# g200-ecoregions
+g200 <- st_read(paste0(p_dat, "Habitats/global200ecoregions/g200_terr.shp"))
+g200 <- st_make_valid(g200)
+
+
+# exploring the datasets, g200
+ecoregions$ECO_NAME
+g200$G200_REGIO
+
+match(g200$G200_REGIO, ecoregions$ECO_NAME)
+match("Alaskan North Slope Coastal Tundra", levels(drop.levels(ecoregions$ECO_NAME)))
+
+g200
+names(g200)
+object_size(g200)
+levels(as.factor(g200$G200_BIOME)) # 14 levels of regions.
+```
+
+```{r deserts}
+ecoregions %>% 
+  filter(WWF_MHTNAM == "Deserts and Xeric Shrublands") %>% st_geometry() %>%
+  plot()
+
+plot(world$geometry, add = TRUE, border = "light blue")
+
+
+ecoregions %>% 
+  filter(WWF_MHTNAM == "Deserts and Xeric Shrublands") %>%
+  st_drop_geometry() %>%
+  select(ECODE_NAME)
+
+
+ecoregions %>% 
+  st_drop_geometry() %>%
+  filter(WWF_MHTNAM == "Deserts and Xeric Shrublands",
+         WWF_REALM2 == "Nearctic") %>%
+  select(ECO_NAME, WWF_REALM2, WWF_MHTNAM)
+
+ecoregions %>%
+  filter(WWF_MHTNAM == "Deserts and Xeric Shrublands",
+         WWF_REALM2 == "Nearctic") %>% 
+  st_geometry() %>%
+  plot()
+
+i <- 5
+
+for(i in seq_along(desert_regions)) {
+  
+  # plotting:
+  gg_deserts <- ggplot(data = filter(ecoregions, 
+                          WWF_MHTNAM == "Deserts and Xeric Shrublands",
+                          WWF_REALM2 == desert_regions[i])) + 
+    # coord_sf(CRS = st_crs("+proj=eck4")) + 
+    geom_sf(mapping = aes(fill = ECO_NAME)) + 
+    # geom_sf_label(data = filter(ecoregions, 
+    #                       WWF_MHTNAM == "Deserts and Xeric Shrublands",
+    #                       WWF_REALM2 == "Nearctic"), aes(label = ECO_NAME)) + 
+    geom_label_repel(aes(label = ECO_NAME, geometry = geometry),
+                     stat = "sf_coordinates",
+                     min.segment.length = 0, segment.alpha = 1,
+                     point.padding = 0.2, box.padding = 0.2,
+                     label.size = 0.1, color = "black", direction = "both",
+                     force = 1, alpha = 0.7) +
+      theme_classic() +
+    labs(title = paste0(desert_regions[i], " Deserts & Xeric Shrublands")) +
+    theme(legend.position = "right", legend.text = element_text(size = 7)) + 
+    guides(fill = guide_legend(ncol = 1))
+    #   theme(legend.position = "bottom", legend.text = element_text(size = 7)) +  # for i = 5
+    # guides(fill = guide_legend(ncol = 5))
+  
+  png(filename = paste0("/Users/christophercrawford/Desktop/", desert_regions[i], "_deserts.png"), 
+      # width = 15, height = 8,  # for i = 5
+      width = 10, height = 10, 
+      units = "in", res = 400)
+  print(gg_deserts)
+  dev.off()
+}
+
+# levels:
+desert_regions <- ecoregions %>%
+  st_drop_geometry() %>%
+  filter(WWF_MHTNAM == "Deserts and Xeric Shrublands") %>%
+  select(WWF_REALM2) %>% unique() %>% unlist(use.names = FALSE)
+
+
+```
+
+
+```{r biomes}
+
+# use this version to match to PREDICTS
+tic()
+ecoregions <- st_read(paste0(p_dat, "Habitats/terr-ecoregions-TNC/tnc_terr_ecoregions.shp")) %>%
+  st_make_valid()
+toc() # 20 seconds about. (making the geometries valid is quick!)
+
+
+# rename the column for WWF_MHTNAM to biome (this matches PREDICTS)
+ecoregions <- ecoregions %>% mutate(biome = WWF_MHTNAM)
+ecoregions %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
+
+# union ecoregions within each biome
+biome_names <- ecoregions %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
+biome_l <- vector(mode = "list", length = 16L)
+names(biome_l) <- biome_names
+
+tic()
+for(i in 1:16) {
+  biome_l[[i]] <- ecoregions %>% 
+    filter(biome == biome_names[i]) %>%
+    st_union() %>%
+    st_sf() %>%
+    mutate(biome = biome_names[i])
+}
+toc() # took a bit of a while - maybe 60 seconds.
+
+biomes <- bind_rows(biome_l)
+
+biomes %>% st_geometry() %>% plot(main = biome_names[2]) # this takes a very long time
+
+# I tried aggregate, st_union, st_combine, merge, etc., and I couldn't find a simple way to dissolve an sf object based on an attribute, other than doing them all individually, then binding them back together. 
+
+
+# save biomes sf file
+st_write(biomes, dsn = paste0(p_dat, "Habitats/biomes.shp"))
+save(biomes, file = paste0(p_dat, "Habitats/biomes.rds"))
+
+biomes <- st_read(paste0(p_dat, "Habitats/biomes.shp"))
+```
+
+
+```{r basemaps}
+library(rnaturalearth)
+world <- ne_countries(scale = "medium", returnclass = "sf") # can set returnclass to sf or sp.
+st_crs(world)
+
+russia <- world %>% filter(name == "Russia")
+nepal <- world %>% filter(name == "Nepal")
+boz <- world %>% filter(name == "Bosnia and Herz.")
+boz1 <- world %>% filter(grepl("Bosnia", name))
+
+usa <- world %>% filter(grepl("United States", name))
+china <- world %>% filter(name == "China")
+russia <- world %>% filter(name == "Russia")
+russia <- world %>% filter(name == "Russia")
+russia <- world %>% filter(name == "Russia")
+
+plot(nepal$geometry)
+
+china %>% st_geometry() %T>% plot()
+plot(nepal$geometry)
+
+plot(world$geometry[world$name == "Brazil"])
+
+usa <- ne_countries(scale = "large", country = "United States of America", returnclass = "sf") # can set returnclass to sf or sp.
+usa %>% st_geometry() %T>% plot()
+
+world <- ne_countries(scale = "medium", returnclass = "sf", type = "mapunits") # can set returnclass to sf or sp.
+
+
+
+
+# --------------------------------------------------------------- #
+# specific regions of the sites of interest
+# --------------------------------------------------------------- #
+china <- ne_states(country = "China", returnclass = "sf")
+nepal <- ne_states(country = "Nepal", returnclass = "sf")
+russia <- ne_states(country = "Russia", returnclass = "sf")
+bh <- ne_states(country = "Bosnia and Herzegovina", returnclass = "sf")
+usa <- ne_states(country = "United States of America", returnclass = "sf")
+brazil <- ne_states(country = "Brazil", returnclass = "sf")
+italy <- ne_states(country = "Italy", returnclass = "sf")
+iraq <- ne_states(country = "Iraq", returnclass = "sf")
+uganda <- ne_states(country = "Uganda", returnclass = "sf")
+belarus <- ne_states(country = "Belarus", returnclass = "sf")
+
+italy %>% st_geometry() %T>% plot()
+italy
+italy["399", ]
+
+italy[1, ]
+
+china[china$name == "Shaanxi", ] %>% st_geometry() %T>% plot()
+china %>% filter(name == "Shanxi") %>% st_geometry() %T>% plot()
+china %>% filter(name %in% c("Shaanxi", "Shanxi", "Inner Mongol")) %>% st_geometry() %T>% plot()
+china %>% select(name) %>% st_drop_geometry()
+russia %>% select(name) %>% st_drop_geometry()
+russia %>% filter(name == "Smolensk") %>% st_geometry() %>% plot()
+
+
+# --------------------------------------------------------------- #
+# Yin et al. 2020 sites
+# --------------------------------------------------------------- #
+s_box <- extent(s$y2017)
+b_box <- extent(b$y2017)
+plot(s_box, add = T)
+st_crs(s_box)
+st_as_sf(s_box)
+st_intersection(china, s_box) %>% st_geometry() %>% plot()
+
+belarus %>% select(name) %>% plot()
+
+belarus %>% filter(name %in% c("Mogilev", "Vitebsk", "Minsk")) %>% st_geometry() %>% plot()
+plot(b_box, add = T)
+plot(russia$geometry, add = TRUE)
+
+
+shaanxi <- china %>% filter(name %in% c("Shaanxi", "Shanxi", "Inner Mongol"))
+cq <- china %>% filter(name == "Chongqing")
+nebraska <- usa %>% filter(name == "Nebraska")
+wisconsin <- usa %>% filter(name == "Wisconsin")
+mn <- usa %>% filter(name == "Minnesota")
+
+orenburg <- russia %>% filter(name == "Orenburg")
+volgograd <- russia %>% filter(name == "Volgograd")
+smolensk <- russia %>% filter(name == "Smolensk")
+
+nepal
+iraq
+uganda
+belarus <- rbind(
+  filter(belarus, name %in% c("Mogilev", "Vitebsk", "Minsk")),
+  filter(russia, name == "Smolensk")
+)
+belarus %>% st_geometry() %>% plot()
+
+
+bh
+sardinia <- italy %>% filter(name_alt == "Cerdeña|Sardenha")
+goias <- brazil %>% filter(name == "Goiás")
+mg <- brazil %>% filter(name == "Mato Grosso")
+
+he_sites <- list(shaanxi, cq, nebraska, wisconsin, orenburg, volgograd, nepal, iraq, uganda, belarus, bh, sardinia, goias, mg)
+deparse(quote(shaanxi))
+he_sites_names <- c(
+  "shaanxi", 
+  "cq", 
+  "nebraska", 
+  "wisconsin", 
+  "orenburg", 
+  "volgograd", 
+  "nepal", 
+  "iraq", 
+  "uganda", 
+  "belarus", 
+  "bh", 
+  "sardinia", 
+  "goias", 
+  "mg")
+
+brazil$name
+plot(shaanxi$geometry)
+```
+
+
+
+```{r intersections}
+# identify the ecoregions of the sites of interest. 
+st_crs(ecoregions)
+he_sites[2]
+
+test_ <- st_intersection(ecoregions, st_union(he_sites[[1]]))
+
+plot(test_$geometry)
+names(he_sites) <- he_sites_names
+
+he_sites_ecoreg_old
+he_sites_ecoreg <- lapply(1:length(he_sites), 
+                          FUN = function(i) {
+                            st_intersection(ecoregions, 
+                                            st_union(he_sites[[i]])
+                                            )
+                            }
+                          )
+
+length(he_sites_ecoreg)
+length(he_sites_names)
+names(he_sites_ecoreg) <- he_sites_names
+
+plot(he_sites_ecoreg_old$shaanxi["ECO_NAME"])
+plot(he_sites_ecoreg$shaanxi["ECO_NAME"])
+
+
+plot(he_sites_ecoreg$shaanxi$geometry)
+
+he_sites_ecoreg$shaanxi$ECO_NAME
+
+he_sites_ecoreg_names_old
+he_sites_ecoreg_names <- c()
+for (i in 1:length(he_sites_ecoreg)) {
+  he_sites_ecoreg_names <- c(he_sites_ecoreg_names, as.character(he_sites_ecoreg[[i]]$ECO_NAME))
+}
+
+he_sites_ecoreg
+he_sites_names[1]
+
+for (i in 1:length(he_sites_ecoreg)) {
+  he_sites_ecoreg[[i]]$site <- he_sites_names[i]
+}
+
+he_sites_ecoreg_sf <- do.call("rbind", he_sites_ecoreg)
+he_sites_ecoreg_sf %>% st_drop_geometry() %>% select(site, ECO_NAME)
+
+names(he_sites_ecoreg_sf)
+plot(he_sites_ecoreg_sf$geometry)
+
+
+nrow(he_sites_ecoreg$shaanxi)
+
+length(he_sites_ecoreg_names)
+levels(as.factor(he_sites_ecoreg_names))
+
+
+
+# ----------------------------
+# intersection of He's sites (political units) with the G200 ecoregions
+he_sites_g200 <- lapply(1:length(he_sites), 
+                          FUN = function(i) {
+                            st_intersection(g200, 
+                                            st_union(he_sites[[i]])
+                                            )
+                            }
+                          )
+
+names(he_sites_g200) <- he_sites_names
+
+plot(he_sites_g200$shaanxi$geometry)
+plot(he_sites_g200$iraq["G200_REGIO"])
+g200$G200_REGIO
+
+
+# combine all of the list elements into a single sf file.
+# first, remove the empty list elements, i.e. sites without a single G200 ecoregion (Wisconsin, Orenburg, Volgograd, and Belarus)
+he_sites_g200[c(4:6, 10)]
+he_sites_names[c(4:6, 10)]
+he_sites_g200 <- he_sites_g200[-c(4:6, 10)]
+for (i in 1:length(he_sites_g200)) {
+  he_sites_g200[[i]]$site <- he_sites_names[-c(4:6, 10)][i]
+}
+
+he_sites_g200
+he_sites_g200_sf <- do.call("rbind", he_sites_g200)
+
+plot(he_sites_g200_sf$geometry)
+he_sites_g200_sf %>% st_drop_geometry() %>% select(G200_REGIO, site)
+
+mapView(filter(he_sites_ecoreg_sf, site == "shaanxi")["ECO_NAME"]) +
+  mapView(filter(he_sites_g200_sf, site == "shaanxi")["G200_REGIO"])
+
+
+
+he_sites_g200_sf %>%
+  filter(site == "shaanxi") %>%
+  st_geometry() %T>% plot(add =  T, border = "red")
+
+# intersect the TNC ecoregion sf file for He's sites with the G200 sf file for He's sites:
+plot(he_sites_ecoreg_sf$geometry)
+plot(he_sites_g200_sf$geometry)
+
+st_is_valid(he_sites_ecoreg_sf, reason = TRUE)
+st_is_valid(he_sites_g200_sf, reason = TRUE)
+he_sites_ecoreg_sf <- cc_make_valid(he_sites_ecoreg_sf)
+he_sites_g200_sf <- cc_make_valid(he_sites_g200_sf)
+
+he_sites_ecoreg_in_g200 <- st_intersection(he_sites_ecoreg_sf, he_sites_g200_sf)
+
+mapView(filter(he_sites_ecoreg_in_g200, site == "cq"), zcol = "ECO_NAME")
+
+he_sites_ecoreg_in_g200 %>% select(site, site.1, ECO_NAME) %>% st_drop_geometry()
+
+names(ecoregions)
+
+levels(drop.levels(he_sites_ecoreg$nepal$ECO_NAME))
+
+# ------------------------------------------------------------------------------
+# Map of ecoregions that overlap with He's sites ------------
+# ------------------------------------------------------------------------------
+mapView(filter(ecoregions, ECO_NAME %in% levels(drop.levels(he_sites_ecoreg_sf$ECO_NAME))), zcol = "ECO_NAME") + mapView(he_sites_ecoreg_sf, zcol = "ECO_NAME")
+
+mapView(he_sites_ecoreg_in_g200[c("7", "2.1"),]$geometry)
+levels(drop.levels(he_sites_ecoreg_in_g200$ECO_NAME))
+levels(drop.levels(he_sites_ecoreg_sf$ECO_NAME))
+
+# ------------------------------------------------------------------------------
+write.csv(st_drop_geometry(he_sites_ecoreg_in_g200), file = "/Users/christophercrawford/Google_Drive/_Projects/Ab_trajectories/test.csv")
+```
+
+
+```{r filter-predicts}
+he_sites_ecoreg_sf %>% st_drop_geometry() %>% select(site, ECO_NAME)
+# list out the ecoregions in each site
+
+filter(he_sites_ecoreg_sf, site == "shaanxi") %>% .$ECO_NAME %>% drop.levels() %>% levels()
+he_sites_ecoreg$orenburg$ECO_NAME %>% drop.levels() %>% levels()
+
+num_eco <- c()
+for (i in 1:length(he_sites_names)) {
+  num_eco <- c(num_eco, 
+               predicts %>% filter(Ecoregion %in% levels(drop.levels(he_sites_ecoreg[[i]]$ECO_NAME))) %>% nrow())
+}
+
+
+num_eco_bird <- c()
+for (i in 1:length(he_sites_names)) {
+  num_eco_bird <- c(num_eco_bird, 
+               predicts %>% filter(
+                 Ecoregion %in% levels(drop.levels(he_sites_ecoreg[[i]]$ECO_NAME)),
+                 Class == "Aves") %>% nrow())
+}
+
+num_records_df <- data.frame(sites = he_sites_names, 
+                      num_eco = num_eco,
+                      num_eco_bird = num_eco_bird)
+arrange(num_records_df, num_eco)
+he_sites_names
+
+he_sites_ecoreg_names <- levels(as.factor(he_sites_ecoreg_names))
+levels(predicts$Ecoregion)
+predicts %>%
+  filter(Ecoregion == he_sites_ecoreg_names[2]) %>% # example of an ecoregion with no data associated with it. 
+  as_tibble()
+
+he_sites_ecoreg_names[3]
+capwords <- function(s, strict = FALSE) {
+    cap <- function(s) paste(toupper(substring(s, 1, 1)),
+                  {s <- substring(s, 2); if(strict) tolower(s) else s},
+                             sep = "", collapse = " " )
+    sapply(strsplit(s, split = " "), cap, USE.NAMES = !is.null(names(s)))
+}
+
+he_sites_ecoreg_names <- capwords(he_sites_ecoreg_names)
+
+he_sites_ecoreg_names[2]
+levels(drop.levels(predicts$Ecoregion))[1:20]
+
+
+
+test <- predicts %>%
+  filter(grepl("Alto ", Ecoregion)) %>% # example of an ecoregion with no data associated with it. 
+  as_tibble()
+
+levels(drop.levels(test$Ecoregion))
+
+intersect(he_sites_ecoreg_names, levels(drop.levels(predicts$Ecoregion)))
+Reduce(intersect, list())
+
+levels(drop.levels(predicts$Ecoregion))
+summary(predicts$Ecoregion)
+
+predicts %>% filter(Ecoregion == "(Other)") %>% as_tibble()
+
+predicts$Ecoregion
+nrow(filter(predicts,is.na(Ecoregion)))
+levels(as.factor(as.character(predicts$Ecoregion)))
+summary(predicts$Ecoregion)
+summary(predicts$Country)
+
+predicts_filter <- predicts %>%
+  filter(Ecoregion %in% he_sites_ecoreg_names) 
+as_tibble(predicts_filter)
+
+
+nrow(predicts_filter) # 295411
+
+levels(drop.levels(predicts$Country))
+summary(predicts$Country)
+
+# number of records in each country
+predicts %>% filter(grepl("Braz", Country)) %>% nrow() # 59312
+predicts %>% filter(grepl("United Sta", Country)) %>% nrow() # 135127
+predicts %>% filter(grepl("China", Country)) %>% nrow() # 22536
+predicts %>% filter(grepl("Nepal", Country)) %>% nrow() # 55332
+predicts %>% filter(grepl("Italy", Country)) %>% nrow() # 62204
+predicts %>% filter(grepl("Uganda", Country)) %>% nrow() # 9834
+predicts %>% filter(grepl("Russia", Country)) %>% nrow() # 2130
+# ----
+predicts %>% filter(grepl("Iraq", Country)) %>% nrow() # 0
+predicts %>% filter(grepl("Belarus", Country)) %>% nrow() # 0
+predicts %>% filter(grepl("Bosnia ", Country)) %>% nrow() # 0
+
+
+# number of bird records in each:
+predicts %>% filter(grepl("Braz", Country), Class == "Aves") %>% nrow() # 10842
+predicts %>% filter(grepl("United Sta", Country), Class == "Aves") %>% nrow() # 35151
+predicts %>% filter(grepl("Italy", Country), Class == "Aves") %>% nrow() # 738
+predicts %>% filter(grepl("China", Country), Class == "Aves") %>% nrow() # 14216
+predicts %>% filter(grepl("Uganda", Country), Class == "Aves") %>% nrow() # 9564
+# ----
+predicts %>% filter(grepl("Nepal", Country), Class == "Aves") %>% nrow() # 0
+predicts %>% filter(grepl("Russia", Country), Class == "Aves") %>% nrow() # 0
+predicts %>% filter(grepl("Iraq", Country)) %>% nrow() # 0
+predicts %>% filter(grepl("Belarus", Country)) %>% nrow() # 0
+predicts %>% filter(grepl("Bosnia ", Country)) %>% nrow() # 0
+
+# ----------------------------------------------------------------------------------------------
+# number of records in each ecoregion
+
+# the number of ecoregions in the PREDICTS database:
+ecoregions_pred <- levels(as.factor(as.character(predicts$Ecoregion))) # 281 ecoregions are represented
+he_sites_ecoreg_names
+
+
+
+
+
+predicts %>% filter(grepl("Braz", Country)) %>% nrow() # 59312
+predicts %>% filter(grepl("United Sta", Country)) %>% nrow() # 135127
+predicts %>% filter(grepl("Nepal", Country)) %>% nrow() # 55332
+predicts %>% filter(grepl("Italy", Country)) %>% nrow() # 62204
+predicts %>% filter(grepl("Uganda", Country)) %>% nrow() # 9834
+predicts %>% filter(grepl("Russia", Country)) %>% nrow() # 2130
+
+he_sites_ecoreg[[1]]$ECO_NAME
+
+predicts %>% filter(Ecoregion %in% capwords(levels(drop.levels(he_sites_ecoreg$shaanxi$ECO_NAME)))) %>% nrow() # 2809
+# "Central China Loess Plateau Mixed Forests" 
+# "Daba Mountains Evergreen Forests"
+# "Huang He Plain Mixed Forests"         
+# "Ordos Plateau Steppe"                  
+# "Qin Ling Mountains Deciduous Forests"
+
+levels(drop.levels(he_sites_ecoreg$cq$ECO_NAME))
+predicts %>% filter(Ecoregion %in% levels(drop.levels(he_sites_ecoreg$cq$ECO_NAME))) %>% nrow() # 0
+# "Daba Mountains Evergreen Forests"
+# "Guizhou Plateau Broadleaf And Mixed Forests"
+# "Sichuan Basin Evergreen Broadleaf Forests"
+
+predicts %>% filter(Ecoregion %in% capwords(levels(drop.levels(he_sites_ecoreg$volgograd$ECO_NAME)))) %>% nrow() # 0
+# "East European Forest Steppe"
+# "Pontic Steppe"
+
+predicts %>% filter(Ecoregion %in% capwords(levels(drop.levels(he_sites_ecoreg$orenburg$ECO_NAME)))) %>% nrow() # 0
+# "East European Forest Steppe"
+# "Kazakh Forest Steppe"
+# "Kazakh Steppe"
+# "Pontic Steppe"
+
+predicts %>% filter(Ecoregion %in% capwords(levels(drop.levels(he_sites_ecoreg$mg$ECO_NAME)))) %>% nrow() # 35975
+# "Cerrado"
+# "Chiquitano Dry Forests"
+# "Madeira-Tapajós Moist Forests"
+# "Mato Grosso Seasonal Forests"
+# "Pantanal"
+# "Tapajós-Xingu Moist Forests"
+# "Xingu-Tocantins-Araguaia Moist Forests"
+
+predicts %>% filter(Ecoregion %in% capwords(levels(drop.levels(he_sites_ecoreg$goias$ECO_NAME)))) %>% nrow() # 20667
+# "Alto Paraná Atlantic Forests"
+# "Cerrado"
+
+predicts %>% filter(Ecoregion %in% capwords(levels(drop.levels(he_sites_ecoreg$wisconsin$ECO_NAME)))) %>% nrow() # 48326
+# "Central Forest-grasslands Transition"
+# "Central Tall Grasslands"
+# "Lake"
+# "Upper Midwest Forest-savanna Transition"
+# "Western Great Lakes Forests"
+
+predicts %>% filter(Ecoregion %in% capwords(levels(drop.levels(he_sites_ecoreg$nebraska$ECO_NAME)))) %>% nrow() #13025
+# "Central And Southern Mixed Grasslands"
+# "Central Tall Grasslands"
+# "Nebraska Sand Hills Mixed Grasslands"
+# "Northern Mixed Grasslands"
+# "Northern Short Grasslands"
+# "Western Short Grasslands"
+
+predicts %>% filter(Ecoregion %in% capwords(levels(drop.levels(he_sites_ecoreg$belarus$ECO_NAME)))) %>% nrow() # 82478
+# "Central European Mixed Forests"
+# "Sarmatic Mixed Forests" 
+
+predicts %>% filter(Ecoregion %in% capwords(levels(drop.levels(he_sites_ecoreg$bh$ECO_NAME)))) %>% nrow() # 16503
+# "Balkan Mixed Forests"
+# "Dinaric Mountains Mixed Forests"
+# "Illyrian Deciduous Forests"
+# "Pannonian Mixed Forests"
+
+predicts %>% filter(Ecoregion %in% capwords(levels(drop.levels(he_sites_ecoreg$sardinia$ECO_NAME)))) %>% nrow() # 30284
+# "Tyrrhenian-Adriatic Sclerophyllous And Mixed Forests"
+
+predicts %>% filter(Ecoregion %in% capwords(levels(drop.levels(he_sites_ecoreg$nepal$ECO_NAME)))) %>% nrow() # 56166
+# "Eastern Himalayan Alpine Shrub And Meadows"
+# "Eastern Himalayan Broadleaf Forests"
+# "Eastern Himalayan Subalpine Conifer Forests"
+# "Himalayan Subtropical Broadleaf Forests"
+# "Himalayan Subtropical Pine Forests"
+# "Lower Gangetic Plains Moist Deciduous Forests"
+# "Rock And Ice"
+# "Terai-Duar Savanna And Grasslands"
+# "Upper Gangetic Plains Moist Deciduous Forests"
+# "Western Himalayan Alpine Shrub And Meadows"
+# "Western Himalayan Broadleaf Forests"
+# "Western Himalayan Subalpine Conifer Forests"
+
+predicts %>% filter(Ecoregion %in% levels(drop.levels(he_sites_ecoreg$uganda$ECO_NAME))) %>% nrow() # 112660
+predicts %>% filter(Ecoregion %in% c("Albertine Rift Montane Forests", 
+                                     "East African Montane Forests", 
+                                     "East African Montane Moorlands", 
+                                     "East Sudanian Savanna", 
+                                     "Lake: Afrotropic", 
+                                     "Northern Acacia-Commiphora Bushlands And Thickets", 
+                                     "Northern Congolian Forest-Savanna Mosaic", 
+                                     "Ruwenzori-Virunga Montane Moorlands", 
+                                     "Victoria Basin Forest-Savanna Mosaic")) %>% nrow() # 112660
+
+# "Albertine Rift Montane Forests"
+# "East African Montane Forests"
+# "East African Montane Moorlands"
+# "East Sudanian Savanna"
+# "Lake"
+# "Northern Acacia-Commiphora Bushlands And Thickets"
+# "Northern Congolian Forest-savanna Mosaic"
+# "Rwenzori-Virunga Montane Moorlands"
+# "Victoria Basin Forest-savanna Mosaic"
+
+predicts %>% filter(Ecoregion %in% capwords(levels(drop.levels(he_sites_ecoreg$iraq$ECO_NAME)))) %>% nrow() # 10198
+# "Arabian Desert And East Sahero-Arabian Xeric Shrublands"
+# "Eastern Mediterranean Conifer-sclerophyllous-broadleaf Forests"
+# "Mesopotamian Shrub Desert"
+# "Middle East Steppe"
+# "Persian Gulf Desert And Semi-desert"
+# "Red Sea Nubo-Sindian Tropical Desert And Semi-desert"
+# "South Iran Nubo-Sindian Desert And Semi-desert"
+# "Tigris-Euphrates Alluvial Salt Marsh"
+# "Zagros Mountains Forest Steppe"
+
+names(he_sites_ecoreg)
+he_sites
+
+plot(he_sites_ecoreg$shaanxi$geometry)
+plot(he_sites_ecoreg$shaanxi["ECO_NAME"])
+
+```
+
+```{r match}
+ecoregions_names_df <- as.data.frame(levels(as.factor(ecoregions$ECO_NAME))) # 827 ecoregions.
+
+predicts_ecoregion_names_df <- as.data.frame(levels(predicts$Ecoregion))
+levels(drop.levels(predicts$Ecoregion)) # 281 ecoregions
+ecoregions_pred # 281 ecoregions
+
+he_sites_ecoreg_names # 65 ecoregions
+
+matches <- match(he_sites_ecoreg_names, ecoregions_pred)
+test_df <- data.frame(matches = matches, ecoregions = he_sites_ecoreg_names)
+
+
+ecoregions_pred[3]
+filter(test_df, is.na(matches))
+!is.na(test_df$matches)
+ecoregions_pred
+
+grep("Albert", ecoregions_pred)
+eco_df <- data.frame(key = 1:length(ecoregions_pred), ecoregions_pred)
+
+# fixing particular ecoregions:
+he_sites_ecoreg_names[21] <- ecoregions_pred[76] # "Eastern Mediterranean Conifer-Sclerophyllous-Broadleaf Forests"
+
+
+identical(ecoregions_pred[76], he_sites_ecoreg_names[21])
+```
+
+
+
+```{r tester}
+italy_birds <- predicts %>% filter(grepl("Italy", Country), Class == "Aves")
+
+italy_birds %>% select(include_columns) %>% head()
+
+names(predicts)
+
+```
+
+
+
+
+
+
+
+
+# Analysis Methods:
+Ok, so how would I run a model to relate the different land use changes to biodiversity outcomes? 
+
+```{r community-comp}
+
+```
+
+Sorensen similarity Index:
+(From Wikipedia: https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient) Sørensen's original formula was intended to be applied to discrete data. Given two sets, X and Y, it is defined as
+
+{\displaystyle DSC={\frac {2|X\cap Y|}{|X|+|Y|}}}{\displaystyle DSC={\frac {2|X\cap Y|}{|X|+|Y|}}}
+Sørensen = 2 * (intersection between X and Y) / (X + Y)
+where |X| and |Y| are the cardinalities of the two sets (i.e. the number of elements in each set). The Sørensen index equals twice the number of elements common to both sets divided by the sum of the number of elements in each set.
+
+Jaccard = size of the intersection divided by the size of the union of the sample sets
+J = intersection / union
+$$
+J = \frac{}{}
+$$
+
+```{r extinction-risk-sandbox}
+z <- 0.25
+A_0 <- 150 # original habitat, long ago
+A_1 <- 125 # new habitat area, after loss, current time step
+x <- 135 # new habitat area, after restoration
+
+
+
+E_1 <- 1 - (A_1 / A_0)^z
+E_2 <- 1 - ((x) / A_0)^z
+
+r <- 1 - (x / A_1)^z
+E_1
+E_2
+r
+E_1 - r
+E_2 - E_1 # this is somewhat close to r
+
+
+
+```
+
+
+# PREDICTS Demo Code
+```{r demo-load}
+# --------------------------------------------------------------- #
+# PREDICTS Database demonstration code
+# Author: Tim Newbold 
+# Shared with Chris Crawford: January 9th, 2020
+# --------------------------------------------------------------- #
+
+library(devtools)
+
+# Install my package for simple manipulation of PREDICTS data
+install_github(repo = "timnewbold/predicts-demo", 
+               subdir = "predictsFunctions")
+
+library(predictsFunctions)
+
+# Set the path to your local copy of the database
+# predicts.path <- "C:/Users/tim_n/Dropbox/PREDICTSDemonstration/database.rds"
+predicts.path <- "/Users/christophercrawford/Google_Drive/_Projects/data/Bd/PREDICTS/database.rds"
+
+
+# --------------------------------------------------------------- #
+# Read in the PREDICTS data
+# --------------------------------------------------------------- #
+predicts <- ReadPREDICTS(path = "/Users/christophercrawford/Google_Drive/_Projects/data/Bd/PREDICTS/database.rds")
+
+# predicts <- readRDS(paste0(p_dat, "Bd/PREDICTS/database.rds")) # PREDICTS itself
+
+nrow(predicts)
+
+# Let's look at the column names - there are a lot
+names(predicts)
+
+# This powerpoint explains the different types of column
+system(command = "powerpnt /S DatabaseVariables.ppsx") # cc- note doesn't work
+
+# This powerpoint gives a bit more detail on the land-use classification
+system(command = "powerpnt /S LanduseClassification.ppsx") # cc- note doesn't work
+
+# Correct effort-sensitive abundance measures (assumes linear relationship between effort and recorded abundance)
+predicts <- CorrectSamplingEffort(diversity = predicts)
+predicts %>% select(Measurement, Effort_corrected_measurement) %>% head() # essentially this updated "Measurement" to match the column "Effort_corrected_measurement"
+
+# Merge sites that have the same coordinates (e.g. multiple traps on a single transect)
+nrow(predicts) # 3.25 M rows before, 2.9 M after
+predicts <- MergeSites(diversity = predicts) # CC: this takes a long time
+# 343410 measurements that have been merged
+# Dropping unused factor levels
+## (cc- note: this matches with the before and after row count)
+
+names(predicts)
+predicts %>% select(Source_ID) %>% unique() %>% unlist(use.names = FALSE) %>% length() # 480
+predicts %>% select(Site_name) %>% unique() %>% unlist(use.names = FALSE) %>% length() # 16,496
+
+# --------------------------------------------------------------- #
+# Calculate site metrics of diversity - currently only species richness and total abundance
+# Note that Biodiversity Intactness Index for a particular land use is the ratio of the current average abundance in that land use to the abundance in an intact land use. So, I think you can calculate it straightforwardly by dividing the richness ratio by 
+# --------------------------------------------------------------- #
+sites <- SiteMetrics(diversity = predicts,
+                     extra.cols = c("Predominant_land_use",
+                                    "SSB","SSBS", 
+                                    # cc additions
+                                    "Country", "Biome", "Ecoregion",
+                                    "Years_since_fragmentation_or_conversion"))
+nrow(sites) # 22678
+names(sites)
+names(predicts)
+
+
+sites %>% select(Source_ID, 
+                 Diversity_metric_type,
+                 Predominant_land_use, Use_intensity,
+                 Biome, Country, Ecoregion, Years_since_fragmentation_or_conversion,
+                 Total_abundance, Species_richness) %>% summary()
+
+sites$Predominant_land_use %>% levels()
+
+# Now install my package for building statistical models (including mixed-effects models)
+install_github("timnewbold/StatisticalModels")
+library(StatisticalModels)
+
+# Let's first try a model of site-level species richness
+
+# First, we will rearrange the land-use classification a bit
+sites$LandUse <- paste(sites$Predominant_land_use)
+# Drop classification where land use could not be identified
+sites$LandUse[(sites$LandUse == "Cannot decide")] <- NA
+# Drop classification where the stage of recovery of secondary vegetation is unknown
+sites$LandUse[(sites$LandUse == "Secondary vegetation (indeterminate age)")] <- NA
+# Now make the variable a factor, and set the reference level to primary vegetation
+sites$LandUse <- factor(sites$LandUse)
+sites$LandUse <- relevel(sites$LandUse, ref="Primary vegetation")
+
+table(sites$LandUse)
+```
+
+
+```{r demo-models}
+# We will compare some random-effects structures
+# We must always consider study identity, because of major differences in sampling
+r1 <- GLMER(modelData = sites, responseVar = "Species_richness",
+            fitFamily = "poisson", fixedStruct = "LandUse",
+            randomStruct = "(1|SS)", REML = FALSE)
+r1$model
+
+# Try adding spatial block to account for spatial differences among sites within studies
+r2 <- GLMER(modelData = sites, responseVar = "Species_richness",
+            fitFamily = "poisson", fixedStruct = "LandUse",
+            randomStruct = "(1|SS)+(1|SSB)", REML = FALSE)
+r2$model
+
+# Is the second random-effects structure better?
+AIC(r1$model, r2$model)
+glmer() # from lme4
+lmer() # from lme4
+
+
+# Species richness models are often overdispersed - is this the case?
+GLMEROverdispersion(model = r2$model)
+
+# We can control for this by fitting an observation-level random effect
+r3 <- GLMER(modelData = sites, responseVar = "Species_richness",
+            fitFamily = "poisson", fixedStruct = "LandUse",
+            randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)", REML = FALSE)
+
+# Is this better than the previous random-effects structure?
+AIC(r2$model,r3$model)
+
+# Has it removed the overdispersion?
+GLMEROverdispersion(model = r3$model)
+
+# Now we will run backward stepwise selection to see if land use has a significant effect
+sr1 <- GLMERSelect(modelData = sites, responseVar = "Species_richness",
+                   fitFamily = "poisson", fixedFactors = "LandUse",
+                   randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)")
+
+# A statistics table is produced
+sr1$stats # this just shows that land use has a significant effect as a factor. 
+
+# And the model itself is shown by:
+sr1$model
+r3$model # same as r3
+
+
+
+
+test_mod <- glmer(Species_richness ~ LandUse + (1|SS) + (1|SSB) + (1|SSBS), 
+           family = "poisson", 
+           data = sites, 
+           control = glmerControl(optimizer = "bobyqa", 
+                                  optCtrl = list(maxfun = 10000))
+           )
+
+r3$model %>% fixef()
+test_mod %>% fixef()
+
+
+
+```
+
+
+```{r demo-plot}
+# Now try plotting this model
+PlotGLMERFactor(model = sr1$model, data = sr1$data,
+                responseVar = "Species richness", seMultiplier = 1.96,
+                logLink = "e", catEffects = "LandUse")
+
+# We can rotate the x-axis labels by adding xtext.srt=45
+PlotGLMERFactor(model = sr1$model,data = sr1$data,
+                responseVar = "Species richness",seMultiplier = 1.96,
+                logLink = "e", catEffects = "LandUse", xtext.srt=320)
+
+# Increase the bottom and right margins using 
+# params=list(mar = c(1.2, 3.5, 0.2, 1.2))
+PlotGLMERFactor(model = sr1$model,data = sr1$data,
+                responseVar = "Species richness",seMultiplier = 1.96,
+                logLink = "e",catEffects = "LandUse",xtext.srt=320,
+                params=list(mar = c(2.2, 3.5, 0.2, 1.2)))
+
+# Reorder the land uses into a logical order, using
+# order=c(1,4,3,8,6,2,5,7)
+sites$LandUse %>% levels() # to be reordered.
+class(sites$LandUse)
+sites <- sites %>% mutate(LandUse = fct_relevel(LandUse, levels(sites$LandUse)[c(1, 4, 3, 8, 6, 2, 5, 7)]))
+
+PlotGLMERFactor(model = sr1$model,data = sr1$data,
+                responseVar = "Species richness",seMultiplier = 1.96,
+                logLink = "e",catEffects = "LandUse",xtext.srt=320,
+                params=list(mar = c(2.2, 3.5, 0.2, 1.2)),
+                order=c(1,4,3,8,6,2,5,7))
+
+
+
+
+# just one of the regular models:
+PlotGLMERFactor(model = sr1$model,data = sr1$data,
+                responseVar = "Species richness",seMultiplier = 1.96,
+                logLink = "e",catEffects = "LandUse",xtext.srt=320,
+                params=list(mar = c(2.2, 3.5, 0.2, 1.2)),
+                order=c(1,4,3,8,6,2,5,7))
+
+```
+
+
+```{r demo-predictions+species-occ}
+# Make some predictions from the model
+nd <- data.frame(
+  LandUse=factor(x = levels(sr1$data$LandUse),
+                 levels = levels(sr1$data$LandUse)), # with added reordering vector
+  Species_richness=0)
+
+preds <- PredictGLMER(model = sr1$model, data = nd, se.fit = TRUE,
+                      seMultiplier = 1.96, randEffs = FALSE)
+preds <- exp(preds)
+
+errbar(x = levels(sr1$data$LandUse), y = preds$y,
+       yplus = preds$yplus, yminus = preds$yminus)
+abline(v = preds$y[1])
+
+
+
+
+# We can also build models at the species level using the raw database
+
+# First, we will rearrange the land uses as before
+predicts$LandUse_cond <- paste(predicts$Predominant_land_use)
+# Drop classification where land use could not be identified
+predicts$LandUse_cond[(predicts$LandUse_cond=="Cannot decide")] <- NA
+# For these models we will group all secondary vegetation together
+predicts$LandUse_cond[(predicts$LandUse_cond=="Secondary vegetation (indeterminate age)")] <- "Secondary vegetation"
+predicts$LandUse_cond[(predicts$LandUse_cond=="Mature secondary vegetation")] <- "Secondary vegetation"
+predicts$LandUse_cond[(predicts$LandUse_cond=="Intermediate secondary vegetation")] <- "Secondary vegetation"
+predicts$LandUse_cond[(predicts$LandUse_cond=="Young secondary vegetation")] <- "Secondary vegetation"
+# We will also group cropland and pasture together into an 'agriculture' class
+predicts$LandUse_cond[(predicts$LandUse_cond=="Cropland")] <- "Agriculture"
+predicts$LandUse_cond[(predicts$LandUse_cond=="Pasture")] <- "Agriculture"
+# Now make the variable a factor, and set the reference level to primary vegetation
+predicts$LandUse_cond <- factor(predicts$LandUse_cond)
+predicts$LandUse_cond <- relevel(predicts$LandUse_cond,ref="Primary vegetation")
+
+# Now create a column for species presence or absence
+predicts$Occurrence <- ifelse(predicts$Measurement > 0, 1, 0)
+
+# Because these models take a long time to run, we will focus on reptiles
+nrow(predicts)
+reptiles <- predicts[(predicts$Class=="Reptilia"),]
+nrow(reptiles)
+
+# Now we will try a model of species presence or absence as a function of land use
+# We will add additional random effects of species identity and site
+# to control for additional likely random variation
+occ1 <- GLMERSelect(modelData = reptiles, responseVar = "Occurrence",
+                    fitFamily = "binomial", fixedFactors = "LandUse_cond",
+                    randomStruct = "(1|SS)+(1|SSBS)+(1|Taxon_name_entered)")
+
+# Stats as before
+occ1$stats
+names(occ1$model)
+names(occ1$stats)
+
+# Now we will plot this model using the same parameters as above
+PlotGLMERFactor(model = occ1$model, data = occ1$data,
+                responseVar = "Occurrence", seMultiplier = 1.96,
+                logLink = "b", catEffects = "LandUse_cond", xtext.srt = 45,
+                params = list(mar = c(2.2, 3.5, 0.2, 1.2)),
+                order = c(1, 4, 3, 2))
+
+```
+
+## Next steps
+### 1. Subset to biome
+```{r subset-biome}
+# load biomes - see "biomes" chunk above
+biomes <- st_read(paste0(p_dat, "Habitats/biomes.shp"))
+
+
+# "Biomes ... are defined by The Nature Conservancy's terrestrial ecoregions of the world dataset"
+
+s_box <- extent(site_r[[9]]) # extent(s$y2017)
+b_box <- extent(b$y2017)
+
+plot(s$y2017)
+plot(s_box, col = "red", add = FALSE)
+plot(s_box)
+plot(biomes[["geometry"]], add = TRUE)
+shaanxi
+belarus
+i <- 9
+# make a list of cropped biomes cropped to each site:
+biomes_crop <- lapply(1:11, function(i) {
+  temp <- st_crop(biomes, extent(site_r[[i]]))
+  temp <- temp %>% mutate(site = site_df$site[i])
+  temp
+})
+
+biomes_crop <- biomes_crop %>% bind_rows()
+
+ggplot() + theme_classic() + 
+  geom_sf(data = biomes_crop, aes(fill = biome)) + 
+  # theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
+  facet_wrap(vars(site))
+
+ggplot() + theme_classic() + 
+  geom_sf(data = biomes_crop %>% filter(site == "shaanxi"), aes(fill = biome)) + 
+  # theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
+  labs(fill = NULL) +
+  theme(legend.position = "bottom") + guides(fill = guide_legend(ncol = 1)) + 
+  facet_wrap(vars(site))
+
+biomes_by_site <-
+  lapply(states, function(thisState){
+    ggplot(map_data('state',region=thisState)
+           , aes(x=long,y=lat,group=group)) +
+      geom_polygon(colour='black',fill='white') +
+      facet_wrap(~region) +
+      coord_map() +
+      theme_void()
+  })
+
+
+library(cowplot)
+plot_grid(plotlist = sepStates)
+
+biomes_s  <- st_crop(biomes, extent(s$y2017))
+biomes_b  <- st_crop(biomes, extent(b$y2017))
+biomes_mn  <- st_crop(biomes, mn$geometry)
+plot(mn$geometry)
+
+plot(biomes_s, key.pos = 4, key.width = lcm(4.5))
+
+rbind(biomes_b, biomes_s) %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
+biome_names[c(3, 5, 6)]
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+show_col(gg_color_hue(3)[2])
+# plot subsets of biomes
+gg_biomes_s <- ggplot() + theme_classic() + 
+  geom_sf(data = biomes_s, aes(fill = biome)) + 
+  labs(title = "Shaanxi Province, China") +
+  theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0))
+
+gg_biomes_b <- ggplot() + theme_classic() + geom_sf(data = biomes_b, aes(fill = biome)) + 
+  labs(title = "Eastern Belarus/Smolensk, Russia") +
+  scale_fill_manual(values = c(gg_color_hue(3)[2])) + 
+  theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0))
+
+png(filename = paste0(p_output, "plots/biomes_subset.png"), 
+    width = 6, height = 5, units = "in", res = 400)
+print(plot_grid(gg_biomes_s, gg_biomes_b, nrow = 2, align = "v"))
+dev.off()
+
+ggplot() + theme_classic() + geom_sf(data = rbind(biomes_b, biomes_s), aes(fill = biome))
+ggplot() + theme_classic() + geom_sf(data = biomes_mn, aes(fill = biome))
+plot(mn$geometry, lwd = 5, border ="blue")
+plot(biomes_mn$geometry, add = T)
+plot(biomes_mn["biome"], add = T, alpha = 0.5)
+
+
+
+rbind(biomes_b, biomes_s)
+ggplot() + theme_classic() + geom_sf(data = filter(biomes, biome %in% c()), aes(fill = biome))
+
+predicts_biomes <- predicts %>% select(Biome) %>% unlist(use.names = FALSE) %>% unique() %>% as.character()
+biome_names
+str_sort(predicts_biomes) == str_sort(gsub(" and ", " & ", biome_names[-c(14:15)]))
+
+
+
+# update biome_names to match the conventions in PREDICTS
+biome_names <- gsub(" and ", " & ", biome_names)
+
+
+
+# raw data
+predicts %>% nrow() # 2906994
+predicts %>% filter(Biome %in% biome_names[c(3, 5, 6)]) %>% nrow() # 1208204
+
+
+# site level estimates of abundance and species richness
+sites %>% nrow() # 22678
+sites %>% filter(Biome %in% biome_names[c(3, 5, 6)]) %>% nrow() # 9055
+
+
+# filter sites
+sites_sub <- sites %>% filter(Biome %in% 
+                                c("Temperate Broadleaf & Mixed Forests", 
+                                  "Temperate Grasslands, Savannas & Shrublands", 
+                                  "Montane Grasslands & Shrublands"))
+sites_montane <- sites %>% filter(Biome == "Montane Grasslands & Shrublands")
+sites_temp_forest <- sites %>% filter(Biome == "Temperate Broadleaf & Mixed Forests")
+sites_temp_grass <- sites %>% filter(Biome == "Temperate Grasslands, Savannas & Shrublands")
+
+sites_sub %>% select(Biome) %>% drop.levels() %>% table()
+
+sites_sub %>% filter(Biome == "Temperate Broadleaf & Mixed Forests",
+         !is.na(Years_since_fragmentation_or_conversion)) %>% 
+  select(Years_since_fragmentation_or_conversion) %>% 
+  table() #%>% sum()
+
+sites_sub %>% filter(Biome == "Temperate Grasslands, Savannas & Shrublands",
+         !is.na(Years_since_fragmentation_or_conversion)) %>% 
+  select(Years_since_fragmentation_or_conversion) %>% 
+  table() #%>% sum()
+
+sites_sub %>% filter(Biome == "Montane Grasslands & Shrublands",
+         !is.na(Years_since_fragmentation_or_conversion)) %>% 
+  select(Years_since_fragmentation_or_conversion) %>% unlist(use.names = FALSE) %>%
+  hist(freq = TRUE, breaks = seq(0, 200, 10)) 
+  #table() # %>% sum()
+
+
+# exploration
+# three subsets
+sites_montane
+sites_temp_forest
+sites_temp_grass
+
+sites %>% select(LandUse) %>% table()
+sites_sub %>% select(LandUse) %>% table()
+sites_montane %>% select(LandUse) %>% table()
+sites_temp_forest %>% select(LandUse) %>% table()
+sites_temp_grass %>% select(LandUse) %>% table()
+
+
+table(sites_sub$Years_since_fragmentation_or_conversion)
+hist(sites_sub$Years_since_fragmentation_or_conversion)
+
+sites_sub
+ggplot(data = sites_sub, mapping = aes(Years_since_fragmentation_or_conversion)) + 
+  labs(title = "Histogram of predicts data, years since fragmentation") +
+  xlab("Years Since Fragmentation") + ylab("Count") +
+  geom_histogram(fill = "gray50", binwidth = 10) +
+  theme_classic()
+
+gg_sites_hist <- ggplot(data = sites_sub, mapping = aes(Years_since_fragmentation_or_conversion)) + 
+  labs(title = "Histogram of PREDICTS data subset, years since fragmentation") +
+  xlab("Years Since Fragmentation") + ylab("Count") +
+  geom_histogram(closed = "left", binwidth = 5) +
+  theme_classic()
+
+gg_sites_hist
+names(sites_sub)
+sites_sub %>% select(Biome) %>% unique()
+gg_sites_hist %+% filter(sites_sub, Biome == "Temperate Broadleaf & Mixed Forests")
+gg_sites_hist %+% filter(sites_sub, Biome == "Montane Grasslands & Shrubs")
+
+
+filter(sites_sub, Biome == "Montane Grasslands & Shrubs")
+
+sites_sub %>% select(Years_since_fragmentation_or_conversion) %>% table()
+sites %>% select(Years_since_fragmentation_or_conversion) %>% table()
+```
+
+
+```{r run-model-on-subset}
+
+sites_montane
+sites_temp_forest
+sites_temp_grass
+
+
+sites_input <- sites
+# We will compare some random-effects structures
+# We must always consider study identity, because of major differences in sampling
+r1 <- GLMER(modelData = sites_input, responseVar = "Species_richness", 
+            fitFamily = "poisson", fixedStruct = "LandUse",
+            randomStruct = "(1|SS)", REML = FALSE)
+r1$model
+
+# Try adding spatial block to account for spatial differences among sites within studies
+r2 <- GLMER(modelData = sites_input, responseVar = "Species_richness",
+            fitFamily = "poisson", fixedStruct = "LandUse",
+            randomStruct = "(1|SS)+(1|SSB)", REML = FALSE)
+r2$model
+
+# Is the second random-effects structure better?
+AIC(r1$model, r2$model)
+
+# Species richness models are often overdispersed - is this the case?
+GLMEROverdispersion(model = r2$model)
+
+# We can control for this by fitting an observation-level random effect
+r3 <- GLMER(modelData = sites_input, responseVar = "Species_richness",
+            fitFamily = "poisson", fixedStruct = "LandUse",
+            randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)", REML = FALSE)
+
+# Is this better than the previous random-effects structure?
+AIC(r2$model,r3$model)
+
+# Has it removed the overdispersion?
+GLMEROverdispersion(model = r3$model)
+
+# Now we will run backward stepwise selection to see if land use has a significant effect
+
+sr1 <- GLMERSelect(modelData = sites_input, responseVar = "Species_richness",
+                   fitFamily = "poisson", fixedFactors = "LandUse",
+                   randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)")
+
+
+# all sites
+sr1_all <- GLMERSelect(modelData = sites, responseVar = "Species_richness",
+                   fitFamily = "poisson", fixedFactors = "LandUse",
+                   randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)")
+
+PlotGLMERFactor(model = sr1_all$model, data = sr1_all$data,
+                responseVar = "Species richness", seMultiplier = 1.96,
+                logLink = "e", catEffects = "LandUse", xtext.srt=45,
+                params = list(mar = c(2.2, 3.5, 0.2, 1.2)),
+                order = c(1,4,3,8,6,2,5,7))
+
+# subsets
+# montane
+sr1_m <- GLMERSelect(modelData = sites_montane, responseVar = "Species_richness",
+                   fitFamily = "poisson", fixedFactors = "LandUse",
+                   randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)")
+
+PlotGLMERFactor(model = sr1_m$model, data = sr1_m$data,
+                responseVar = "Species richness", seMultiplier = 1.96,
+                logLink = "e", catEffects = "LandUse", xtext.srt=45,
+                params = list(mar = c(2.2, 3.5, 0.2, 1.2)),
+                order = c(1,4,3,8,6,2,5,7))
+
+# temp forest
+sr1_tf <- GLMERSelect(modelData = sites_temp_forest, responseVar = "Species_richness",
+                   fitFamily = "poisson", fixedFactors = "LandUse",
+                   randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)")
+
+PlotGLMERFactor(model = sr1_tf$model, data = sr1_tf$data,
+                responseVar = "Species richness", seMultiplier = 1.96,
+                logLink = "e", catEffects = "LandUse", xtext.srt=45,
+                params = list(mar = c(2.2, 3.5, 0.2, 1.2)),
+                order = c(1,4,3,8,6,2,5,7))
+
+
+# temp grass
+sr1_tg <- GLMERSelect(modelData = sites_temp_grass, responseVar = "Species_richness",
+                   fitFamily = "poisson", fixedFactors = "LandUse",
+                   randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)")
+
+PlotGLMERFactor(model = sr1_tg$model, data = sr1_tg$data,
+                responseVar = "Species richness", seMultiplier = 1.96,
+                logLink = "e", catEffects = "LandUse", xtext.srt=45,
+                params = list(mar = c(2.2, 3.5, 0.2, 1.2)),
+                order = c(1,4,3,8,6,2,5,7))
+
+```
+
+```{r biome-PREDICTS-figures}
+
+# all
+PlotGLMERFactor(model = sr1_all$model, data = sr1_all$data,
+                responseVar = "Species richness", seMultiplier = 1.96,
+                logLink = "e", catEffects = "LandUse", 
+                main = "All Biomes",
+                xtext.srt = 30,#45,
+                plotLabels = TRUE,
+                errbar.cols = "black",
+                #ylim = c(-100, 100),
+                params = list(mar = c(2.2, 3.5, 1, 1.2), col = "black"),
+                order = c(1,4,3,8,6,2,5,7))
+
+biomes_s %>% st_drop_geometry()
+# montane
+PlotGLMERFactor(model = sr1_m$model, data = sr1_m$data,
+                responseVar = "Species richness", seMultiplier = 1.96,
+                logLink = "e", catEffects = "LandUse", 
+                main = "Montane Grasslands and Shrublands",
+                xtext.srt = 30,
+                plotLabels = FALSE, add = TRUE, offset = 0.2,
+                errbar.cols = "blue",
+                params = list(mar = c(2.2, 3.5, 0.2, 1.2)),
+                order = c(1,4,3,8,6,2,5,7))
+
+# temperate forest
+PlotGLMERFactor(model = sr1_tf$model, data = sr1_tf$data,
+                responseVar = "Species richness", seMultiplier = 1.96,
+                logLink = "e", catEffects = "LandUse", 
+                main = "Temperate Broadleaf and Mixed Forests",
+                xtext.srt=45,
+                plotLabels = FALSE, add = TRUE, offset = 0.4,
+                errbar.cols = "dark green",
+                params = list(mar = c(2.2, 3.5, 0.2, 1.2)),
+                order = c(1,4,3,8,6,2,5,7))
+
+# temperate grassland
+PlotGLMERFactor(model = sr1_tg$model, data = sr1_tg$data,
+                responseVar = "Species richness", seMultiplier = 1.96,
+                logLink = "e", catEffects = "LandUse",
+                main = "Temperate Grasslands, Savannas and Shrublands",
+                xtext.srt=45,
+                plotLabels = T, add = FALSE, offset = 0.6,
+                errbar.cols = 259,
+                params = list(mar = c(2.2, 3.5, 0.2, 1.2)),
+                order = c(1,4,3,8,6,2,5,7))
+plot.new()
+dev.off()
+class(sr1_tg$model)
+model <- sr1_tg$model
+labels <- character(0)
+coef.labels <- character(0)
+tnames <- levels(model@frame[, "LandUse"])
+labels <- c(labels, tnames)
+coef.labels <- c(coef.labels, paste("LandUse", tnames, sep = ""))
+
+o <- match(tolower(coef.labels), tolower(names(fixef(model))))
+y <- fixef(model)[o]
+yplus <- y + se.fixef(model)[o] * 1.96
+yminus <- y - se.fixef(model)[o] * 1.96
+
+df4 <- 
+  data.frame(y = y[2:8],
+             yplus = yplus[2:8],
+             yminus = yminus[2:8],
+             subset = "temp. grassland") %>% 
+  rownames_to_column(var = "land_use") %>%
+  mutate(land_use = gsub("LandUse","", land_use),
+         land_use = gsub("secondary vegetation","SV", land_use),
+         land_use = fct_relevel(land_use, c("Mature SV", "Intermediate SV", "Young SV", 
+                                            "Plantation forest", "Cropland", "Pasture", "Urban")))
+
+df <- rbind(df1, df2, df3, df4)
+
+gg_model_comparison <- ggplot(data = df) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
+  xlab("Land Use") + ylab("Species richness difference (%)") +
+  labs(title = "Coefficients for different biome subsets of PREDICTS") +
+  #geom_point(mapping = aes(x = land_use, y = y, color = subset),
+  #           position = "dodge") +
+  # geom_errorbar(mapping = aes(x = land_use, color = subset,
+  #                             ymin = yminus, 
+  #                             ymax = yplus, width = 0.2), 
+  #               position = position_dodge(width = 0.3)
+  #               ) +
+  geom_pointrange(mapping = aes(x = land_use, color = subset,
+                                y = y,
+                              ymin = yminus, 
+                              ymax = yplus),
+                fatten = 2, position = position_dodge(width = 0.4)) +
+  geom_hline(yintercept = 0, linetype="dashed", 
+             color = "grey", size = 0.75)
+gg_model_comparison
+
+# save
+png(filename = paste0(p_output, "plots/predicts_coeff.png"), 
+    width = 7, height = 5, units = "in", res = 400)
+print(gg_model_comparison)
+dev.off()
+
+  #facet_grid(cols = vars(comparison), scales = "free_x", switch = "x", 
+  #           space = "free_x")
+
+# just 
+gg_predicts_all <- ggplot(data = filter(df, subset == "all")) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
+  xlab("Land Use") + ylab("Species richness difference (%)") +
+  labs(title = "Coefficients for different biome subsets of PREDICTS") +
+  geom_pointrange(mapping = aes(x = land_use,
+                                y = y,
+                              ymin = yminus, 
+                              ymax = yplus),
+                fatten = 2, position = position_dodge(width = 0.4)) +
+  geom_hline(yintercept = 0, linetype="dashed", 
+             color = "grey", size = 0.75)
+
+png(filename = paste0(p_output, "plots/predicts_coeff_all.png"), 
+    width = 7, height = 5, units = "in", res = 400)
+print(gg_predicts_all)
+dev.off()
+
+```
+
+
+### 2. Abundance
+```{r abundance}
+names(sites)
+tibble(sites)
+ggplot(data = sites) + 
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
+  geom_boxplot(mapping = aes(x = LandUse, y = Species_richness))
+
+r1_ab <- GLMER(modelData = sites, responseVar = "Total_abundance",
+               fitFamily = "poisson", fixedStruct = "LandUse",
+               randomStruct = "(1|SS)", REML = FALSE)
+warnings() # In (function (fr, X, reTrms, family, nAGQ = 1L, verbose = 0L,  ... : non-integer x = 252.375000
+
+sites$Total_abundance # note, this has to be integer values, I think. 
+round(sites$Total_abundance[1:100], digits = 1)
+
+sites <- sites %>% mutate(
+  Adj_abundance = round(Total_abundance, digits = 2))
+
+r1_adj_ab <- GLMER(modelData = sites, responseVar = "Adj_abundance",
+                   fitFamily = "poisson", fixedStruct = "LandUse",
+                   randomStruct = "(1|SS)", REML = FALSE)
+warnings()
+sites$Species_richness
+sites$Adj_abundance
+
+r3_adj_ab <- GLMER(modelData = sites, responseVar = "Adj_abundance",
+                   fitFamily = "poisson", 
+                   fixedStruct = "LandUse",
+                   randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)", 
+                   REML = FALSE)
+
+r3 <- GLMER(modelData = sites, responseVar = "Species_richness",
+            fitFamily = "poisson", fixedStruct = "LandUse",
+            randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)", REML = FALSE)
+
+r3$model
+modelData = sites
+responseVar = "Total_abundance"
+fitFamily = "poisson"
+fixedStruct = "LandUse"
+randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)"
+
+# modelData, responseVar, fitFamily, fixedStruct, randomStruct, 
+#     saveVars = character(0), REML = TRUE, optimizer = "bobyqa", 
+#     maxIters = 10000, ADMB = FALSE
+
+# "Species_richness ~ LandUse + (1 | SS) + (1 | SSB) + (1 | SSBS)"
+.ConstructCall <- function(responseVar,fixedStruct,randomStruct){
+  return(paste(responseVar,"~",fixedStruct,"+",randomStruct,sep=""))
+}
+call.best <- .ConstructCall(responseVar, fixedStruct, randomStruct)
+allTerms <- unlist(strsplit(call.best, "[+]"))
+allTerms <- unlist(strsplit(allTerms, "[-]"))
+allTerms <- unlist(strsplit(allTerms, "[~]"))
+allTerms <- unlist(strsplit(allTerms, "[(]"))
+allTerms <- unlist(strsplit(allTerms, "[)]"))
+allTerms <- unlist(strsplit(allTerms, "[|]"))
+allTerms <- unlist(strsplit(allTerms, "[:]"))
+allTerms <- unlist(strsplit(allTerms, "[*]"))
+allTerms <- unique(allTerms)
+allTerms <- gsub(" ", "", allTerms)
+allTerms <- allTerms[allTerms != ""]
+allTerms <- allTerms[allTerms != "1"]
+allTerms <- allTerms[allTerms != "0"]
+allTerms <- allTerms[!grepl("poly", allTerms)]
+allTerms <- gsub("[,][0-9]", "", allTerms)
+saveVars <- character(0)
+allTerms <- c(allTerms, saveVars)
+allTerms <- unique(allTerms)
+
+modelData <- subset(modelData, select = c(allTerms))
+modelData <- na.omit(modelData)
+
+eval(substitute(m <- glmer(cb, family = "poisson", 
+                data = modelData, control = glmerControl(optimizer = "bobyqa", 
+                  optCtrl = list(maxfun = 10000))), list(cb = call.best)))
+
+
+m <- glmer(Total_abundance ~ LandUse + (1|SS) + (1|SSB) + (1|SSBS), 
+           family = "poisson", 
+           data = sites, 
+           control = glmerControl(optimizer = "bobyqa", 
+                                  optCtrl = list(maxfun = 10000))
+           )
+
+m1 <- glmer(Adj_abundance ~ LandUse + (1|SS), #, 
+           family = "poisson", 
+           data = sites, 
+           control = glmerControl(optimizer = "bobyqa", 
+                                  optCtrl = list(maxfun = 10000))
+           )
+
+
+# This doesn't work, shows the following error:
+# Error in (function (fr, X, reTrms, family, nAGQ = 1L, verbose = 0L, maxit = 100L,  : 
+#   (maxstephalfit) PIRLS step-halvings failed to reduce deviance in pwrssUpdate
+
+
+# Is this better than the previous random-effects structure?
+AIC(r2$model,r3$model)
+
+# Has it removed the overdispersion?
+GLMEROverdispersion(model = r3$model)
+
+# Now we will run backward stepwise selection to see if land use has a significant effect
+sr1 <- GLMERSelect(modelData = sites, responseVar = "Species_richness",
+                   fitFamily = "poisson", 
+                   fixedFactors = "LandUse",
+                   randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)")
+
+# A statistics table is produced
+sr1$stats # this just shows that land use has a significant effect as a factor. 
+
+# And the model itself is shown by:
+sr1$model
+r3$model # same as r3
+
+
+# Reorder the land uses into a logical order, using
+# order=c(1,4,3,8,6,2,5,7)
+sites$LandUse %>% levels() # to be reordered.
+class(sites$LandUse)
+sites <- sites %>% mutate(LandUse = fct_relevel(LandUse, levels(sites$LandUse)[c(1, 4, 3, 8, 6, 2, 5, 7)]))
+
+# plot
+PlotGLMERFactor(model = sr1$model,data = sr1$data,
+                responseVar = "Species richness",seMultiplier = 1.96,
+                logLink = "e",catEffects = "LandUse",xtext.srt=320,
+                params=list(mar = c(2.2, 3.5, 0.2, 1.2)),
+                order=c(1,4,3,8,6,2,5,7))
+
+
+```
+
+
+### 3. Years
+Try to put together a figure showing the evolution of species richness coefficient as a function of years since fragmentation
+
+```{r mod-richness-v-time}
+names(sites)
+
+# initial model
+
+m0 <- glmer(Species_richness ~ LandUse:Years_since_fragmentation_or_conversion + (1|SS) + (1|SSB) + (1|SSBS), 
+           family = "poisson", 
+           data = sites, 
+           control = glmerControl(optimizer = "bobyqa", 
+                                  optCtrl = list(maxfun = 10000))
+           )
+tidy(m0, conf.int = TRUE)
+
+sites$LandUse %>% levels() %>% grep("sec", ., value = T)
+sites_2nd <- sites %>% 
+  filter(LandUse %in% c("Mature secondary vegetation", 
+                        "Intermediate secondary vegetation",
+                        "Young secondary vegetation"))
+
+sites$LandUse %>% class()
+sites_2nd_ln <- sites %>% 
+  filter(LandUse %in% c("Mature secondary vegetation", 
+                        "Intermediate secondary vegetation",
+                        "Young secondary vegetation"),
+         Years_since_fragmentation_or_conversion > 0) %>%
+  mutate(years_ln = log(Years_since_fragmentation_or_conversion))
+
+sites_ln <- sites %>% 
+  filter(Years_since_fragmentation_or_conversion > 0,
+         LandUse != "Secondary vegetation (indeterminate age)") %>%
+  mutate(years_ln = log(Years_since_fragmentation_or_conversion),
+         LandUse_cond = dplyr::recode(LandUse, # old = new
+                               "Mature secondary vegetation" = "Secondary vegetation", 
+                               "Intermediate secondary vegetation" = "Secondary vegetation", 
+                               "Young secondary vegetation" = "Secondary vegetation",
+                               "Cropland" = "Agriculture",
+                               "Pasture" = "Agriculture"))
+
+table(sites_ln$LandUse_cond)
+
+sites_sub <- sites %>% 
+  filter(Predominant_land_use %in% c("Primary vegetation", 
+                        "Mature secondary vegetation", 
+                        "Intermediate secondary vegetation",
+                        "Young secondary vegetation")) %>%
+  mutate(years_ln = log(Years_since_fragmentation_or_conversion))
+
+table(sites_sub$Years_since_fragmentation_or_conversion)
+hist(sites_sub$Years_since_fragmentation_or_conversion)
+
+
+  
+# Drop classification where land use could not be identified
+sites_2nd_ln$LandUse_cond[(sites_2nd_ln$LandUse_cond=="Cannot decide")] <- NA
+
+# For these models we will group all secondary vegetation together
+sites_2nd_ln$LandUse_cond[(sites_2nd_ln$LandUse_cond=="Secondary vegetation (indeterminate age)")] <- "Secondary vegetation"
+sites_2nd_ln$LandUse_cond[(sites_2nd_ln$LandUse_cond=="Mature secondary vegetation")] <- "Secondary vegetation"
+sites_2nd_ln$LandUse_cond[(sites_2nd_ln$LandUse_cond=="Intermediate secondary vegetation")] <- "Secondary vegetation"
+sites_2nd_ln$LandUse_cond[(sites_2nd_ln$LandUse_cond=="Young secondary vegetation")] <- "Secondary vegetation"
+# We will also group cropland and pasture together into an 'agriculture' class
+sites_2nd_ln$LandUse_cond[(sites_2nd_ln$LandUse_cond=="Cropland")] <- "Agriculture"
+sites_2nd_ln$LandUse_cond[(sites_2nd_ln$LandUse_cond=="Pasture")] <- "Agriculture"
+# Now make the variable a factor, and set the reference level to primary vegetation
+sites_2nd_ln$LandUse_cond <- factor(sites_2nd_ln$LandUse_cond)
+sites_2nd_ln$LandUse_cond <- relevel(sites_2nd_ln$LandUse_cond,ref="Primary vegetation")
+
+nrow(sites) # 22678
+nrow(sites_2nd) # 3788
+nrow(sites_2nd_ln) # 1850
+
+hist(sites_2nd$Years_since_fragmentation_or_conversion)
+
+table(sites_2nd$Years_since_fragmentation_or_conversion)
+
+m1 <- glmer(Species_richness ~ Years_since_fragmentation_or_conversion + (1|SS) + (1|SSB) + (1|SSBS), 
+           family = "poisson", 
+           data = sites_2nd, 
+           control = glmerControl(optimizer = "bobyqa", 
+                                  optCtrl = list(maxfun = 10000))
+           )
+# Warning message:
+# In checkConv(attr(opt, "derivs"), opt$par, ctrl = control$checkConv,  :
+#   Model is nearly unidentifiable: very large eigenvalue
+#  - Rescale variables?
+
+m2 <- glmer(Species_richness ~ log(Years_since_fragmentation_or_conversion) + (1|SS) + (1|SSB) + (1|SSBS), 
+           family = "poisson", 
+           data = sites_2nd_ln, 
+           control = glmerControl(optimizer = "bobyqa", 
+                                  optCtrl = list(maxfun = 10000))
+           )
+
+m3 <- GLMER(modelData = sites_2nd_ln, responseVar = "Species_richness",
+            fitFamily = "poisson", fixedStruct = "years_ln",
+            randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)", REML = FALSE)
+m3$model
+
+LandUse_cond
+m4 <- GLMER(modelData = sites_ln, responseVar = "Species_richness",
+            fitFamily = "poisson", fixedStruct = "LandUse_cond + years_ln",
+            randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)", REML = FALSE)
+m4$model
+
+m5 <- GLMER(modelData = sites_ln, responseVar = "Species_richness",
+            fitFamily = "poisson", fixedStruct = "LandUse_cond:years_ln",
+            randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)", REML = FALSE)
+m5$model
+
+m6 <- GLMER(modelData = sites_ln, responseVar = "Species_richness",
+            fitFamily = "poisson", fixedStruct = "LandUse_cond:years_ln + LandUse_cond",
+            randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)", REML = FALSE)
+m6$model
+
+
+# just young secondary vegetation
+m_ysv <- GLMER(modelData = filter(sites_2nd_ln, LandUse == "Young secondary vegetation"), responseVar = "Species_richness",
+            fitFamily = "poisson", fixedStruct = "Years_since_fragmentation_or_conversion",
+            randomStruct = "(1|SS)+(1|SSB)+(1|SSBS)", REML = FALSE)
+m_ysv$model
+
+plot(Species_richness ~ Years_since_fragmentation_or_conversion, 
+     data = filter(sites_2nd_ln, LandUse == "Young secondary vegetation"),
+     main = "Species richness as a function of Age", 
+     xlab = "log(Age in Years)", ylab = "log(Species Richness)")
+abline(a = fixef(m_ysv$model)[1], b = fixef(m_ysv$model)[2], lwd = 3, col = "red")
+
+
+plot(Species_richness ~ Years_since_fragmentation_or_conversion, 
+     data = filter(sites_2nd_ln, LandUse == "Young secondary vegetation"),
+     main = "Species richness as a function of Age", 
+     xlab = "log(Age in Years)", ylab = "log(Species Richness)")
+abline(a = fixef(m_ysv$model)[1], b = fixef(m_ysv$model)[2], lwd = 3, col = "red")
+
+
+
+PlotGLMERFactor(model = m_ysv$model, data = m_ysv$data,
+                responseVar = "Species richness", seMultiplier = 1.96,
+                logLink = "e", catEffects = "Years_since_fragmentation_or_conversion",
+                main = "Species richness as a function of Time",
+                xtext.srt=45,
+                plotLabels = T, add = FALSE, offset = 0.6,
+                errbar.cols = 259,
+                params = list(mar = c(2.2, 3.5, 0.2, 1.2)), order = c(1,4,3,8,6,2,5,7)
+                )
+
+
+
+m2
+m3$model
+
+
+#
+m3$model
+plot(fixef(m3$model))
+abline(fixef(m3$model), lwd = 3)
+plot.new()
+
+names(sites_2nd_ln)
+plot(log(Species_richness) ~ log(Years_since_fragmentation_or_conversion), data = sites_2nd_ln,
+     main = "Species richness as a function of Age", xlab = "log(Age in Years)", ylab = "log(Species Richness)")
+abline(a = fixef(m3$model)[1], b = fixef(m3$model)[2], lwd = 3, col = "red")
+
+dev.off()
+hist(sites_2nd_ln$Years_since_fragmentation_or_conversion, breaks = 30, main = "Histogram of Age of Secondary Veg.", xlab = "Age (Years)", right = TRUE) # including the right side of the bin - 0 < x <= 10, 10 < x <= 20,
+table(sites_2nd_ln$Years_since_fragmentation_or_conversion)
+
+
+PlotGLMERFactor(model = m3$model, data = m3$data,
+                responseVar = "Species richness", seMultiplier = 1.96,
+                logLink = "e", catEffects = "years_ln",
+                main = "Land Use and Length of Time",
+                xtext.srt=45,
+                plotLabels = T, add = FALSE, offset = 0.6,
+                errbar.cols = 259,
+                params = list(mar = c(2.2, 3.5, 0.2, 1.2)),
+                order = c(1,4,3,8,6,2,5,7))
+
+fixef(m6$model)
+
+ggplot(data = filter(df, subset == "all")) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
+  xlab("Land Use") + ylab("Species richness difference (%)") +
+  labs(title = "Coefficients for different biome subsets of PREDICTS") +
+  geom_pointrange(mapping = aes(x = land_use,
+                                y = y,
+                              ymin = yminus, 
+                              ymax = yplus),
+                fatten = 2, position = position_dodge(width = 0.4)) +
+  geom_hline(yintercept = 0, linetype="dashed", 
+             color = "grey", size = 0.75)
+
+png(filename = paste0(p_output, "plots/predicts_coeff_all.png"), 
+    width = 7, height = 5, units = "in", res = 400)
+print(gg_predicts_all)
+dev.off()
+
+
+
+```
+
+```{r richness-proportion}
+sites_sub %>% head()
+sites_sub %>% nrow()
+sites_sub %>% filter(Diversity_metric_type == "Species richness") %>% nrow()
+predicts %>% filter(Diversity_metric_type == "Species richness") %>% nrow()
+ 
+
+sites_sub %>% select(Diversity_metric_type) %>% table()
+
+sites_sub %>% select(SSB) %>% unique() %>% head() %>% .$SSB %>% .[1] %>% as.character()
+
+sites_sub %>% filter(Diversity_metric_type == "Species richness") %>% select(SSB) %>% unique() 
+
+# %>% head() %>% .$SSB %>% .[1] %>% as.character()
+
+
+sites_sub %>% filter(SSB == "AD1_2001__Liow 2 ")
+
+sites_sub %>% group_by(SSBS) %>% mutate(prop_rich = Species_richness/ref_richness)
+# 
+```
+
+
+
+```{r mod-sub}
+
+sites_sub <- sites %>% 
+  filter(Predominant_land_use %in% c("Primary vegetation", 
+                        "Mature secondary vegetation", 
+                        "Intermediate secondary vegetation",
+                        "Young secondary vegetation")) %>%
+  mutate(years_ln = log(Years_since_fragmentation_or_conversion))
+
+table(sites_sub$Years_since_fragmentation_or_conversion)
+hist(sites_sub$Years_since_fragmentation_or_conversion)
+
+sites_sub$LandUse %>% unique
+
+mod1 <- glmer(Species_richness ~ LandUse:Years_since_fragmentation_or_conversion + (1|SS) + (1|SSB) + (1|SSBS), 
+           family = "poisson", 
+           data = sites_sub, 
+           control = glmerControl(optimizer = "bobyqa", 
+                                  optCtrl = list(maxfun = 10000))
+           )
+
+mod1
+
+mod2 <- glmer(Species_richness ~ Years_since_fragmentation_or_conversion + (1|SS) + (1|SSB) + (1|SSBS), 
+           family = "poisson", 
+           data = sites_sub, 
+           control = glmerControl(optimizer = "bobyqa", 
+                                  optCtrl = list(maxfun = 10000))
+           )
+
+
+dev.off()
+# plot
+plot(Species_richness ~ Years_since_fragmentation_or_conversion, data = sites_sub,
+     main = "Species richness as a function of Age", xlab = "Age in Years", ylab = "Species Richness")
+abline(a = fixef(mod1)[1], b = fixef(mod1)[2], lwd = 3, col = "red")
+abline(a = fixef(mod1)[1], b = fixef(mod1)[4], lwd = 3, col = "blue")
+abline(a = fixef(mod2)[1], b = fixef(mod2)[2], lwd = 3, col = "green")
+
+
+names(sites_2nd_ln)
+plot(Species_richness ~ log(Years_since_fragmentation_or_conversion), data = sites_sub,
+     main = "Species richness as a function of Age", xlab = "log(Age in Years)", ylab = "log(Species Richness)")
+abline(a = fixef(m3$model)[1], b = fixef(m3$model)[2], lwd = 3, col = "red")
+
+
+
+
+plot(Species_richness ~ Years_since_fragmentation_or_conversion, 
+     data = filter(sites_2nd_ln, LandUse == "Young secondary vegetation"),
+     main = "Species richness as a function of Age", 
+     xlab = "log(Age in Years)", ylab = "log(Species Richness)")
+abline(a = fixef(m_ysv$model)[1], b = fixef(m_ysv$model)[2], lwd = 3, col = "red")
+
+# plot
+PlotGLMERFactor(model = m_ysv$model, data = m_ysv$data,
+                responseVar = "Species richness", seMultiplier = 1.96,
+                logLink = "e", catEffects = "Years_since_fragmentation_or_conversion",
+                main = "Species richness as a function of Time",
+                xtext.srt=45,
+                plotLabels = T, add = FALSE, offset = 0.6,
+                errbar.cols = 259,
+                params = list(mar = c(2.2, 3.5, 0.2, 1.2)), order = c(1,4,3,8,6,2,5,7)
+                )
+
+
+
+```
+
+
+
+```{r basic-plots}
+
+sites_2nd_ln$LandUse
+gg_richness_ysv <- 
+  ggplot(data = sites_2nd_ln #%>% 
+           #filter(
+             #LandUse == "Young secondary vegetation"
+             #LandUse != "Mature secondary vegetation"
+             #)
+         ,
+         mapping = aes(x = Years_since_fragmentation_or_conversion, 
+                       y = Species_richness#, color = land_cover
+                       )) +
+  theme_classic() +
+  geom_point(alpha = 0.3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Age (Years)", #color = "Land Cover",
+       #title = "Constrained to just 'Young Secondary Vegetation'",
+       title = "Species richness as a function of age (in years)",
+       y = "Species Richness") #+ guides(fill = FALSE) #+ facet_grid(cols = vars(site), scales = "free_y")
+
+gg_richness_ysv %+% filter(sites_2nd_ln, 
+                           # LandUse == "Young secondary vegetation"
+                           LandUse != "Mature secondary vegetation"
+                           )
+
+png(filename = paste0(p_output, "plots/predicts_richness_age_ysv", ".png"), 
+      width = 7, height = 5, units = "in", res = 400)
+print(gg_richness_ysv)
+dev.off()
+
+sites_2nd_ln$Biome %>% unique()
+p2 <- gg_richness_ysv %+% filter(sites_2nd_ln, Biome == "Montane Grasslands & Shrublands") + labs(title = "Montane Grasslands & Shrublands")
+
+p3 <- gg_richness_ysv %+% filter(sites_2nd_ln, Biome == "Temperate Broadleaf & Mixed Forests") + labs(title = "Temperate Broadleaf & Mixed Forests")
+
+p4 <- gg_richness_ysv %+% filter(sites_2nd_ln, Biome == "Temperate Grasslands, Savannas & Shrublands") + labs(title = "Temperate Grasslands, Savannas & Shrublands")
+
+
+png(filename = paste0(p_output, "plots/predicts_richness_age_ysv_grid", ".png"), 
+      width = 9, height = 7, units = "in", res = 400)
+plot_grid(gg_richness_ysv, p2, p3, p4)
+dev.off()
+```
+
+
+```{r richness-v-time-by-biome}
+site_biome_names %>% gsub(" and ", " & ", .)
+
+site_biome_names_mod <- site_biome_names %>% gsub(" and ", " & ", .)
+
+sites_2nd %>% names
+sites_2nd_ln %>% names
+sites_2nd_ln %>% .$Biome %>% unique()
+sites_2nd_ln %>% filter(Biome == site_biome_names[5])
+
+predicts %>% select(Biome) %>% unique() %>% unlist(use.names = FALSE) #%>% length() # 14
+predicts %>% select(Predominant_land_use) %>% 
+  unique() %>% unlist(use.names = FALSE) %>% 
+  as.character() #%>% length() # 14
+
+names1 <- predicts %>% select(Biome) %>% 
+  unique() %>% unlist(use.names = FALSE) %>% 
+  as.character() #%>% length() # 14
+
+site_biome_names_mod
+names1
+
+# ok, now they match:
+site_biome_names_mod == sort(names1)[c(2:3,5:9,12:13)]
+
+
+predicts %>% filter(Biome == site_biome_names_mod[2],
+                    # Years_since_fragmentation_or_conversion > 0,
+                    Predominant_land_use %in% c("Mature secondary vegetation", 
+                                                "Intermediate secondary vegetation",
+                                                "Secondary vegetation (indeterminate age)", 
+                                                "Young secondary vegetation")
+                    ) %>% as_tibble()
+
+biomes %>% st_drop_geometry() %>% select(biome) %>% unique()
+
+
+
+predicts_sub_biomes_l <- lapply(seq_along(site_biome_names_mod), function(i) {
+  gg_richness_ysv %+% filter(sites_2nd_ln, Biome == site_biome_names_mod[i]) + labs(title = site_biome_names_mod[i])
+}
+)
+
+predicts_sub_biomes_l[[1]]
+
+ggsave(plot = plot_grid(plotlist = predicts_sub_biomes_l, ncol = 3, nrow = 3),
+       filename = paste0(p_plots, "predicts_rich_v_time_by_biome.pdf"), 
+    width = 7.5, height = 6.75, units = "in"
+)
+
+
+
+# or facet grid specifically:
+ggplot(data = sites_2nd_ln %>% filter(Biome %in% site_biome_names_mod),
+       mapping = aes(x = Years_since_fragmentation_or_conversion, 
+                     y = Species_richness#, color = land_cover
+                     )) +
+  theme_classic() +
+  geom_point(alpha = 0.3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Time (Years)", 
+       y = "Species Richness") + 
+  #guides(fill = FALSE) +
+  facet_wrap(vars(Biome), scales = "free")
+
+sites
+
+
+ggplot(data = 
+         sites %>% 
+         filter(Biome %in% site_biome_names_mod,
+                Predominant_land_use %in% c("Mature secondary vegetation", 
+                                            "Intermediate secondary vegetation",
+                                            # "Secondary vegetation (indeterminate age)", 
+                                            "Young secondary vegetation")),
+       mapping = aes(x = Years_since_fragmentation_or_conversion, 
+                     y = Species_richness#, color = land_cover
+                     )) +
+  theme_classic() +
+  geom_point(alpha = 0.3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Time (Years)", 
+       y = "Species Richness") + 
+  #guides(fill = FALSE) +
+  facet_wrap(vars(Biome), scales = "free")
+
+sites %>% names
+sites %>% select(LandUse) %>% unique
+sites %>% filter(LandUse == "Primary vegetation")
+
+sites %>% select(Biome) %>% unique
+
+
+
+ggplot(data = 
+         sites %>% 
+         filter(LandUse == "Primary vegetation",
+                Biome %in% site_biome_names_mod),
+       mapping = aes(x = Biome, 
+                     y = Species_richness#, color = land_cover
+                     )) +
+  theme_classic() +
+  geom_violin() + 
+  theme(axis.text.x = element_blank()) +
+  facet_wrap(vars(Biome), scales = "free") 
+
+
+sites %>% 
+  filter(LandUse == "Primary vegetation",
+         Biome %in% site_biome_names_mod[5]) %>%
+  ggplot(data = .) +
+  theme_classic() +
+  geom_violin(mapping = aes(x = Biome, y = Species_richness)) + 
+  geom_point(mapping = aes(x = Years_since_fragmentation_or_conversion, 
+                           y = Species_richness), 
+             alpha = 0.3) + 
+  geom_smooth(method = "lm", mapping = aes(x = Years_since_fragmentation_or_conversion, 
+                           y = Species_richness)) +
+  labs(x = "Time (Years)", 
+       y = "Species Richness")
+
+p1 <- ggplot(data = 
+         sites %>% 
+         filter(LandUse == "Primary vegetation",
+                Biome %in% site_biome_names_mod[5]),
+       mapping = aes(x = Biome, 
+                     y = Species_richness#, color = land_cover
+                     )) +
+  theme_classic() +
+  geom_violin() + 
+  theme(axis.text.x = element_blank()) +
+  facet_wrap(vars(Biome), scales = "free") 
+
+p2 <- 
+  sites %>% 
+  filter(Predominant_land_use %in% c("Mature secondary vegetation", 
+                                     "Intermediate secondary vegetation",
+                                     # "Secondary vegetation (indeterminate age)", 
+                                     "Young secondary vegetation"),
+         Biome %in% site_biome_names_mod[5]) %>%
+  ggplot(data = ., mapping = aes(x = Years_since_fragmentation_or_conversion, 
+                           y = Species_richness)) + 
+  theme_classic() +
+  geom_point(alpha = 0.3) + 
+  geom_smooth(method = "lm") +
+  labs(x = "Time (Years)", 
+       y = "Species Richness") + 
+  #guides(fill = FALSE) +
+  facet_wrap(vars(Biome), scales = "free")
+
+
+plot_grid(
+  p2, p1, ncol = 2, align = "h", axis = "b"
+)
+
+```
+
+
