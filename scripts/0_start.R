@@ -4,10 +4,7 @@
 # Abandonment & Biodiversity
 # 
 # --------------------------------------------------------------- #
-# setwd("/Users/christophercrawford/Google_Drive/_Projects/abandonment_biodiversity")
-# A collection of scripts that support an analysis of the biodiversity implications of cropland abandonment
-p_proj <- "/Users/christophercrawford/Google_Drive/_Projects/abandonment_biodiversity/"
-
+p_proj <- "/Users/christophercrawford/work/projects/biodiversity_abn/"
 
 # ------------------------- #
 # list the needed packages and load the libraries ----
@@ -18,7 +15,8 @@ needed_packages <- c(
   "gdalUtils", "gdata", "GISTools", "rgeos", "lwgeom", "fasterize",
   "ncdf4", # for opening NetCDF spatial files
   
-  "tidyverse", "lobstr", "pryr", "reshape2", "rlang",
+  "tidyverse", "lobstr", #"pryr", 
+  "reshape2", "rlang",
   # tidyverse includes ggplot2, dplyr, tidyr, readr, purrr, tibble, stringr, and forcats
   
   "rticles",
