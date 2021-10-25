@@ -6,13 +6,100 @@ editor_options:
 ---
 
 ```{r initialize}
-source("/Users/christophercrawford/Google_Drive/_Projects/abandonment_biodiversity/scripts/0_start.R")
+source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
+# install.packages("terra")
+# packageVersion("terra")
+# library(terra)
+
 ```
 
 ```{r load-files}
 site_df <- read.csv(file = paste0(p_derived, "site_df.csv"))
+run_label <- "_2021_03_13" 
+
 ```
 
+```{r site-extent}
+site_sf <- st_read(paste0(p_derived, "site_sf.shp"))
+st_crs(site_sf) <-  "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
+site_sf <- site_sf %>% st_make_valid()
+
+plot(site_sf$geometry)
+
+
+plot(site_sf %>% filter(site == "shaanxi") %>% st_geometry())
+```
+
+```{r load-rasters}
+
+# Land use class codes:
+#       1. Non-vegetated area (e.g. water, urban, barren land)
+#       2. Woody vegetation
+#       3. Cropland 
+#       4. Herbaceous land (e.g. grassland)
+
+# ------------------------------- load land cover maps --------------------------------------- #
+# prepared input rasters (derived by Chris)
+site_input_raster_files <- list.files(paste0(p_dat_derived, "input_rasters"), full.names = TRUE) %>%
+  grep(".tif", ., value = TRUE) #%>% grep("age", ., value = TRUE, invert = TRUE)
+
+lc <- lapply(seq_along(site_input_raster_files), function(i) {
+  # raster::brick(site_input_raster_files[i]) # as rasters
+  terra::rast(site_input_raster_files[i]) # as SpatRasters
+  })
+names(lc) <- site_df$site
+
+# rename raster layers:
+for (i in 1:11) {
+  if (names(lc[i]) == "nebraska") {
+    names(lc[[i]]) <- paste0("y", 1986:2018)
+  } else {
+    if (names(lc[i]) == "wisconsin") {
+      names(lc[[i]]) <- paste0("y", 1987:2018)
+    } else {
+      # everything else, just 1987:2017
+      names(lc[[i]]) <- paste0("y", 1987:2017)
+    }}}
+
+
+
+# ----------------------------- load abandonment age rasters ---------------------------- #
+# abandonment age maps (produced by Chris)
+age_files <- list.files(paste0(p_dat_derived, "age_rasters/", run_label), 
+                        full.names = TRUE) %>%
+  grep(".tif", ., value = TRUE) #%>% grep("age", ., value = TRUE, invert = FALSE)
+
+
+# age_r <- lapply(seq_along(age_files), function(i) {raster::brick(age_files[i])})
+# names(age_r) <- site_df$site
+# for (i in seq_along(age_r)) {names(age_r[[i]]) <- paste0("y", 1987:2017)} # remember: these are just 1987:2017
+
+
+age_t <- lapply(seq_along(age_files), function(i) {terra::rast(age_files[i])})
+names(age_t) <- site_df$site
+for (i in seq_along(age_t)) {names(age_t[[i]]) <- paste0("y", 1987:2017)} # remember: these are just 1987:2017
+
+
+# load max age rasters
+max_age_files <- list.files(paste0(p_dat_derived, "max_age/", run_label), 
+                        full.names = TRUE) %>%
+  grep(".tif", ., value = TRUE)
+
+# max_age_r <- lapply(seq_along(max_age_files), function(i) {
+#   brick(max_age_files[i])
+#   })
+# names(max_age_r) <- site_df$site
+
+max_age_t <- lapply(seq_along(max_age_files), function(i) {
+  rast(max_age_files[i])
+  })
+names(max_age_t) <- site_df$site
+for (i in seq_along(max_age_t)) {names(max_age_t[[i]]) <- "max_age"} # remember: these are just 1987:2017
+
+
+```
+
+# AOH
 
 ```{r load-species-data}
 # location of prepped range map data (from Zambia project)
@@ -85,24 +172,6 @@ amp_sf[7147, ]
 
 ```
 
-
-```{r}
-env_size(ls())
-```
-
-```{r site-extent}
-site_sf <- st_read(paste0(p_derived, "site_sf.shp"))
-st_crs(site_sf) <-  "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
-site_sf <- site_sf %>% st_make_valid()
-
-plot(site_sf$geometry)
-
-
-plot(site_sf %>% filter(site == "shaanxi") %>% st_geometry())
-```
-
-
-
 ```{r crop-ranges-to-sites}
 # Amphibians
 
@@ -133,6 +202,24 @@ save(amp_sites, file = paste0(p_derived, "amp_sites.RData"))
 # Birds
 bird_s <- bird_sf %>%
     st_intersection(., site_sf %>% filter(site == "shaanxi"))
+
+```
+
+```{r habitat-prefs}
+habitat_prefs <- read_csv(file = "/Volumes/GoogleDrive-107266184156135828486/My Drive/ee/habitat_prefs.csv")
+
+habitat_prefs
+names(habitat_prefs)
+
+habitat_prefs$specialism %>% unique()
+
+habitat_prefs$habitat_code %>% unique() %>% sort()
+habitat_prefs$habitat_importance
+habitat_prefs$habitat_suitability %>% unique() %>% sort()
+habitat_prefs$className %>% unique() %>% sort()
+
+habitat_prefs$scientificName %>% unique() %>% sort()
+
 
 ```
 
@@ -229,11 +316,137 @@ amp_sf %>%
 
 ```
 
+
+
+```{r RS-AOH-tester}
+library(sf)
+AOH <- st_read(paste0(p_dat, "Bd/AOH/reptilia_AOH/reptilia.shp"))
+
+AOH %>% st_drop_geometry() %>% as_tibble()
+object_size(AOH)
+names(AOH)
+head(AOH)
+st_crs(AOH)
+
+
+
+# plot
+AOH %>% 
+  filter(binom == "Archaius_tigris") %>% 
+  st_geometry() %>% 
+  plot()
+
+AOH %>% 
+  st_geometry() %>% 
+  plot(add = TRUE)
+
+plot(ne_countries()) # or all sub national level bodies plot(ne_states())
+
+crs(ne_countries())
+
+# Create template raster by extending the input raster (mask) to the extent of the input polygons.
+mask_filled <- mask
+mask_filled[is.na(mask_filled)] <- 0 # replace NAs with 0s
+
+projection <- crs(AOH) # note, seems to work better than st_crs().
+
+# make a template raster
+mask <- raster()
+res(mask) <- 0.01
+
+
+# values(mask) <- 0 # If you want, you can add values to the raster. You don't have to though, and it just makes the raster HUGE at this resolution (4.8 GB)
+# writeRaster(mask, "mask.tif") # if you add values, you'll need to just write it to your machine, otherwise you'll quickly run out of memory, as the fasterize layer will be the same size.  
+
+
+AOH_r <- fasterize(AOH, mask, fun = "sum") # field = NULL by default, which gives every polygon a value of 1
+
+# in the event that you want to build a raster based on 
+template_raster <- extend(small_mask, extent(as.Spatial(sf_file)), value = 0)
+
+
+
+
+# fasterize
+
+
+  
+```
+
+```{r sparse}
+library(sf)
+library(raster)
+
+AOH <- st_read(paste0(p_dat, "Bd/AOH/reptilia_AOH/reptilia.shp"))
+
+# check it out
+AOH %>% 
+  filter(binom == "Archaius_tigris") %>% 
+  st_geometry() %>% 
+  plot()
+
+AOH %>% 
+  st_geometry() %>% 
+  plot(add = TRUE)
+# tiny lil guys, eh?
+
+
+
+# -------------------
+# First, make a template raster
+
+mask <- raster()
+res(mask) <- 0.01
+
+
+# values(mask) <- 0 # If you want, you can add values to the raster. You don't have to though, and it just makes the raster HUGE at this resolution (4.8 GB)
+# writeRaster(mask, "mask.tif") # if you add values, you'll need to just write it to your machine, otherwise you'll quickly run out of memory, as the fasterize layer will be the same size.  
+
+
+# -------------------
+#  Fasterize: 
+
+AOH_r <- fasterize(AOH, mask, fun = "sum") # field = NULL by default, which gives every polygon a value of 1
+
+plot(AOH_r) # again.... tiny lil guys!
+
+
+
+
+# -------------------
+# Notes:
+
+# If you aren't already familiar, these are great packages for basemaps:
+install.packages("rnaturalearth")
+devtools::install_github("ropensci/rnaturalearthdata")
+devtools::install_github("ropensci/rnaturalearthhires")
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(rnaturalearthhires)
+
+plot(ne_countries())  # nice!
+# plot(ne_states()) # or all sub national level bodies with this one 
+
+
+
+# if you need to reproject the mask before you fasterize, I think raster works best with: 
+crs(AOH) # note, seems to work better than st_crs().
+
+# in the event that you want to build a raster based on a smaller existing one
+template_raster <- extend(small_mask, extent(as.Spatial(sf_file)), value = 0)
+
+
+
+```
+
+
 # Habitats
+
+## PNV
 
 ```{r pnv}
 # load PNV
-pnv <- raster(paste0(p_dat, "/Habitats/PNV/Hengl_2018_PNV/1km/pnv_biome.type_biome00k_c_1km_s0..0cm_2000..2017_v0.1.tif"))
+pnv_1km <- raster(paste0(p_dat, "/Habitats/PNV/Hengl_2018_PNV/1km/pnv_biome.type_biome00k_c_1km_s0..0cm_2000..2017_v0.1.tif"))
 
 # Resolution
 res(l) * 110 # = 0.9167 km grid (~ 1 km)
@@ -246,201 +459,183 @@ pnv_table <- pnv_table %>%
   rename(Name = New.global.consolidated.biome.scheme)
 
 
-hist(pnv, maxpixels = 1000)
-extent(s$y2017)
-plot(extent(s$y2017))
-plot(pnv, maxpixels = 1000)
-
-# plot PNV map, with 
-plot(pnv, maxpixels = 100000,
-     main = "PNV, Hengl et al. 2018",
-     breaks = c(0, pnv_table$Number), # note, you need a 0 at the beginning of the breaks
-     col = pnv_table$Color, legend = FALSE)
-legend("top", legend = pnv_table$Name[1:10], 
-       fill = pnv_table$Color[1:10], cex = 0.5, inset = 0)
-legend("bottom", legend = pnv_table$Name[11:21], 
-       fill = pnv_table$Color[11:21], cex = 0.5, inset = 0)
-
-# shaanxi
-plot(pnv, maxpixels = 100000,
-     ext = extent(s$y2017),
-     breaks = c(0, pnv_table$Number), # note, you need a 0 at the beginning of the breaks
-     col = pnv_table$Color)
-
-# belarus
-plot(pnv, maxpixels = 100000,
-     ext = extent(b$y2017),
-     breaks = c(0, pnv_table$Number), # note, you need a 0 at the beginning of the breaks
-     col = pnv_table$Color)
+# 250 m version, the one I'll use:
+pnv <- rast(paste0(p_dat, "/Habitats/PNV/Hengl_2018_PNV/250m/pnv_biome.type_biome00k_c_250m_s0..0cm_2000..2017_v0.2.tif"))
+plot(pnv)
 
 
-# crop:
-s_pnv <- crop(pnv, extent(s$y2017))
-b_pnv <- crop(pnv, extent(b$y2017))
-
-sort(unique(values(s_pnv)))
-sort(unique(values(b_pnv)))
-filter(pnv_table, Number %in% unique(values(s_pnv)))
-filter(pnv_table, Number %in% unique(values(b_pnv)))
-
-c(0, filter(pnv_table, Number %in% unique(values(s_pnv)))$Number)
-pnv_table$Color
-pnv_table
-
-# shaanxi
-par(mfrow = c(2,2))
-plot(s_pnv, maxpixels = 100000, main = "Shaanxi, PNV",
-     breaks = c(0, filter(pnv_table, Number %in% unique(values(s_pnv)))$Number),
-     col = filter(pnv_table, Number %in% unique(values(s_pnv)))$Color)
-
-legend("topleft", 
-       legend = filter(pnv_table, Number %in% unique(values(s_pnv)))$Name, 
-       fill = filter(pnv_table, Number %in% unique(values(s_pnv)))$Color,
-       cex = 0.6, inset = 0)
-
-
-# belarus
-plot(b_pnv, maxpixels = 100000, main = "Belarus, PNV",
-     breaks = c(0, filter(pnv_table, Number %in% unique(values(b_pnv)))$Number),
-     col = filter(pnv_table, Number %in% unique(values(b_pnv)))$Color)
-
-legend("bottomleft", 
-       legend = filter(pnv_table, Number %in% unique(values(b_pnv)))$Name, 
-       fill = filter(pnv_table, Number %in% unique(values(b_pnv)))$Color,
-       cex = 0.6, inset = 0)
-
-
-# what habitat types are these?
-
-# area in each category, in km2 \\ Shaanxi
-s_pnv_area <- pnv_table %>%
-  filter(Number %in% unique(values(s_pnv))) %>%
-  select(Number, Name) %>%
-  mutate(
-    area_percent = (table(getValues(s_pnv))/ncell(s_pnv))*100, # percentage in each
-    area_km2 = 
-      length(raster::area(s_pnv)) * 
-      median(raster::area(s_pnv), na.rm = TRUE) * 
-      area_percent/100
-  )
-s_pnv_area # 
-# < 0.05 % in 9 (cool mixed forest) and 27 (desert)
-# 96% in steppe
-# 3.82% in temperate deciduous broadleaf forest
-
-# area in each category, in km2 \\ Belarus
-b_area <- pnv_table %>%
-  filter(Number %in% unique(values(b_pnv))) %>%
-  select(Number, Name) %>%
-  mutate(
-    area_percent = (table(getValues(b_pnv))/ncell(b_pnv))*100, # percentage in each
-    area_km2 = 
-      length(raster::area(b_pnv)) * 
-      median(raster::area(b_pnv), na.rm = TRUE) * 
-      area_percent/100
-  )
-
-b_area
-# 2/3 in 9, or "cool mixed forest"
-# 1/3 in 15, or "cold evergreen needleleaf forest"
-
-
-# plot
-
-plot(b_age_r$y2017, main = "Belarus, abn age, 2017")
-plot(s_age_r$y2017, main = "Shaanxi, abn age, 2017")
-```
-
-Which pnv map should we use? The published 1 km map, or the 250 m map?
-```{r pnv-250m}
-pnv_250 <- raster(paste0(p_dat, "/Habitats/PNV/Hengl_2018_PNV/250m/pnv_biome.type_biome00k_c_250m_s0..0cm_2000..2017_v0.2.tif"))
-
-pnv_250 <- rast(paste0(p_dat, "/Habitats/PNV/Hengl_2018_PNV/250m/pnv_biome.type_biome00k_c_250m_s0..0cm_2000..2017_v0.2.tif"))
-
-plot(pnv_250)
 
 # Resolution
-res(pnv) * 110 # = 0.9167 km grid (~ 1 km)
-res(pnv_250) * 110 # = 0.229 km grid (~ 250 m)
+res(pnv_1km) * 110 # = 0.9167 km grid (~ 1 km)
+res(pnv) * 110 # = 0.229 km grid (~ 250 m)
+
+
+
+# Load pnv table
 
 # color palette information
-pnv_250_table <- read_csv(paste0(p_dat, "Habitats/PNV/Hengl_2018_PNV/250m/pnv_biome.type_biome00k_c_250m_s0..0cm_2000..2017_v0.2.tif.csv"))
-pnv_table # the tables are the same
-pnv_250_table == pnv_table
-pnv_250_table[14, ]
-pnv_table[14, ]
+pnv_table <- read_csv(paste0(p_dat, "Habitats/PNV/Hengl_2018_PNV/250m/pnv_biome.type_biome00k_c_250m_s0..0cm_2000..2017_v0.2.tif.csv"))
 
-# crop:
-s_pnv_250 <- crop(pnv_250, extent(s$y2017))
-b_pnv_250 <- crop(pnv_250, extent(b$y2017))
+pnv_table <- pnv_table %>% 
+  mutate(labels = paste0(Number, ": ", New.global.consolidated.biome.scheme),
+         cols = rgb(red = R, green = G, blue = B, maxColorValue = 255))
 
-sort(unique(values(s_pnv_250)))
-sort(unique(values(b_pnv_250)))
-filter(pnv_table, Number %in% unique(values(s_pnv_250)))
-filter(pnv_table, Number %in% unique(values(b_pnv_250)))
+pnv_table %>% print(n = 22)
 
-# plots
-# shaanxi
-plot(s_pnv_250, maxpixels = 100000, main = "Shaanxi, PNV, 250 m resolution",
-     breaks = c(0, filter(pnv_table, Number %in% unique(values(s_pnv_250)))$Number),
-     col = filter(pnv_table, Number %in% unique(values(s_pnv_250)))$Color)
-
-legend("topleft", 
-       legend = filter(pnv_table, Number %in% unique(values(s_pnv_250)))$Name, 
-       fill = filter(pnv_table, Number %in% unique(values(s_pnv_250)))$Color,
-       cex = 0.6, inset = 0)
-
-# belarus
-plot(b_pnv_250, maxpixels = 100000, main = "Belarus, PNV, 250 m resolution",
-     breaks = c(0, filter(pnv_table, Number %in% unique(values(b_pnv_250)))$Number),
-     col = filter(pnv_table, Number %in% unique(values(b_pnv_250)))$Color)
-
-legend("bottomleft", 
-       legend = filter(pnv_table, Number %in% unique(values(b_pnv_250)))$Name, 
-       fill = filter(pnv_table, Number %in% unique(values(b_pnv_250)))$Color,
-       cex = 0.6, inset = 0)
+# label vector:
 
 
-# what habitat types are these?
-# belarus, mostly closed mixed 
+# freq in each class
+site_pnv_freq <- lapply(1:11, function(i) {
+  freq(site_pnv[[i]]) %>% as_tibble() %>% mutate(site = site_df$site[i])
+  }) %>% bind_rows()
 
-# area in each category, in km2 \\ Shaanxi
-s_pnv_area_250 <- pnv_table %>%
-  filter(Number %in% unique(values(s_pnv_250))) %>%
-  select(Number, Name) %>%
-  mutate(area_percent = (table(getValues(s_pnv_250))/ncell(s_pnv_250))*100, # percentage in each
-    area_km2 = 
-      length(raster::area(s_pnv_250)) * 
-      median(raster::area(s_pnv_250), na.rm = TRUE) * 
-      area_percent/100
+site_pnv_freq$value %>% unique() %>% sort() %>% length
+pnv_table$Number %>% unique() %>% sort()
+
+
+
+# simple plots, with specified colors:
+
+plot(pnv, 
+     type = "classes", 
+     col = pnv_table$cols, 
+     levels = pnv_table$labels)
+
+```
+
+
+```{r crop-pnv-to-sites}
+
+# crop, and save to file
+site_pnv <- lapply(1:11, function(i) {
+  terra::crop(pnv, ext(lc[[i]]),
+              filename = paste0(p_derived, "site_pnv/", names(lc[i]), "_pnv.tif"),
+              overwrite = TRUE
+              )
+  }
   )
-s_pnv_area # 
-s_pnv_area_250
-# < 0.05 % in 9 (cool mixed forest) and 27 (desert)
-# 96% in steppe
-# 3.82% in temperate deciduous broadleaf forest
+names(site_pnv) <- site_df$site
 
-# area in each category, in km2 \\ Belarus
-b_area_250 <- pnv_table %>%
-  filter(Number %in% unique(values(b_pnv_250))) %>%
-  select(Number, Name) %>%
-  mutate(area_percent = (table(getValues(b_pnv_250))/ncell(b_pnv_250))*100, # percentage in each
-    area_km2 = 
-      length(raster::area(b_pnv_250)) * 
-      median(raster::area(b_pnv_250), na.rm = TRUE) * 
-      area_percent/100
+# load back in:
+site_pnv <- lapply(
+  list.files(paste0(p_derived, "site_pnv"), full.names = TRUE) %>% grep("_pnv.tif", ., value = TRUE), 
+  function(i) rast(i)
+  )
+names(site_pnv_30) <- site_df$site
+
+
+
+show_col(cbf_col)
+show_col(pnv_table$cols)
+
+show_col(gg_color_hue(12))
+
+
+# plot a single site:
+i <- 3
+
+terra::plot(site_pnv[[i]], type = "classes",
+       col = filter(pnv_table, 
+                    Number %in% filter(site_pnv_freq, 
+                                       site == site_df$site[i])$value)$cols, 
+       levels = filter(pnv_table, 
+                    Number %in% filter(site_pnv_freq, 
+                                       site == site_df$site[i])$value)$labels
+       )
+
+plot(pnv, 
+     type = "classes", 
+     col = pnv_table$cols, 
+     levels = pnv_table$labels)
+
+```
+
+```{r resample-pnv}
+
+
+site_pnv_30 <- lapply(1:11, function(i) {
+  terra::resample(
+    x = site_pnv[[i]], y = lc[[i]]$y2017, method = "near",
+    filename = paste0(p_derived, "site_pnv/", names(lc[i]), "_pnv_30.tif"),
+    names = paste0(names(lc[i]), "_pnv_30"),
+    overwrite = TRUE)
+  }
   )
 
-b_area_250
-b_area
-# 2/3 in 9, or "cool mixed forest"
-# 1/3 in 15, or "cold evergreen needleleaf forest"
+# load back in
+site_pnv_30 <- lapply(
+  list.files(paste0(p_derived, "site_pnv"), full.names = TRUE) %>% grep("_30.tif", ., value = TRUE), 
+  function(i) rast(i)
+  )
+names(site_pnv_30) <- site_df$site
+
+plot(site_pnv_30$shaanxi)
+
+
+
+# some testing:
+i
+rs1 <- terra::resample(
+    x = site_pnv[[i]], y = lc[[i]]$y2017, method = "near")
+plot(rs1)
+
+rs2 <- terra::resample(
+    x = site_pnv[[i]], y = age_t[[i]]$y2017, method = "near")
+
+plot(rs2)
+freq(rs1)
+freq(rs2)
+plot(rs1-rs2)
+ft1 <- freq(lc[[i]]$y2017)
+ft2 <- freq(age_t[[i]]$y2017)
+ft1[, 3] %>% sum()
+ft2[, 3] %>% sum()
 
 
 ```
 
-```{r nlcd}
 
+```{r save-PNV-plot}
+pdf(file = paste0(p_output, "plots/pnv_sites.pdf"), width = 10, height = 7.5)
+mval <- 1.5
+par(mfrow = c(3, 4), 
+      # mar=c(0,0,0,0), 
+      oma=c(1,1,0,0), 
+      adj = 0,
+      cex.main = 1#,
+      # tcl = -0.2
+      )
+    
+for(i in 1:11) {plot(site_pnv[[i]], 
+                     main = names(site_pnv[i]),
+                     mar = c(mval+0.5, mval, mval + 1.2, mval + 2), # bltr     
+                     type = "classes", #legend = FALSE,
+                     col = pnv_table %>% 
+                       filter(Number %in% 
+                                filter(site_pnv_freq, site == site_df$site[i])$value) %>% 
+                       .$cols
+)
+  }
+
+plot.new()
+plot(site_pnv[[i]], type = "classes",
+     legend = "left",
+     plg = list(cex = 0.7, title = "Potential Natural Vegetation", title.adj = 0),
+     legend.only = TRUE,
+     col = pnv_table$cols, 
+     levels = pnv_table$labels
+     )
+dev.off()
+
+
+
+
+```
+
+## other
+
+```{r nlcd}
 install.packages("terra")
 library(terra)
 library(tictoc)
@@ -571,19 +766,21 @@ plot(nj_aea$geometry, add = T)
 
 ```{r habitat classifications}
 # level 1
-habitat <- raster("/Users/christophercrawford/Google_Drive/_Projects/data/Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_composite_lvl1_ver003.tif")
+habitat <- raster(paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_composite_lvl1_ver003.tif"))
 
 # level 2
-habitat <- raster("/Users/christophercrawford/Google_Drive/_Projects/data/Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_composite_lvl2_ver003.tif")
+habitat <- raster(paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_composite_lvl2_ver003.tif"))
 
 stack()
 
 # color palette information #
 # level 1
-habitat_table <- read_delim(file = "/Users/christophercrawford/Google_Drive/_Projects/data/Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_code_ver003/styles/level1.clr", delim = " ", col_names = c("Number", "R", "G", "B", "Opacity", "Name"))
+habitat_table <- read_delim(
+  file = paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_code_ver003/styles/level1.clr"), delim = " ", col_names = c("Number", "R", "G", "B", "Opacity", "Name"))
 
 # level 2
-habitat_table <- read_delim(file = "/Users/christophercrawford/Google_Drive/_Projects/data/Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_code_ver003/styles/level2.clr", delim = " ", col_names = c("Number", "R", "G", "B", "Opacity", "Name"))
+habitat_table <- read_delim(
+  file = paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_code_ver003/styles/level2.clr"), delim = " ", col_names = c("Number", "R", "G", "B", "Opacity", "Name"))
 habitat_table <- habitat_table %>%
   mutate(Color = rgb(R, G, B, maxColorValue = 255))
 
@@ -732,127 +929,6 @@ plot(extent(s_age_r), add = T, col = "red")
 
 ```
 
-
-```{r RS-AOH-tester}
-library(sf)
-AOH <- st_read("/Users/christophercrawford/Google_Drive/_Projects/data/Bd/AOH/reptilia_AOH/reptilia.shp")
-
-AOH %>% st_drop_geometry() %>% as_tibble()
-object_size(AOH)
-names(AOH)
-head(AOH)
-st_crs(AOH)
-
-
-
-# plot
-AOH %>% 
-  filter(binom == "Archaius_tigris") %>% 
-  st_geometry() %>% 
-  plot()
-
-AOH %>% 
-  st_geometry() %>% 
-  plot(add = TRUE)
-
-plot(ne_countries()) # or all sub national level bodies plot(ne_states())
-
-crs(ne_countries())
-
-# Create template raster by extending the input raster (mask) to the extent of the input polygons.
-mask_filled <- mask
-mask_filled[is.na(mask_filled)] <- 0 # replace NAs with 0s
-
-projection <- crs(AOH) # note, seems to work better than st_crs().
-
-# make a template raster
-mask <- raster()
-res(mask) <- 0.01
-
-
-# values(mask) <- 0 # If you want, you can add values to the raster. You don't have to though, and it just makes the raster HUGE at this resolution (4.8 GB)
-# writeRaster(mask, "mask.tif") # if you add values, you'll need to just write it to your machine, otherwise you'll quickly run out of memory, as the fasterize layer will be the same size.  
-
-
-AOH_r <- fasterize(AOH, mask, fun = "sum") # field = NULL by default, which gives every polygon a value of 1
-
-# in the event that you want to build a raster based on 
-template_raster <- extend(small_mask, extent(as.Spatial(sf_file)), value = 0)
-
-
-
-
-# fasterize
-
-
-  
-```
-
-```{r sparse}
-library(sf)
-library(raster)
-
-AOH <- st_read("/Users/christophercrawford/Google_Drive/_Projects/data/Bd/AOH/reptilia_AOH/reptilia.shp")
-
-# check it out
-AOH %>% 
-  filter(binom == "Archaius_tigris") %>% 
-  st_geometry() %>% 
-  plot()
-
-AOH %>% 
-  st_geometry() %>% 
-  plot(add = TRUE)
-# tiny lil guys, eh?
-
-
-
-# -------------------
-# First, make a template raster
-
-mask <- raster()
-res(mask) <- 0.01
-
-
-# values(mask) <- 0 # If you want, you can add values to the raster. You don't have to though, and it just makes the raster HUGE at this resolution (4.8 GB)
-# writeRaster(mask, "mask.tif") # if you add values, you'll need to just write it to your machine, otherwise you'll quickly run out of memory, as the fasterize layer will be the same size.  
-
-
-# -------------------
-#  Fasterize: 
-
-AOH_r <- fasterize(AOH, mask, fun = "sum") # field = NULL by default, which gives every polygon a value of 1
-
-plot(AOH_r) # again.... tiny lil guys!
-
-
-
-
-# -------------------
-# Notes:
-
-# If you aren't already familiar, these are great packages for basemaps:
-install.packages("rnaturalearth")
-devtools::install_github("ropensci/rnaturalearthdata")
-devtools::install_github("ropensci/rnaturalearthhires")
-library(rnaturalearth)
-library(rnaturalearthdata)
-library(rnaturalearthhires)
-
-plot(ne_countries())  # nice!
-# plot(ne_states()) # or all sub national level bodies with this one 
-
-
-
-# if you need to reproject the mask before you fasterize, I think raster works best with: 
-crs(AOH) # note, seems to work better than st_crs().
-
-# in the event that you want to build a raster based on a smaller existing one
-template_raster <- extend(small_mask, extent(as.Spatial(sf_file)), value = 0)
-
-
-
-```
 
 ```{r biomes}
 # use this version to match to PREDICTS
@@ -1035,6 +1111,98 @@ p <- gplot(age_r$shaanxi$y2017) +
   # facet_wrap(~ variable) +
   scale_fill_gradientn(colours = terrain.colors(100)) +
   coord_quickmap() 
+
+```
+
+
+# Carbon Sequestration
+
+```{r load-cp}
+forest_c <- rast(paste0(p_dat, "climate/carbon_seq_rates/sequestration_rate_layer_in_full_extent.tif"))
+plot(forest_c)
+# crop to sites, resample
+
+# crop, and save to file
+site_forest_c <- lapply(1:11, function(i) {
+  terra::crop(forest_c, ext(lc[[i]]),
+              filename = paste0(p_derived, "site_forest_carbon/", names(lc[i]), "_forest_c.tif"),
+              overwrite = TRUE
+              )
+  }
+  )
+names(site_forest_c) <- site_df$site
+plot(site_forest_c)
+
+site_pnv_30 <- lapply(1:11, function(i) {
+  terra::resample(
+    x = site_pnv[[i]], y = lc[[i]]$y2017, method = "near",
+    filename = paste0(p_derived, "site_pnv/", names(lc[i]), "_pnv_30.tif"),
+    names = paste0(names(lc[i]), "_pnv_30"),
+    overwrite = TRUE)
+  }
+  )
+
+# load back in
+site_pnv_30 <- lapply(
+  list.files(paste0(p_derived, "site_pnv"), full.names = TRUE) %>% grep("_30.tif", ., value = TRUE), 
+  function(i) rast(i)
+  )
+names(site_pnv_30) <- site_df$site
+
+
+
+# load back in:
+site_pnv <- lapply(
+  list.files(paste0(p_derived, "site_pnv"), full.names = TRUE) %>% grep("_pnv.tif", ., value = TRUE), 
+  function(i) rast(i)
+  )
+names(site_pnv_30) <- site_df$site
+
+```
+
+```{r save-forest-C-plot}
+pdf(file = paste0(p_output, "plots/forest_carbon_seq_rates.pdf"), width = 10, height = 7.5)
+mval <- 1.5
+par(mfrow = c(3, 4), 
+      # mar=c(0,0,0,0), 
+      oma=c(1,1,0,0), 
+      adj = 0,
+      cex.main = 1#,
+      # tcl = -0.2
+      )
+    
+for(i in 1:11) {
+  plot(site_forest_c[[i]], 
+       main = names(site_forest_c[i]),
+       mar = c(mval+0.5, mval, mval + 1.2, mval + 2) # bltr   
+       # type = "classes", #legend = FALSE,
+       )
+  }
+
+# plot.new()
+# plot(site_pnv[[i]], type = "classes",
+#      legend = "left",
+#      plg = list(cex = 0.7, title = "Potential Natural Vegetation", title.adj = 0),
+#      legend.only = TRUE,
+#      col = pnv_table$cols, 
+#      levels = pnv_table$labels
+#      )
+dev.off()
+
+```
+
+```{r clean-up}
+env_size(ls())
+
+# 
+os <- get_sizes(ls())
+os
+
+# rm(list = os$object[2:5])
+
+os %>% 
+  summarise(total_env_size = sum(size)) %>% 
+  mutate(gb = total_env_size / 1024^3)
 
 ```
 
