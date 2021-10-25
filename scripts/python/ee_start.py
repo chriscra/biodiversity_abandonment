@@ -7,7 +7,7 @@ Created on Thu Jul  9 16:17:45 2020
 """
 import ee
 
-ee.Authenticate()
+# ee.Authenticate()
 
 ee.Initialize()
 
