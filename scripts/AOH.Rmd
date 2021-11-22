@@ -1,0 +1,577 @@
+---
+title: "AOH"
+author: "Christopher L. Crawford"
+date: "11/16/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r initialize}
+source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
+# install.packages("terra")
+# packageVersion("terra")
+# library(terra)
+
+```
+
+```{r load-files}
+source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/util/_util_files.R")
+```
+
+
+# AOH
+
+
+```{r load-raw-species-data}
+# location of prepped range map data (from Zambia project)
+p_range <- "/Volumes/GoogleDrive/My Drive/Zambia/agroEcoTradeoff/external/data_new/1_IUCN_dev/"
+list.files(p_range) %>% grep("prep", .,  value = TRUE)
+
+
+
+# Amphibians
+load(paste0(p_range, "amp_valid_prepped.RData"), verbose = TRUE)
+assign("amp_sf", amp_valid)
+rm(amp_valid)
+st_crs(amp_sf) <- st_crs(amp_sf)
+
+
+# Birds
+load(paste0(p_range, "bird_valid_prepped.RData"), verbose = TRUE)
+assign("bird_sf", bird_valid)
+rm(bird_valid)
+st_crs(bird_sf) <- st_crs(bird_sf)
+
+
+# Mammals
+load(paste0(p_range, "mam_valid_prepped.RData"), verbose = TRUE)
+assign("mam_sf", mam_valid)
+rm(mam_valid)
+st_crs(mam_sf) <- st_crs(mam_sf)
+
+
+# Reptiles (GARD)
+load(paste0(p_range, "gard_prep.RData"), verbose = TRUE)
+gard_prep
+assign("rep_sf", gard_prep)
+rm(gard_prep)
+st_crs(rep_sf) <- st_crs(rep_sf)
+
+
+```
+
+```{r validate}
+# Amphibians
+
+amp_sf <- amp_sf %>% sf::st_make_valid()
+
+amp_valid_reasons <- st_is_valid(amp_sf, reason = TRUE)
+length(amp_valid_reasons)
+unique(amp_valid_reasons)
+grep("Loop 0: Edge 9032 crosses edge 9034", amp_valid_reasons) 
+# 7147:
+# Vaillant's Frog
+# Lithobates vaillanti
+
+amp_sf[7147, ]
+
+
+# Birds
+bird_sf <- bird_sf %>% sf::st_make_valid()
+
+bird_sf_valid_reasons <- st_is_valid(bird_sf, reason = TRUE)
+
+length(amp_valid_reasons)
+unique(amp_valid_reasons)
+grep("Valid Geometry", bird_sf_valid_reasons, invert = TRUE) 
+
+
+
+amp_sf[7147, ]
+
+# Mammals
+
+
+# Reptiles (GARD)
+
+```
+
+```{r crop-ranges-to-sites}
+# Amphibians
+
+names(amp_sf)
+amp_s <- amp_sf[-7147, ] %>%
+    st_intersection(., site_sf %>% filter(site == "shaanxi"))
+
+amp_sc <- amp_sf[-7147, ] %>%
+    st_intersection(., site_sf %>% 
+                      filter(site %in% site_df$site[c(3,9)])
+                    )
+
+tic()
+amp_sites <- amp_sf[-7147, ] %>% st_intersection(., site_sf)
+toc() # 1402 sec
+
+names(amp_sites)
+amp_sites %>% st_drop_geometry() %>% select(binomial, category, site)
+
+write_csv(amp_sites %>% st_drop_geometry(), 
+          file = paste0(p_derived, "/amp_sites.csv"))
+st_write(amp_sites, paste0(p_derived, "amp_sites.shp")) # 
+save(amp_sites, file = paste0(p_derived, "amp_sites.RData"))
+# load(file = paste0(p_derived, "amp_sites.RData"), verbose = TRUE)
+
+
+
+# Birds
+bird_s <- bird_sf %>%
+    st_intersection(., site_sf %>% filter(site == "shaanxi"))
+
+```
+
+```{r mam-sites}
+mam_sites %>%
+  filter(site == "shaanxi") %>%
+  st_geometry() %>% plot()
+
+# how many species occur at each site?
+
+mam_sites %>%
+  st_drop_geometry() %>%
+  group_by(site) %>%
+  select(site, binomial) %>%
+  summarise(num_sp = length(unique(binomial)))
+
+filter(mam_sites, site == "shaanxi")
+
+mam_rich <- lapply(site_df$site,
+                   function(i) {
+                     
+                     template <- raster()
+                     extent(template) <- extent(raster(lc[[i]]))
+                     res(template) <- res(lc[[i]])
+                     
+                     rast(
+                       fasterize(sf = mam_sites %>%
+                                   filter(site == i) %>% 
+                                   st_cast("MULTIPOLYGON"), 
+                                 raster = template, 
+                                 fun = "sum"))})
+
+
+rm(mam_rich)
+plot(mam_rich[[1]])
+plot(mam_rich[[1]]$sha_1)
+dev.off()
+```
+
+
+
+```{r load-and-bind-cropped-ranges}
+
+vert_list <- c("amp", "bird", "mam", "gard")
+
+species_files <- list.files(paste0(p_derived, "species_ranges"), full.names = TRUE)
+
+load(grep("amp", grep("RData", species_files, value = T), value = T), verbose = T)
+amp_sites <- range_sites %>% 
+  mutate(vert_class = "amp")
+
+load(grep("bird", grep("RData", species_files, value = T), value = T), verbose = T)
+bird_sites <- range_sites %>% 
+  mutate(vert_class = "bird")
+
+load(grep("mam", grep("RData", species_files, value = T), value = T), verbose = T)
+mam_sites <- range_sites %>% 
+  mutate(vert_class = "mam")
+
+load(grep("gard", grep("RData", species_files, value = T), value = T), verbose = T)
+gard_sites <- range_sites %>% 
+  mutate(vert_class = "gard")
+
+
+
+# Select and rename columns to facilitate join:
+
+# note, mam and amp columns match perfectly
+names(mam_sites) == names(amp_sites) 
+
+amp_pre_merge <- amp_sites %>% 
+  select(site, vert_class, binomial, category, 
+         id_no, presence, origin, seasonal,
+         order_, family, 
+         area_km2:threat_weight,
+         pre_valid_reasons, post_valid_reasons,
+         compiler, citation,
+         genus, marine, terrestial, freshwater, # extras
+         geometry
+         )
+
+mam_pre_merge <- mam_sites %>% 
+  select(site, vert_class, binomial, category, 
+         id_no, presence, origin, seasonal,
+         order_, family, 
+         area_km2:threat_weight,
+         pre_valid_reasons, post_valid_reasons,
+         compiler, citation,
+         genus, marine, terrestial, freshwater, # extras
+         geometry
+         )
+
+bird_pre_merge <- bird_sites %>% 
+  select(site, vert_class, binomial, category, 
+         id_no = SISID, presence, origin, seasonal,
+         order_ = Order_, family = FamilyName, 
+         area_km2:threat_weight,
+         pre_valid_reasons, post_valid_reasons,
+         compiler = COMPILER, citation = CITATION,
+         family_common = Family, CommonName, # extras
+         geometry = Shape
+)
+
+gard_pre_merge <- gard_sites %>% 
+  select(site, vert_class, binomial, 
+         category = redlistCategory, # reptiles are not comprehensively assessed, but I've added the category for those that are assessed
+         # id_no = SISID, presence, origin, seasonal,
+         # order_ = Order_, family = FamilyName, 
+         area_km2, range_size_quantile, inverse_range_glob,
+         pre_valid_reasons, post_valid_reasons,
+         # compiler = COMPILER, citation = CITATION,
+         Group, # extras
+         geometry
+)
+
+# -------------- bind rows: ---------------- #
+
+vert_sites <- bind_rows(amp_pre_merge, bird_pre_merge, mam_pre_merge, gard_pre_merge)
+save(vert_sites, file = paste0(p_derived, "species_ranges/vert_sites.RData"))
+
+
+vert_sites %>% st_drop_geometry()
+
+vert_sites %>% st_geometry() %>% plot()
+
+
+df1 <- amp_sites %>% st_drop_geometry() %>% as_tibble()
+df2 <- bird_sites %>% st_drop_geometry() %>% as_tibble()
+df3 <- gard_sites %>% st_drop_geometry() %>% as_tibble()
+
+
+
+sum(df2$binomial != df2$ScientificName) # all 
+identical(df2$binomial, df2$ScientificName) # all equal!
+
+names(df1)
+names(df3)
+names(df2)
+
+df3$FID_2 %>% length()
+df3$FID_2 %>% unique() %>% length()
+
+df3$binomial %>% length()
+
+
+```
+
+```{r merge-polygons}
+
+vert_sites %>% st_drop_geometry() %>%
+  filter(vert_class != "gard") %>% # I can't use reptile species because they do not all have habitat assessments from IUCN
+  select(binomial, vert_class, #site
+         ) %>%
+  unique() %>%
+  nrow() 
+# 4253 features (4856 with reptiles)
+# 2230 species total occur at one or more of my sites (2656 if including reptiles)
+# 4038 unique site, species pairs exist - this is the number of runs I'll have to do. (4641 if including reptiles)
+
+vert_sites %>% nrow()
+vert_sites_merged %>% nrow()
+vert_sites_merged %>% st_drop_geometry() %>%
+  filter(vert_class != "gard") %>% # I can't use reptile species because they do not all have habitat assessments from IUCN
+  select(site, binomial, vert_class, #site
+         ) %>%
+  unique() %>%
+  nrow() 
+
+
+
+# how many sites have multiple polygons per species?
+vert_sites %>% 
+  filter(vert_class != "gard") %>% # I can't use reptile species because they do not all have habitat assessments from IUCN
+  # 4253 features
+  st_drop_geometry() %>%
+  group_by(site, vert_class) %>% 
+  summarise(num_rows = binomial %>% length(),
+            num_sp = binomial %>% unique() %>% length()) %>% 
+  filter(site == "wisconsin")
+
+sf_use_s2()
+sf_use_s2(FALSE)
+
+tic()
+vert_sites_merged <- vert_sites %>% 
+  group_by(site, vert_class, binomial, category, id_no, #presence, origin, seasonal
+           ) %>% 
+  summarise() %>% ungroup()
+toc()
+
+tcom1 <- vert_sites %>% filter(binomial == "Lithobates palustris")
+
+tcom1 %>%
+  st_geometry() %>%
+  plot()
+
+tcom1
+tcom1 %>% st_combine()
+
+names(tcom1)
+tcom2 <- tcom1 %>% 
+  group_by(site, vert_class, binomial, category, id_no, presence, origin, seasonal) %>% 
+  summarise() %>% ungroup()
+
+tcom3 <- tcom1 %>%
+  group_by(site) %>% summarise()
+
+plot(tcom2)
+plot(tcom1[1,])
+tcom1 %>% group_by(c("site", "vert_class")) %>% summarise()
+
+
+```
+
+
+
+```{r habitat-prefs}
+habitat_prefs <- read_csv(file = "/Volumes/GoogleDrive-107266184156135828486/My Drive/ee/habitat_prefs.csv")
+
+habitat_prefs
+names(habitat_prefs)
+
+habitat_prefs$specialism %>% unique()
+
+habitat_prefs$habitat_code %>% unique() %>% sort()
+habitat_prefs$habitat_importance
+habitat_prefs$habitat_suitability %>% unique() %>% sort()
+habitat_prefs$className %>% unique() %>% sort()
+
+habitat_prefs$scientificName %>% unique() %>% sort()
+
+```
+
+
+```{r fasterize-site_ranges}
+# fasterize
+amp_sc_r <- amp_sc %>%
+  st_collection_extract(., "POLYGON") %>% # extract only polygons
+  fasterize(sf = ., raster = template_raster, 
+            field = NULL, fun = "sum")
+
+plot(amp_sc_r)
+plot(amp_sc_r, ext = my_ext)
+
+plot(amp_sc)
+
+
+amp_china <- amp_sf[-7147, ] %>%
+    st_intersection(., st_geometry(china))
+
+
+plot(st_geometry(china))
+amp_china
+
+st_bbox(china)
+
+extent(filter(site_sf, site == "shaanxi"))
+
+template_raster <- raster::raster(ncols = 100, nrows = 100,
+                    xmn = -84, xmx = -83, 
+                    ymn = 42, ymx = 43)
+
+template_raster <- raster::raster(ncols = 100, nrows = 100,
+                    extent(china))
+
+extent(filter(site_sf, site == "shaanxi"))
+
+
+values(template_raster) <- 1:ncell(template_raster)
+plot(template_raster)
+plot(china$geometry, add = T)
+#extend(mask_filled, template_raster_extent, value = 0)
+
+amp_china_poly <- amp_china %>% st_collection_extract(., "POLYGON") # extract only polygons
+
+
+amp_china_r <- 
+  fasterize(sf = amp_china_poly, raster = template_raster, 
+            field = NULL, fun = "sum")
+
+plot(amp_china_r)
+my_ext <- drawExtent()
+
+plot(amp_china_r, ext = my_ext)
+plot(site_sf %>% 
+       filter(site == "shaanxi") %>%
+       st_geometry(), 
+     add = T)
+
+act <- rast(amp_china_r)
+plot(act)
+plot(act, extent = my_ext)
+
+act_crop <- crop(act, terra::ext(my_ext))
+amp_s
+plot(act_crop, type = "classes")
+plot(amp_s$geometry)
+
+
+plot(amp_s$geometry)
+
+plot(amp_sf[1, ]$geometry)
+
+plot(site_sf %>% filter(site == "shaanxi") %>% st_geometry())
+plot(amp_sf$geometry, add = TRUE)
+
+```
+
+
+
+```{r filter-ranges}
+names(amp_sf)
+
+amp_sf %>% select(binomial, category)
+
+amp_sf %>%
+  filter(presence == 1) %>%   # only records with Code 1 (Extant)
+  filter(origin %in% c(1, 2)) %>%     # only native species (Code 1) and reintroduced (Code 2)
+  filter(seasonal %in% c(1, 2, 3)) %>%   # selecting "Resident" (1), "Breeding" (2), and "Non-breeding Season" (3) ranges. Other categories include: Non-breeding Season (3), Passage (4), and Seasonal Occurrence Uncertain (5).
+  filter(marine == "False") %>%   # removing all marine species
+  filter(!category %in% c("EW", "EX")) %>% # remove Extinct or Extinct in the Wild species ("EW", "EX")
+  
+  print(n = 40)
+
+```
+
+
+
+```{r RS-AOH-tester}
+library(sf)
+AOH <- st_read(paste0(p_dat, "bd/AOH/reptilia_AOH/reptilia.shp"))
+
+AOH %>% st_drop_geometry() %>% as_tibble()
+object_size(AOH)
+names(AOH)
+head(AOH)
+st_crs(AOH)
+
+
+
+# plot
+AOH %>% 
+  filter(binom == "Archaius_tigris") %>% 
+  st_geometry() %>% 
+  plot()
+
+AOH %>% 
+  st_geometry() %>% 
+  plot(add = TRUE)
+
+plot(ne_countries()) # or all sub national level bodies plot(ne_states())
+
+crs(ne_countries())
+
+# Create template raster by extending the input raster (mask) to the extent of the input polygons.
+mask_filled <- mask
+mask_filled[is.na(mask_filled)] <- 0 # replace NAs with 0s
+
+projection <- crs(AOH) # note, seems to work better than st_crs().
+
+# make a template raster
+mask <- raster()
+res(mask) <- 0.01
+
+
+# values(mask) <- 0 # If you want, you can add values to the raster. You don't have to though, and it just makes the raster HUGE at this resolution (4.8 GB)
+# writeRaster(mask, "mask.tif") # if you add values, you'll need to just write it to your machine, otherwise you'll quickly run out of memory, as the fasterize layer will be the same size.  
+
+
+AOH_r <- fasterize(AOH, mask, fun = "sum") # field = NULL by default, which gives every polygon a value of 1
+
+# in the event that you want to build a raster based on 
+template_raster <- extend(small_mask, extent(as.Spatial(sf_file)), value = 0)
+
+
+
+
+# fasterize
+
+
+  
+```
+
+```{r sparse}
+library(sf)
+library(raster)
+
+AOH <- st_read(paste0(p_dat, "bd/AOH/reptilia_AOH/reptilia.shp"))
+
+# check it out
+AOH %>% 
+  filter(binom == "Archaius_tigris") %>% 
+  st_geometry() %>% 
+  plot()
+
+AOH %>% 
+  st_geometry() %>% 
+  plot(add = TRUE)
+# tiny lil guys, eh?
+
+
+
+# -------------------
+# First, make a template raster
+
+mask <- raster()
+res(mask) <- 0.01
+
+
+# values(mask) <- 0 # If you want, you can add values to the raster. You don't have to though, and it just makes the raster HUGE at this resolution (4.8 GB)
+# writeRaster(mask, "mask.tif") # if you add values, you'll need to just write it to your machine, otherwise you'll quickly run out of memory, as the fasterize layer will be the same size.  
+
+
+# -------------------
+#  Fasterize: 
+
+AOH_r <- fasterize(AOH, mask, fun = "sum") # field = NULL by default, which gives every polygon a value of 1
+
+plot(AOH_r) # again.... tiny lil guys!
+
+
+
+
+# -------------------
+# Notes:
+
+# If you aren't already familiar, these are great packages for basemaps:
+install.packages("rnaturalearth")
+devtools::install_github("ropensci/rnaturalearthdata")
+devtools::install_github("ropensci/rnaturalearthhires")
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(rnaturalearthhires)
+
+plot(ne_countries())  # nice!
+# plot(ne_states()) # or all sub national level bodies with this one 
+
+
+
+# if you need to reproject the mask before you fasterize, I think raster works best with: 
+crs(AOH) # note, seems to work better than st_crs().
+
+# in the event that you want to build a raster based on a smaller existing one
+template_raster <- extend(small_mask, extent(as.Spatial(sf_file)), value = 0)
+
+
+
+```

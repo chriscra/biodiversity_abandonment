@@ -1,0 +1,2129 @@
+---
+title: "Habitats"
+author: "Christopher L. Crawford"
+date: "11/16/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r initialize}
+source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
+# install.packages("terra")
+# packageVersion("terra")
+# library(terra)
+
+```
+
+```{r load-files}
+source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/util/_util_files.R")
+```
+
+
+
+# Habitats
+
+## PNV
+
+```{r pnv}
+# load PNV
+pnv_1km <- raster(paste0(p_dat, "/Habitats/PNV/Hengl2019/1km/pnv_biome.type_biome00k_c_1km_s0..0cm_2000..2017_v0.1.tif"))
+
+# Resolution
+res(l) * 110 # = 0.9167 km grid (~ 1 km)
+
+
+# ------------------------------------------------ #
+# 250 m version, the one I'll use:
+pnv <- rast(paste0(p_dat, "/Habitats/PNV/Hengl2019/250m/pnv_biome.type_biome00k_c_250m_s0..0cm_2000..2017_v0.2.tif"))
+plot(pnv)
+
+
+# Resolution
+res(pnv_1km) * 110 # = 0.9167 km grid (~ 1 km)
+res(pnv) * 110 # = 0.229 km grid (~ 250 m)
+
+
+# ------------------------------------------------ #
+# Load pnv table
+
+# color palette information
+pnv_table <- read_csv(
+  paste0(p_dat, "Habitats/PNV/Hengl2019/250m/pnv_biome.type_biome00k_c_250m_s0..0cm_2000..2017_v0.2.tif.csv")) %>% 
+  rename(Name = New.global.consolidated.biome.scheme) %>%
+  mutate(labels = paste0(Number, ": ", Name),
+         cols = rgb(red = R, green = G, blue = B, maxColorValue = 255)
+         ) 
+
+pnv_table %>% print(n = 22)
+
+# Separate forest PNV classes from non-forest
+pnv_table %>%
+  # filter(Number %in% c(site_pnv_freq$value %>% unique())) %>%
+  select(Number, Name, Mega_biome_classification) %>%
+  filter(Number >= 17) %>% .$Name
+  
+site_pnv_freq %>% 
+  arrange(value) %>%
+  filter(value >= 16) %>%
+  .$site %>% unique
+
+
+
+pnv_table <- pnv_table %>% 
+  mutate(forest = ifelse(grepl("forest", Name), "yes", "no"),
+         rep_at_sites = ifelse(Number %in% c(site_pnv_freq$value %>% unique()),
+                            "yes", "no"))
+
+pnv_table
+
+pnv_table %>% 
+  filter(Number %in% c(site_pnv_freq$value %>% unique() %>% sort()))
+
+
+pnv_table %>%
+  filter(forest == "no") %>%
+  select(Number, Name, Mega_biome_classification)
+
+pnv_table %>%
+  select(Number, rep_at_sites, Name, Mega_biome_classification,
+         forest) %>% 
+  print(n = 22)
+
+non_forest_c_rates <- tibble()
+
+grep("forest", pnv_table$Name)
+# Non forest classes:
+# "temperate evergreen needleleaf open woodland" 
+# "tropical savanna"
+# "steppe"
+# "desert"   
+
+
+
+```
+
+
+```{r crop-pnv-to-sites}
+
+# crop, and save to file
+site_pnv <- lapply(1:11, function(i) {
+  terra::crop(pnv, ext(lc[[i]]),
+              filename = paste0(p_derived, "site_pnv/", 
+                                names(lc[i]), "_pnv.tif"),
+              overwrite = TRUE
+              )
+  }
+  )
+names(site_pnv) <- site_df$site
+
+# load back in:
+site_pnv <- lapply(
+  list.files(paste0(p_derived, "site_pnv"), full.names = TRUE) %>% 
+    grep("_pnv.tif", ., value = TRUE), 
+  function(i) rast(i)
+  )
+names(site_pnv) <- site_df$site
+
+
+# ---------------------------------------------- #
+# crop with a buffer, to deal with NA issues: use this going forward
+# ---------------------------------------------- #
+plot(site_pnv$chongqing, colNA = "blue", ext = ext(site_pnv$chongqing) + rep(0.1, 4))
+
+site_pnv <- lapply(1:11, function(i) {
+  terra::crop(pnv, ext(lc[[i]]) + rep(0.1, 4), # with a bit of buffer
+              filename = paste0(p_derived, "site_pnv/", 
+                                names(lc[i]), "_pnv_buff.tif"),
+              overwrite = TRUE
+              )
+  }
+  )
+names(site_pnv) <- site_df$site
+
+# load back in
+site_pnv <- lapply(
+  list.files(paste0(p_derived, "site_pnv"), full.names = TRUE) %>%
+    grep("buff", ., value = TRUE), 
+  function(i) rast(i)
+  )
+names(site_pnv) <- site_df$site
+
+
+```
+
+```{r resample-pnv}
+site_pnv_30 <- lapply(1:11, function(i) {
+  terra::resample(
+    x = site_pnv[[i]], y = lc[[i]]$y2017, method = "near",
+    filename = paste0(p_derived, "site_pnv/", names(lc[i]), "_pnv_30.tif"),
+    names = paste0(names(lc[i]), "_pnv_30"),
+    overwrite = TRUE)
+  }
+  )
+
+# load back in
+site_pnv_30 <- lapply(
+  list.files(paste0(p_derived, "site_pnv"), full.names = TRUE) %>% grep("_30.tif", ., value = TRUE), 
+  function(i) rast(i)
+  )
+names(site_pnv_30) <- site_df$site
+
+res(site_pnv$chongqing) * 110 # 250 m resolution
+```
+
+```{r pnv-plot}
+# simple plots, with specified colors:
+
+plot(pnv, 
+     type = "classes", 
+     col = pnv_table$cols, 
+     levels = pnv_table$labels)
+
+
+show_col(cbf_col)
+show_col(pnv_table$cols)
+
+show_col(gg_color_hue(12))
+
+
+# plot a single site:
+i <- 3
+
+terra::plot(site_pnv[[i]], type = "classes",
+       col = filter(pnv_table, 
+                    Number %in% filter(site_pnv_freq, 
+                                       site == site_df$site[i])$value)$cols, 
+       levels = filter(pnv_table, 
+                    Number %in% filter(site_pnv_freq, 
+                                       site == site_df$site[i])$value)$labels
+       )
+
+plot(pnv, 
+     type = "classes", 
+     col = pnv_table$cols, 
+     levels = pnv_table$labels)
+
+
+# resampled:
+plot(site_pnv$chongqing, main = "Original resolution, 250 m, with 0.1 deg buffer")
+plot(site_pnv_30$chongqing, main = "Resampled to 30 m")
+
+```
+
+```{r freq-PNV}
+
+# freq in each class
+site_pnv_freq <- lapply(1:11, function(i) {
+  freq(site_pnv_30[[i]]) %>% as_tibble() %>% mutate(site = site_df$site[i])
+  }) %>% bind_rows()
+
+site_pnv_freq %>% arrange
+
+site_pnv_freq$value %>% unique() %>% sort() %>% length
+pnv_table$Number %>% unique() %>% sort()
+
+site_pnv_freq$value %>% unique() %>% sort()
+
+site_pnv$belarus
+
+
+
+```
+
+
+```{r save-PNV-plot}
+pdf(file = paste0(p_output, "plots/pnv_sites.pdf"), width = 10, height = 7.5)
+mval <- 1.5
+par(mfrow = c(3, 4), 
+      # mar=c(0,0,0,0), 
+      oma=c(1,1,0,0),
+      adj = 0,
+      cex.main = 1#,
+      # tcl = -0.2
+      )
+    
+# i<-11
+# show_col(pnv_table %>% 
+#          filter(Number %in% 
+#                   filter(site_pnv_freq, 
+#                          site == site_df$site[i])$value) %>% 
+#          .$cols)
+# freq(site_pnv_30[[i]])
+
+for(i in 1:11) {
+  plot(site_pnv_30[[i]], maxcell = 5000000,
+       main = names(site_pnv_30[i]),
+       mar = c(mval+0.5, mval, mval + 1.2, mval + 2), # bltr     
+       type = "classes", #legend = FALSE,
+       col = pnv_table %>%
+         filter(Number %in%
+                  filter(site_pnv_freq,
+                         site == site_df$site[i])$value) %>%
+         .$cols
+)
+  }
+
+plot.new()
+plot(site_pnv[[i]], type = "classes",
+     legend = "left",
+     plg = list(cex = 0.85, title = "Potential Natural Vegetation", title.adj = 0#, 
+                # y.intersp	= 1.1
+                # xjust = 0.5
+                ),
+     legend.only = TRUE,
+     # col = pnv_table$cols, 
+     # levels = pnv_table$labels
+     col = filter(pnv_table, 
+                  Number %in% c(site_pnv_freq$value %>% 
+                                  unique() %>% sort())
+                  )$cols,
+     levels =
+       filter(pnv_table, Number %in% c(site_pnv_freq$value %>% unique() %>% sort()))$labels #%>%
+       # str_wrap(., width = 50)
+     )
+dev.off()
+
+```
+
+## PNV land cover classes 2020
+
+```{r copernicus}
+copernicus_table <- read_csv(paste0(p_proj, "resources/copernicus_lc_classes.csv")) %>%
+   mutate(cols = rgb(red = R, green = G, blue = B, maxColorValue = 255),
+          name_w_code = paste0(map_code, ": ", Name))
+
+```
+
+```{r pnv-lc}
+pnv_2020_files <- read_csv(paste0(p_proj, "resources/pnv_2020_files.csv"))
+pnv_2020_files$file_name
+
+# the PNV 2020 Land Cover 
+pnv_2020_files <- pnv_2020_files %>% 
+  mutate(type = ifelse(grepl("_sd_", file_name), "sd",
+                       ifelse(grepl("_p_", file_name), "p", "unsure")),
+         name = gsub("pnv_potential.landcover_probav.lc100.", "", file_name),
+         name = gsub("250m_s0..0cm_2017_v0.1.tif", "", name),
+         name = gsub("_p_|_sd_", "", name))
+
+pnv_2020_files %>% filter(type == "p") %>% .$name
+
+pnv_lc <- rast(paste0(p_dat, "/Habitats/PNV/Hengl2020/pnv_potential.landcover_probav.lc100_c_250m_s0..0cm_2017_v0.1.tif"))
+
+pnv20
+pnv_lc
+
+plot(pnv_lc)
+
+# the resolution is ~250 m
+res(pnv_lc)[1] * 110000 # 110,000 m / deg at the equator
+res(pnv)[1] * 110000 # 110,000 m / deg at the equator
+```
+
+
+```{r pnv-lc-crop-resample}
+# ------------------------------------------------------- #
+# crop pnv_lc
+# ------------------------------------------------------- #
+site_pnv_lc <- lapply(1:11, function(i) {
+  terra::crop(pnv_lc, ext(lc[[i]]) + rep(0.1, 4), # with a bit of buffer
+              # filename = paste0(p_derived, "site_jung/", 
+                                # names(lc[i]), "_jung_l1_buff.tif"),
+              filename = paste0(p_derived, "site_pnv_lc/", 
+                                names(lc[i]), "_pnv_lc_buff.tif"),
+              overwrite = TRUE
+              )
+  }
+  )
+names(site_pnv_lc) <- site_df$site
+
+
+# load back in:
+site_pnv_lc <- lapply(
+  list.files(paste0(p_derived, "site_pnv_lc"), full.names = TRUE) %>% 
+    # grep("_pnv_lc.tif", ., value = TRUE), # without buffer
+    grep("_pnv_lc_buff.tif", ., value = TRUE), # with buffer
+  function(i) rast(i)
+  )
+names(site_pnv_lc) <- site_df$site
+
+plot(site_pnv_lc$shaanxi)
+
+
+# ------------------------------------------------------- #
+# resample pnv_lc to 30 m
+# ------------------------------------------------------- #
+
+site_pnv_lc_30 <- lapply(1:11, function(i) {
+  terra::resample(
+    x = site_pnv_lc[[i]], y = lc[[i]]$y2017, method = "near",
+    filename = paste0(p_derived, "site_pnv_lc/", names(lc[i]), "_pnv_lc_30.tif"),
+    names = paste0(names(lc[i]), "_pnv_lc_30"),
+    overwrite = TRUE)
+  }
+  )
+names(site_pnv_lc_30) <- site_df$site
+
+
+# load back in
+site_pnv_lc_30 <- lapply(
+  list.files(paste0(p_derived, "site_pnv_lc"), full.names = TRUE) %>% grep("_30.tif", ., value = TRUE), 
+  function(i) rast(i)
+  )
+names(site_pnv_lc_30) <- site_df$site
+
+
+res(site_pnv_lc$chongqing) * 110000 # ~250 m resolution
+res(site_pnv_lc_30$chongqing) * 110000 # ~30 m resolution
+```
+
+
+```{r pnv-lc-freq}
+# calculate frequency table:
+
+# pnv land cover classes 2020 (matching copernicus LC)
+site_pnv_lc_30_freq <- lapply(1:11, function(i) {
+  freq(site_pnv_lc_30[[i]]) %>% as_tibble() %>% mutate(site = site_df$site[i])
+  }) %>% bind_rows() %>% 
+  select("map_code" = "value", count, site) %>%
+  left_join(., select(pnv_lc_table, map_code, 
+                      land_cover_class, land_cover_class_agg),
+            by = "map_code") %>%
+  left_join(., select(copernicus_table, map_code, Name, "land_cover_classC" = "land_cover_class"),
+            by = "map_code")
+
+site_pnv_lc_30_freq <- site_pnv_lc_30_freq %>% 
+  left_join(., 
+            site_pnv_lc_30_freq %>% 
+              group_by(site) %>%
+              summarise(total_px = sum(count))) %>%
+  mutate(pnv_percent = 100*count/total_px) %>% 
+  ungroup() %>%
+  select(map_code, site, pnv_percent, land_cover_class_agg, Name, land_cover_classC, land_cover_class, count, total_px)
+
+# write to file
+site_pnv_lc_30_freq %>%
+  write_csv(file = paste0(p_derived, "site_pnv_lc_30_freq.csv"))
+
+site_pnv_lc_30_freq %>% 
+  select(map_code, land_cover_class, land_cover_class_agg) %>%
+  unique() %>% 
+  arrange(map_code) %>% 
+  mutate(label = paste0(map_code, " ", land_cover_class)) %>% 
+  .$label %>% cat(sep = ", ")
+```
+
+
+```{r pnv-lc-table}
+# pnv lc (2020) table
+
+pnv_lc_table$map_code
+# mapped to copernicus land cover categories
+
+pnv_lc_table <- read_csv(
+  paste0(p_dat, "/Habitats/PNV/Hengl2020/pnv_potential.landcover_probav.lc100_c_250m_s0..0cm_2017_v0.1.tif.csv")) %>%
+  arrange(map_code)
+
+# also, see:
+copernicus_table
+
+pnv_lc_table$land_cover_class
+pnv_lc_table %>% print(n = 25)
+copernicus_table %>% arrange(map_code) %>% print(n = 25)
+
+
+left_join(pnv_lc_table, copernicus_table, by = "map_code") %>%
+  print(n = 25)
+
+site_pnv_lc_30_freq
+# simple plots
+
+
+terra::plot(site_pnv_lc_30[[i]], type = "classes",
+       levels = filter(arrange(copernicus_table, map_code), 
+                    map_code %in% filter(site_pnv_lc_30_freq,
+                                         site == site_df$site[i])$map_code
+                    )$Name,
+       col = filter(arrange(copernicus_table, map_code), 
+                    map_code %in% filter(site_pnv_lc_30_freq,
+                                         site == site_df$site[i])$map_code
+                    )$cols
+       )
+
+plot(site_pnv_lc$shaanxi)
+plot(site_pnv_lc_30$shaanxi)
+
+
+
+```
+
+```{r plot-pnv_lc}
+pdf(file = paste0(p_output, "plots/pnv_lc_sites_colors.pdf"), width = 10, height = 7.5)
+mval <- 1.5
+par(mfrow = c(3, 4), 
+      # mar=c(0,0,0,0), 
+      oma=c(1,1,0,0),
+      adj = 0,
+      cex.main = 1#,
+      # tcl = -0.2
+      )
+    
+for(i in 1:11) {
+  plot(site_pnv_lc[[i]], #maxcell = 5000000,
+       main = names(site_pnv_lc[i]),
+       mar = c(mval+0.5, mval, mval + 1.2, mval + 2), # bltr     
+       type = "classes", #legend = FALSE,
+       col = filter(arrange(copernicus_table, map_code),
+                    map_code %in% filter(site_pnv_lc_freq,
+                                         site == site_df$site[i])$map_code
+                    )$cols
+)
+  }
+
+plot.new()
+plot(site_pnv_lc[[i]], type = "classes",
+     legend = "left",
+     plg = list(cex = 0.95, title = "Potential Natural Vegetation", title.adj = 0#, 
+                # y.intersp	= 1.1
+                # xjust = 0.5
+                ),
+     legend.only = TRUE,
+     levels = filter(arrange(copernicus_table, map_code), 
+                    map_code %in% c(site_pnv_lc_freq$map_code %>% unique() %>% sort()))$name_w_code,
+     col = filter(arrange(copernicus_table, map_code), 
+                    map_code %in% c(site_pnv_lc_freq$map_code %>% unique() %>% sort()))$cols
+     )
+dev.off()
+
+copernicus_table$Name 
+
+```
+
+
+## IUCN Habitat types
+
+```{r load-jung-habitat-types}
+# level 1
+jung_l1 <- rast(paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_composite_lvl1_ver004.tif"))
+# jung_l1 <- rast(paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_composite_lvl1_ver003.tif"))
+
+
+# level 2
+jung_l2 <- rast(paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_composite_lvl2_ver004.tif"))
+# jung_l2 <- rast(paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_composite_lvl2_ver003.tif"))
+
+plot(jung_l2, type = "classes")
+
+# freq(jung_l2)
+jung_freq <- read_csv(paste0(p_proj, "resources/jung_freq_table.csv"))
+```
+
+
+```{r jung-crop-resample}
+# ---------------------------------------------- #
+# crop with a buffer, to deal with NA issues: use this going forward
+# ---------------------------------------------- #
+
+site_jung_l1 <- lapply(1:11, function(i) {
+  terra::crop(jung_l1, ext(lc[[i]]) + rep(0.1, 4), # with a bit of buffer
+              filename = paste0(p_derived, "site_jung/", 
+                                names(lc[i]), "_jung_l1_buff.tif"),
+              overwrite = TRUE
+              )
+  }
+  )
+names(site_jung_l1) <- site_df$site
+
+# load back in
+site_jung_l1 <- lapply(
+  list.files(paste0(p_derived, "site_jung"), full.names = TRUE) %>%
+    grep("_l1_buff", ., value = TRUE), 
+  function(i) rast(i)
+  )
+names(site_jung_l1) <- site_df$site
+
+
+site_jung_l2 <- lapply(1:11, function(i) {
+  terra::crop(jung_l2, ext(lc[[i]]) + rep(0.1, 4), # with a bit of buffer
+              filename = paste0(p_derived, "site_jung/", 
+                                names(lc[i]), "_jung_l2_buff.tif"),
+              overwrite = TRUE
+              )
+  }
+  )
+names(site_jung_l2) <- site_df$site
+
+# load back in
+site_jung_l2 <- lapply(
+  list.files(paste0(p_derived, "site_jung"), full.names = TRUE) %>%
+    grep("_l2_buff", ., value = TRUE), 
+  function(i) rast(i)
+  )
+names(site_jung_l2) <- site_df$site
+
+plot(site_jung_l2$shaanxi, type = "classes")
+
+
+# ------------------------------------------------------ #
+# resample
+# ------------------------------------------------------ #
+# level 1
+site_jung_l1_30 <- lapply(1:11, function(i) {
+  terra::resample(
+    x = site_jung_l1[[i]], y = lc[[i]]$y2017, method = "near",
+    filename = paste0(p_derived, "site_jung/", names(lc[i]), "_jung_l1_30.tif"),
+    names = paste0(names(lc[i]), "_jung_l1_30"),
+    overwrite = TRUE)
+  }
+  )
+
+# load back in
+site_jung_l1_30 <- lapply(
+  list.files(paste0(p_derived, "site_jung"), full.names = TRUE) %>% grep("l1_30.tif", ., value = TRUE), 
+  function(i) rast(i)
+  )
+names(site_jung_l1_30) <- site_df$site
+
+# level 2
+site_jung_l2_30 <- lapply(1:11, function(i) {
+  terra::resample(
+    x = site_jung_l2[[i]], y = lc[[i]]$y2017, method = "near",
+    filename = paste0(p_derived, "site_jung/", names(lc[i]), "_jung_l2_30.tif"),
+    names = paste0(names(lc[i]), "_jung_l2_30"),
+    overwrite = TRUE)
+  }
+  )
+
+# load back in
+site_jung_l2_30 <- lapply(
+  list.files(paste0(p_derived, "site_jung"), full.names = TRUE) %>% grep("l2_30.tif", ., value = TRUE), 
+  function(i) rast(i)
+  )
+names(site_jung_l2_30) <- site_df$site
+```
+
+
+```{r jung-freq}
+# ----------------------------- #
+# freq in each class
+site_jung_l1_30_freq <- lapply(1:11, function(i) {
+  freq(site_jung_l1_30[[i]]) %>% as_tibble() %>% mutate(site = site_df$site[i])
+  }) %>% bind_rows() %>% 
+  select("map_code" = "value", count, site) %>%
+  left_join(select(jung_table, map_code, Coarse_Name, IUCNLevel))
+
+site_jung_l2_30_freq <- lapply(1:11, function(i) {
+  freq(site_jung_l2_30[[i]]) %>% as_tibble() %>% mutate(site = site_df$site[i])
+  }) %>% bind_rows() %>% 
+  select("map_code" = "value", count, site) %>%
+  left_join(select(jung_table, map_code, Coarse_Name, IUCNLevel))
+
+site_jung_l2_30_freq %>% 
+  select(map_code, Coarse_Name, IUCNLevel) %>%
+  unique() %>% arrange(map_code) %>% print (n=37)
+
+# percent of each site in each habitat type:
+# what proportion of the abandoned land at each site ends up in forest vs. grassland?
+
+site_jung_l1_30_freq <- site_jung_l1_30_freq %>% 
+  left_join(., 
+            site_jung_l1_30_freq %>% 
+              group_by(site) %>%
+              summarise(total_px = sum(count))) %>%
+  mutate(hab_percent = 100*count/total_px) %>% 
+  ungroup() %>%
+  select(map_code, site, hab_percent, Coarse_Name, IUCNLevel, count, total_px)
+  
+
+site_jung_l2_30_freq <- site_jung_l2_30_freq %>% 
+  left_join(., 
+            site_jung_l2_30_freq %>% 
+              group_by(site) %>%
+              summarise(total_px = sum(count))) %>%
+  mutate(hab_percent = 100*count/total_px) %>% 
+  ungroup() %>%
+  select(map_code, site, hab_percent, Coarse_Name, IUCNLevel, count, total_px)
+
+
+site_jung_l2_30_freq %>% 
+  filter(#hab_percent > 1,
+         site %in% site_df$site[c(7:10)]
+         ) %>% 
+  select(site, hab_percent, Coarse_Name, IUCNLevel) %>% 
+  arrange(site, desc(hab_percent)) %>%
+  print(n = 60)
+  
+
+site_jung_l2_30_freq %>% 
+  filter(#hab_percent > 1,
+         site %in% site_df$site[c(7:10)]
+         ) %>% 
+  select(site, hab_percent, Coarse_Name, IUCNLevel) %>% 
+  group_by(site, Coarse_Name) %>% 
+  summarise(total_percent = sum(hab_percent)) %>%
+  arrange(site, desc(total_percent)) %>%
+  print(n = 60)
+
+site_jung_l2_30_freq %>% 
+  filter(hab_percent > 0.5
+         ) %>% 
+  select(map_code, Coarse_Name, IUCNLevel) %>% unique() %>%
+  arrange(Coarse_Name) %>%
+  print(n = 60)
+
+
+site_jung_l2_30_freq %>% 
+    # filter(site == site_df$site[i]) %>%
+    # filter(hab_percent > 0.5) %>%
+    arrange(Coarse_Name, desc(hab_percent)) %>% 
+    select(map_code, site, hab_percent, Coarse_Name, IUCNLevel) %>%
+    # group_by(Coarse_Name, site) %>%
+    # summarise(percent = sum(hab_percent)) %>%
+    # arrange(Coarse_Name, desc(percent)) %>% 
+    print(n = 170)
+
+site_jung_l1_30_freq %>% 
+    # filter(site == site_df$site[i]) %>%
+    # filter(hab_percent > 0.5) %>%
+    arrange(Coarse_Name, desc(hab_percent)) %>% 
+    # select(map_code, site, hab_percent, Coarse_Name, IUCNLevel) %>%
+    group_by(Coarse_Name, site) %>%
+    summarise(percent = sum(hab_percent)) %>%
+    arrange(Coarse_Name, desc(percent)) %>% 
+    print(n = 170)
+
+
+
+# write to file
+site_jung_l1_30_freq %>%
+  write_csv(file = paste0(p_derived, "site_jung_l1_30_freq.csv"))
+
+
+# write to file
+site_jung_l2_30_freq %>%
+  write_csv(file = paste0(p_derived, "site_jung_l2_30_freq.csv"))
+
+
+```
+
+```{r save-plot-jung}
+# jung_table
+jung_table
+# plot(site_jung_l2$iraq, type = "classes")
+
+# ------------------ Level 1 ---------------------- # 
+
+pdf(file = paste0(p_output, "plots/jung_l1_sites_colors.pdf"), width = 10, height = 7.5)
+mval <- 1.5
+par(mfrow = c(3, 4), 
+      # mar=c(0,0,0,0), 
+      oma=c(1,1,0,0),
+      adj = 0,
+      cex.main = 1#,
+      # tcl = -0.2
+      )
+    
+# i <- 3
+
+for(i in 1:11) {
+  
+  tmp_table <- #jung_table %>%
+    jung_l1_table_clr %>%
+    arrange(map_code) %>% 
+    filter(map_code %in% filter(site_jung_l1_30_freq,
+                                site == site_df$site[i])$map_code
+           )
+  
+  plot(site_jung_l1[[i]], maxcell = 5000000,
+       main = names(site_jung_l1[i]),
+       mar = c(mval+0.5, mval, mval + 1.2, mval + 2), # bltr     
+       type = "classes", #legend = FALSE,
+       col = tmp_table$cols,
+       levels = tmp_table$map_code,
+)
+  }
+
+# pdf(file = paste0(p_output, "plots/jung_sites_colors_legend.pdf"), width = 7.5, height = 7.5)
+plot.new()
+plot(site_jung_l1[[i]], type = "classes",
+     legend = "left",
+     plg = list(cex = 1,
+                title = "IUCN Habitat Types\n(Level 1)",
+                                # text.width = 100,
+                title.adj = 0#,
+                # y.intersp	= 1.1
+                # xjust = 0.5
+                ),
+     legend.only = TRUE,
+     levels =
+       # str_wrap(
+         filter(arrange(jung_l1_table_clr, map_code),
+                    map_code %in% c(site_jung_l1_30_freq$map_code %>% unique() %>% sort()))$label,
+                # width = 40, exdent = 5),
+     col = filter(arrange(jung_l1_table_clr, map_code),
+                    map_code %in% c(site_jung_l1_30_freq$map_code %>% unique() %>% sort()))$cols
+     )
+
+dev.off()
+
+
+# ------------------ Level 2 ---------------------- # 
+
+pdf(file = paste0(p_output, "plots/jung_l2_sites_colors.pdf"), width = 10, height = 7.5)
+mval <- 1.5
+par(mfrow = c(3, 4), 
+      # mar=c(0,0,0,0), 
+      oma=c(1,1,0,0),
+      adj = 0,
+      cex.main = 1#,
+      # tcl = -0.2
+      )
+    
+# i <- 5
+
+for(i in 1:11) {
+  
+  tmp_table <- jung_table %>% 
+    arrange(map_code) %>% 
+    filter(map_code %in% filter(site_jung_l2_freq,
+                                site == site_df$site[i])$map_code
+           )
+  
+  plot(site_jung_l2[[i]], maxcell = 5000000,
+       main = names(site_jung_l2[i]),
+       mar = c(mval+0.5, mval, mval + 1.2, mval + 2), # bltr     
+       type = "classes", #legend = FALSE,
+       col = tmp_table$cols,
+       levels = tmp_table$map_code,
+)
+  }
+
+# pdf(file = paste0(p_output, "plots/jung_sites_colors_legend.pdf"), width = 7.5, height = 7.5)
+plot.new()
+plot(site_jung_l2[[i]], type = "classes",
+     legend = "left",
+     plg = list(cex = 0.47,
+                title = "IUCN Habitat Types",
+                                # text.width = 100,
+                title.adj = 0#,
+                # y.intersp	= 1.1
+                # xjust = 0.5
+                ),
+     legend.only = TRUE,
+     levels =
+       # str_wrap(
+         filter(arrange(jung_table, map_code),
+                    map_code %in% c(site_jung_l2_freq$map_code %>% unique() %>% sort()))$label,
+                # width = 40, exdent = 5),
+     col = filter(arrange(jung_table, map_code),
+                    map_code %in% c(site_jung_l2_freq$map_code %>% unique() %>% sort()))$cols
+     )
+
+dev.off()
+
+```
+
+
+```{r habitat-old}
+# color palette information #
+# level 1
+habitat_table <- read_delim(
+  file = paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_code_ver003/styles/level1.clr"), delim = " ", col_names = c("Number", "R", "G", "B", "Opacity", "Name"))
+
+# level 2
+habitat_table <- read_delim(
+  file = paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_code_ver003/styles/level2.clr"), delim = " ", col_names = c("Number", "R", "G", "B", "Opacity", "Name"))
+habitat_table <- habitat_table %>%
+  mutate(Color = rgb(R, G, B, maxColorValue = 255))
+
+habitat_table[habitat_table$Name == "Forest", "Color"] <- terrain.colors(15)[1]
+habitat_table[habitat_table$Name == "Shrubland", "Color"] <- terrain.colors(15)[2]
+habitat_table[habitat_table$Name == "Savanna", "Color"] <- terrain.colors(15)[3]
+habitat_table[habitat_table$Name == "Grassland", "Color"] <- filter(plot_cols, name == "4. Grassland")$color
+habitat_table[habitat_table$Name == "Artificial", "Color"] <- filter(plot_cols, name == "3. Crop")$color
+
+plot_cols
+show_col(plot_cols$color)
+show_col(habitat_table$Color)
+show_col(terrain.colors(15))
+terrain.colors(9)
+show_col("006633")
+show_col("brown")
+
+
+habitat
+res(habitat) * 110 # = 0.0988 km grid (~ 0.10 km, ~ 100 m)
+
+# crop:
+s_habitat <- crop(habitat, extent(s$y2017))
+b_habitat <- crop(habitat, extent(b$y2017))
+
+sort(unique(values(s_habitat)))
+sort(unique(values(b_habitat)))
+filter(habitat_table, Number %in% unique(values(s_habitat)))
+filter(habitat_table, Number %in% unique(values(b_habitat)))
+
+
+# fancy plots
+par(mfrow = c(2,2))
+plot(s_habitat, main = "Shaanxi, Habitat Types",
+     breaks = c(-1, 
+                filter(habitat_table, Number %in% unique(values(s_habitat)))$Number),
+     col = filter(habitat_table, Number %in% unique(values(s_habitat)))$Color)
+
+legend("topleft", 
+       legend = filter(habitat_table, Number %in% unique(values(s_habitat)))$Name, 
+       fill = filter(habitat_table, Number %in% unique(values(s_habitat)))$Color,
+       cex = 0.6, inset = 0)
+
+# compare to raw land use data
+plot(s$y2015, main = "Shaanxi 2015", 
+     breaks = c(0, plot_cols$breaks), 
+     col = plot_cols$color)
+legend("bottomleft", cex = 0.6, inset = 0,
+       legend = plot_cols$name, 
+       fill = plot_cols$color)
+
+# belarus
+plot(b_habitat, main = "Belarus, Habitat Types",
+     breaks = c(-1, 
+                filter(habitat_table, Number %in% unique(values(b_habitat)))$Number),
+     col = filter(habitat_table, Number %in% unique(values(b_habitat)))$Color)
+
+legend("bottomleft", 
+       legend = filter(habitat_table, Number %in% unique(values(b_habitat)))$Name, 
+       fill = filter(habitat_table, Number %in% unique(values(b_habitat)))$Color,
+       cex = 0.6, inset = 0)
+
+
+# compare to raw land use data
+plot(b$y2015, main = "Belarus 2015", breaks = c(0, plot_cols$breaks), col = plot_cols$color)
+legend("bottomleft", cex = 0.6, inset = 0,
+       legend = plot_cols$name, 
+       fill = plot_cols$color)
+
+
+
+habitat_table 
+# 0   Water                     
+# 100 Forest                   
+# 200 Savanna                 
+# 300 Shrubland               
+# 400 Grassland              
+# 500 Wetlands (inland)       
+# 600 Rocky Areas            
+# 800 Desert                 
+# 1400 Artificial - Terrestrial
+# 1700 Unknown
+unique(values(b_habitat))
+table(getValues(b_habitat))/ncell(b_habitat)
+plot(b_habitat, main = "Belarus Habitat classes", breaks = c(0, 100, 300, 500, 1400), col = plot_cols$color[c(2, 4, 4, 3)])
+
+
+# summary stats
+b_habitat_area <- habitat_table %>%
+  filter(Number %in% unique(values(b_habitat))) %>%
+  select(Number, 
+         Name = New.global.consolidated.biome.scheme) %>%
+  mutate(
+    area_percent = (table(getValues(b_pnv))/ncell(b_pnv))*100, # percentage in each
+    area_km2 = 
+      length(raster::area(b_pnv)) * 
+      median(raster::area(b_pnv), na.rm = TRUE) * 
+      area_percent/100
+  )
+
+```
+
+### Crosswalks
+
+
+```{r jung-table-crosswalk}
+# ---------------------------------------------- #
+# Jung table with classes
+# ---------------------------------------------- #
+jung_l1_table_clr <- read_delim(
+  file = paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/Habitatmapping-004/styles/level1.clr"), 
+  delim = " ", 
+  col_names = c("map_code", "R", "G", "B", "Opacity", "Name")) %>%
+  mutate(cols = rgb(R, G, B, maxColorValue = 255),
+         label = paste0(map_code, ": ", Name)
+  )
+
+
+
+jung_l2_table_clr <- read_delim(
+  file = paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/Habitatmapping-004/styles/level2.clr"), 
+  delim = " ", 
+  col_names = c("map_code", "R", "G", "B", "Opacity", "Name")) %>%
+  mutate(cols = rgb(R, G, B, maxColorValue = 255))
+
+jung_table <- read_csv(paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/Habitatmapping-004/IUCN_mapping_legend.csv")) %>%
+  rename("map_code" = "NewCode") %>%
+  mutate(IUCNLevel = gsub(" – | –", " - ", IUCNLevel)) %>%
+  left_join(select(jung_table_clr, map_code, cols, Coarse_Name = Name), by = "map_code") %>%
+  mutate(label = paste0(map_code, ": ", IUCNLevel))
+
+jung_table %>% select(map_code, IUCNLevel) %>% print(n = 126)
+
+jung_table %>% 
+  filter(map_code == 1404) %>%
+  .$IUCNDefintion
+  # .$Notes
+
+# level 1
+jung_table %>%
+  filter((map_code %% 100) == 0) %>%
+  select(map_code, Coarse_Name, IUCNLevel)
+
+
+# ---------------------------------------------- #
+# Jung table crosswalk
+# ---------------------------------------------- #
+IUCN_crosswalk <- read_csv(paste0(p_derived, "/IUCN_lc_crosswalk.csv")) # %>%
+  # mutate("is" = map_code, "becomes" = lc)
+
+IUCN_crosswalk %>% arrange(lc, map_code) %>% print(n = 40)
+
+```
+
+```{r pnv-to-IUCN-crosswalk}
+# 20 shrubs, 30 herbaceous vegetation, 60 bare/sparse vegetation, 90 herbaceous wetland, 111 closed forest, evergreen needleleaf, 112 closed forest, evergreen broadleaf, 114 closed forest, deciduous broadleaf, 115 closed forest, mixed, 121 open forest, evergreen needleleaf, and 122 open forest, evergreen broadleaf
+site_pnv_lc_30_freq %>% 
+  select(map_code, Name, land_cover_class_agg) %>% 
+  arrange(map_code) %>% 
+  unique()
+
+site_jung_l2_30_freq %>% 
+  # filter(hab_percent > 1) %>%
+  select(map_code, Coarse_Name, IUCNLevel) %>% 
+  unique() %>% 
+  arrange(map_code) %>% 
+  print(n = 35)
+
+
+
+IUCN_pnv_crosswalk
+
+test <- site_jung_l2_30_freq %>% 
+  arrange(map_code) %>% 
+  select(map_code, Coarse_Name, IUCNLevel) %>% 
+  unique() %>% 
+  mutate(pnv_code = NA)
+
+test %>% 
+  mutate(pnv_code = if(grepl("1.4", test$IUCNLevel), "")))
+
+site_jung_l2_30_freq %>% 
+  filter(Coarse_Name == unique(site_jung_l2_30_freq$Coarse_Name)[1]) %>%
+  arrange(map_code, desc(hab_percent))
+
+site_jung_l2_30_freq %>% filter(site == site_df$site[i])
+site_pnv_lc_30_freq %>% filter(site == site_df$site[i])
+
+
+# ecoregions_simple %>% select(ECO_NAME) %>% 
+  grep("Amaz", ecoregions_simple$ECO_NAME, value = TRUE)
+
+ecoregions_simple %>%
+  filter(ECO_NAME %in% grep("Amaz", ecoregions_simple$ECO_NAME, value = TRUE)) %>%
+  st_geometry() %>% plot()
+
+plot(jung_l2, add = T)
+
+
+site_pnv_lc_freq %>% 
+  select(land_cover_class, land_cover_class_agg) %>% 
+  unique() %>%
+  arrange(land_cover_class)
+
+
+site_jung_l2_freq %>% 
+  select(IUCNLevel, Coarse_Name) %>% 
+  unique() %>%
+  arrange(IUCNLevel)
+
+# aggregated
+site_pnv_lc_freq %>% 
+  select(land_cover_class_agg) %>% 
+  unique() %>%
+  arrange(land_cover_class_agg)
+
+
+site_jung_l2_freq %>% 
+  select(Coarse_Name) %>% 
+  unique() %>% .$Coarse_Name %>% cat()
+
+
+site_jung_l2_freq$IUCNLevel %>% unique() %>% sort()
+
+```
+
+
+```{r calculate-overlap-IUCN-to-Yin}
+
+i <- 3
+lc[[i]]$y2015
+
+site_jung_l1_30[[i]]
+site_jung_l1_30_freq$map_code %>% sort %>% unique()
+jung_l1_table_clr
+jung_l2_table_clr
+
+jung_table %>% 
+  select(map_code, Coarse_Name) 
+
+select(IUCN_crosswalk, "is" = map_code, "becomes" = lc)
+
+lc_plot_cols$name
+
+# reclassify level 2 habitat types
+
+IUCN_crosswalk <- IUCN_crosswalk %>% 
+  mutate(
+    #lc is where savanna is grassland (4) and shrubland is forest (2)
+    
+    # recode shrubland (IUCN) to 4, grassland (lc). 
+    # This version has both savanna and shrubland as grassland (2)
+    lc2 = ifelse(map_code >= 300 & map_code < 400, 4, lc), 
+    
+    # recode savanna (IUCN) to forest (lc). 
+    # This version has both savanna and shrubland as forest (3)
+    lc3 = ifelse(map_code >= 200 & map_code < 300, 2, lc), 
+    
+    # swap both: This version has savanna as forest (2), and shrubland as grassland (4)
+    lc4 = ifelse(map_code >= 200 & map_code < 300, 2, lc2) 
+  )
+
+IUCN_crosswalk %>% select(map_code:lc, lc2:lc4, IUCNLevel) %>% print(n = 50)
+
+
+tic()
+site_jung_l2_30_rcl <- 
+  lapply(1:11, function(site) {
+    rast(lapply(c("lc", "lc2", "lc3", "lc4"), function(lc_type) {
+      classify(
+        site_jung_l2_30[[site]],
+        
+        # cycles through lc, lc2, lc3, and lc4 as the "lc_type", to convert the map_code to.
+        rcl = IUCN_crosswalk %>% select("is" = map_code, "becomes" = lc_type),
+        filename = paste0(p_derived, "site_jung/", site_df$site[site], "_jung_l2_rcl_", lc_type,".tif"),
+        overwrite=TRUE)
+      }
+      )
+    )
+    }
+    )
+toc()
+
+names(site_jung_l2_30_rcl) <- site_df$site
+
+for(i in 1:11) {names(site_jung_l2_30_rcl[[i]]) <- c("lc", "lc2", "lc3", "lc4")}
+
+
+plot(site_jung_l2_30_rcl[[3]]$lc, col = lc_plot_cols$color)
+plot(lc[[3]]$y2015, col = lc_plot_cols$color)
+
+# Comparing how well the crosswalks match:
+# Confusion Matrix
+conf <- tmp_dt[, 1:2][, .N, by = c("y2015", "lc")][order(y2015, lc)]
+conf %>% pivot_wider(names_from = lc, values_from = N)
+                       
+
+# calculate the jaccard similarities between Yin's land cover maps (2015) and the IUCN habitat map (Jung 2020), following four different recoding schemes.
+
+site <- 3
+crosswalk_jac0
+
+identical(crosswalk_jac, crosswalk_jac0)
+crosswalk_jac <- lapply(1:11, 
+                        function(site) {
+  tmp_t <- terra::rast(
+    list(
+      lc[[site]]$y2015, # land cover in 2015
+      site_jung_l2_30_rcl[[site]] # IUCN habitat types, reclassified
+    )
+    )
+
+  # convert to data.table
+  tmp_dt <- spatraster_to_dt(tmp_t, xy_switch = FALSE)
+  
+  # calculate Jaccard similarity
+  jac_df <- lapply(c("lc", "lc2", "lc3", "lc4"), function(rcl_version){
+    tibble(site = site_df$site[site],
+           lc = 1:4,
+           ver = rcl_version) %>%
+      mutate(jaccard = sapply(lc, #1:4, 
+                              function(lc_code) {
+        int <- tmp_dt[y2015 == lc_code & get(rcl_version) == lc_code, .N] # intersection
+        a <- tmp_dt[y2015 == lc_code, .N] 
+        b <- tmp_dt[get(rcl_version) == lc_code, .N]
+        int / (a + b - int) # int / union
+        }))
+    
+    }
+    ) %>% bind_rows()
+
+  jac_df
+  }) %>% 
+  bind_rows()
+
+names(site_jung_l2_30_rcl) <- c("shrubs to forest, savanna to grass", 
+                                "shrubs to grass, savanna to grass",
+                                "shrubs to forest, savanna to forest", 
+                                "shrubs to grass, savanna to forest")
+
+gg_crosswalk_jac <- 
+  ggplot(data = crosswalk_jac, mapping = aes(x = as_factor(lc), y = jaccard, fill = as_factor(ver))) +
+    geom_col(size = 1, position = position_dodge2()) + 
+    theme_classic() +
+  labs(fill = "Crosswalk", x = "Land Cover Class") +
+  scale_x_discrete(labels = c("1" = "Non-veg",
+                              "2" = "Forest",
+                              "3" = "Cropland",
+                              "4" = "Grassland")) +
+  scale_fill_manual(values = brewer.pal(n = 4, name = "Set1"), # gg_color_hue(4), #viridis(n = 4),
+                    labels = c("lc" = "shrubs to forest,\n savanna to grass", 
+                                "lc2" = "shrubs to grass,\n savanna to grass",
+                                "lc3" = "shrubs to forest,\n savanna to forest", 
+                                "lc4" = "shrubs to grass,\n savanna to forest")) +
+  facet_wrap(vars(site)) + 
+  theme(axis.text.x = element_text(angle = 330, vjust = 1, hjust = 0))
+
+
+ggsave(plot = gg_crosswalk_jac,
+       filename = paste0(p_plots, "crosswalk_jaccard.pdf"),
+       width = 9, height = 7, units = "in")  
+
+
+i <- 1 # belarus
+i <- 2 # bh
+i <- 11 # wisc
+
+
+plot(site_jung_l1_30[[i]])
+plot(site_jung_l1_30[[i]],
+     breaks = c(299, 301),
+     main = paste0(names(site_jung_l1_30[[i]]), ": shrubland"))
+
+plot(site_jung_l2_30[[i]],
+     breaks = c(299, 399),
+     main = paste0(names(site_jung_l2_30[[i]]), ": shrubland"),
+     col = "red", add = T)
+
+plot(lc[[i]]$y2015,
+     col = lc_plot_cols$color)
+
+# comparing grassland and shrubland, jung first
+plot(site_jung_l2_30[[i]],
+     breaks = c(299, 399),
+     main = paste0(names(site_jung_l2_30[[i]]), ": shrubland"),
+     col = "red")
+
+plot(lc[[i]]$y2015,
+     col = lc_plot_cols$color,
+     breaks = c(3.9, 4.1),
+     add = T)
+
+# lc first
+plot(lc[[i]]$y2015,
+     col = lc_plot_cols$color,
+     breaks = c(3.9, 4.1))
+
+plot(site_jung_l2_30[[i]],
+     breaks = c(299, 399),
+     main = paste0(names(site_jung_l2_30[[i]]), ": shrubland"),
+     col = "red", add = T)
+
+jung_l2_table_clr %>% print(n = 82)
+
+```
+
+```{r comparing-PNV-and-ecoregions}
+
+# plot PNV and ecoregions side by side:
+
+site_pnv_lc_30$belarus
+
+cat(paste0(site_df$site, " (", 1:11, ")\n"))
+
+# ---------- forest biomes: ---------- #
+# belarus (1)
+# bosnia_herzegovina (2)
+# wisconsin (11)
+# chongqing (3) - tropical
+
+
+site_ecoregions2017 %>% st_drop_geometry() %>% select(site, BIOME_NAME) %>% unique()
+
+# ---------- Savanna biomes: ---------- #
+# goias (4)
+# mato_grosso (6)
+
+# ---------- shrublands / desert biomes: ---------- #
+# iraq (5)
+
+# ---------- grasssland biomes: ---------- #
+# nebraska (7)
+# orenburg (8)
+# shaanxi (9)
+# volgograd (10)
+
+
+plot(site_forest_c_30$chongqing, main = "Resampled to ~30 m")
+
+for(i in 1:2) {
+  plot(site_forest_c_30[[i]], main = site_df$site[i])
+  site_ecoregions2017 %>% 
+  filter(site == site_df$site[i],
+         BIOME_NAME %in% grep("Savanna",
+                         site_ecoregions2017$BIOME_NAME,
+                         value = TRUE)) %>%
+  st_geometry() %>% plot(col = "red", add = TRUE)
+  
+  Sys.sleep(4)
+  
+}
+
+plot(pnv_lc)
+
+plot(pnv_lc, ext = ext(lc[[i]]$y2017 + 1), maxcell = 1e8)
+
+```
+
+
+
+```{r backwards-crosswalk}
+
+```
+
+
+
+## Plot sites with abandonment, lc, PNV, and habitat types
+
+```{r plot-4x4}
+site_pnv_lc
+
+# four by four matrix with"
+# 1. LC in 2015
+# 2. Abandonment age in 2017
+# 3. PNV land cover
+# 4. IUCN Habitat types
+i <- 9
+for (i in 1:11) {
+pdf(file = paste0(p_output, "plots/site_4x4_", site_df$site[i],"_l2.pdf"), width = 7.5, height = 7.5)
+  
+mval <- 1.5
+par(mfrow = c(2, 2), 
+      # mar=c(0,0,0,0), 
+      oma=c(1,1,0,0),
+      adj = 0,
+      cex.main = 1#,
+      # tcl = -0.2
+      )
+
+
+plot(lc[[i]]$y2017, col = lc_plot_cols$color, levels = lc_plot_cols$name, 
+     mar = c(mval+0.5, mval, mval + 1.2, mval + 4), # bltr     
+     type = "classes", main = "Land cover, 2015")
+
+plot(age_t_bins[[i]]$y2017, colNA = "gray95", main = "Abandonment age (years), 2017",
+     mar = c(mval+0.5, mval, mval + 1.2, mval + 3), # bltr     
+     type = "classes", 
+     levels = c("5-10", "11-15", "16-20", "21-25", "26-30"))
+
+
+
+plot(site_pnv_lc[[i]], maxcell = 5000000,
+       main = paste0("PNV Land Cover, ", names(site_pnv_lc[i])),
+       mar = c(mval+0.5, mval, mval + 1.2, mval + 4), # bltr     
+       type = "classes", #legend = FALSE,
+       # col = filter(arrange(copernicus_table, map_code),
+       #              map_code %in% filter(site_pnv_lc_freq,
+       #                                   site == site_df$site[i])$map_code
+       #              )$cols
+     levels = filter(arrange(copernicus_table, map_code), 
+                  map_code %in% filter(site_pnv_lc_freq, 
+                                       site == site_df$site[i])$map_code)$Name %>%
+       str_wrap(., width = 14),
+     col = filter(arrange(copernicus_table, map_code), 
+                  map_code %in% filter(site_pnv_lc_freq, 
+                                       site == site_df$site[i])$map_code)$cols,
+     plg = list(y.intersp = 1.5)
+)
+
+
+# Level 2:
+# i <- 3
+plot(site_jung_l2[[i]], maxcell = 5000000,
+       main = paste0("IUCN Habitat Types, Level 2: ", names(site_jung_l2[i])),
+       mar = c(mval+0.5, mval, mval + 1.2, mval + 2), # bltr
+       type = "classes", #legend = FALSE,
+       col = jung_table %>%
+       arrange(map_code) %>%
+       filter(map_code %in% filter(site_jung_l2_freq,
+                                site == site_df$site[i])$map_code
+           ) %>% .$cols,
+       levels = jung_table %>%
+    arrange(map_code) %>%
+    filter(map_code %in% filter(site_jung_l2_freq,
+                                site == site_df$site[i])$map_code
+           ) %>% .$map_code
+    )
+
+# Level 1:
+# site_jung_l1_30
+# jung_l1_table_clr
+# plot(site_jung_l1_30[[i]], maxcell = 5000000,
+#        main = paste0("IUCN Habitat Types, Level 1: ", names(site_jung_l1_30[i])),
+#        mar = c(mval+0.5, mval, mval + 1.2, mval + 4), # bltr     
+#        type = "classes", #legend = FALSE,
+#        col = jung_l1_table_clr %>% 
+#        arrange(map_code) %>% 
+#        filter(map_code %in% filter(site_jung_l1_30_freq,
+#                                 site == site_df$site[i])$map_code
+#            ) %>% .$cols,
+#        levels = jung_l1_table_clr %>%
+#     arrange(map_code) %>%
+#     filter(map_code %in% filter(site_jung_l1_30_freq,
+#                                 site == site_df$site[i])$map_code
+#            ) %>% .$Name
+#     )
+
+dev.off()
+}
+```
+
+```{r explore-savanna}
+i <- 3
+
+plot(lc[[i]]$y2017, col = lc_plot_cols$color, levels = lc_plot_cols$name, 
+     mar = c(mval+0.5, mval, mval + 1.2, mval + 4), # bltr     
+     type = "classes", main = "Land cover, 2017")
+
+# chongqing:
+plot(lc[[i]]$y2015, 
+     breaks = c(3.9, 4.1),
+     main = "CQ: Grassland (4)") # just grassland 
+
+site_jung_l2_freq %>% filter(site == site_df$site[i])
+plot(site_jung_l2[[i]],
+     breaks = c(201, 307), # savanna
+     # breaks = c(301, 307) # shrubs
+     main = "CQ: IUCN savanna & shrubs"
+     )
+
+plot(lc[[i]]$y2015, breaks = c(1.9, 2.1), main = "CQ: forest")
+
+plot(site_jung_l2[[i]], breaks = c(103,110))
+plot(site_jung_l2[[i]], breaks = c(1402.9, 1403), add = T)
+
+
+plot(site_jung_l2[[i]], breaks = c(1401, 1402), main = "Arable")
+plot(lc[[i]]$y2015, breaks = c(2.9, 3.1), main = "CQ: Cropland (3)")
+
+
+plot(age_t_bins[[i]]$y2017, #colNA = "gray95", 
+     main = "Abandonment age (years), 2017",
+     mar = c(mval+0.5, mval, mval + 1.2, mval + 3), # bltr     
+     type = "classes", 
+     levels = c("5-10", "11-15", "16-20", "21-25", "26-30"),
+     col = "pink", add = T)
+
+
+# iraq
+
+site_jung_l2_freq %>% filter(site == site_df$site[5])
+
+
+# -------------------------------------------------- #
+# Cerrado
+# -------------------------------------------------- #
+
+pnv_lc
+
+ecoregions_simple %>% 
+  # st_drop_geometry() %>%
+  select(ECO_NAME, biome) %>%
+  # .$ECO_NAME %>%
+  filter(ECO_NAME == "Cerrado") %>% st_geometry() %>% plot(border = "red", add = T)
+
+plot(site_sf %>% filter(site %in% site_df$site[c(4,6)]) %>% st_geometry,
+     add = T)
+
+plot(pnv_lc, ext = ext(filter(ecoregions_simple, ECO_NAME == "Cerrado")),
+     type = "classes", maxcell = 100000000)
+
+
+     
+plot(forest_c, col = brewer_pal(palette = "Greens")(9), colNA = "gray80", add = T,
+     ext = ext(filter(ecoregions_simple, ECO_NAME == "Cerrado")))
+plot(st_geometry(filter(ecoregions_simple, ECO_NAME == "Cerrado")),
+     add = T)
+
+plot(site_sf$geometry, border = "black", add = T)
+
+
+```
+
+
+## Other Landcover
+
+```{r nlcd}
+install.packages("terra")
+library(terra)
+library(tictoc)
+
+# update filenames to match yours:
+nlcd <- rast(paste0(p_dat, "LU/nlcd_2019_land_cover_l48_20210604/nlcd_2019_land_cover_l48_20210604.img"))
+plot(nlcd)
+# freq(nlcd) # I used this to produce a table of the classes, but warning... it took a long time.
+nlcd_classes <- read_csv("/Users/christophercrawford/Downloads/nlcd_freq.csv")
+
+terraOptions()
+terraOptions(tempdir = paste0(p_dat, "LU/nlcd_temp"), todisk = TRUE, progress=10)
+
+tic()
+nlcd <- 
+  classify(nlcd,
+           rcl = tibble("is" = nlcd_classes$value, 
+                        becomes = if_else(is == 81, 1, NA_real_)), # note, it takes way longer to change values to 0 than to NA_real_
+           filename = paste0(p_dat, "LU/nlcd_2019_pasture_mask.tif"),
+           overwrite = TRUE)
+toc() # 605 seconds
+
+
+# load sf polygons ------------- #
+install.packages("rnaturalearth")
+library(rnaturalearth)
+
+usa <- rnaturalearth::ne_states(country = "United States of America", returnclass = "sf")
+conus <- usa %>% filter(!name %in% c("Alaska", "Hawaii"))
+plot(conus$geometry)
+conus_aea <- st_transform(conus, crs(nlcd)) # reproject to aea
+
+
+# plot the pasture mask
+pdf(file = paste0(p_dat, "LU/nlcd_pasture_mask.pdf"), width = 7, height = 4)
+plot(nlcd, main = "NLCD Pasture Mask")
+plot(conus_aea$geometry, add = T, border = "gray70")
+dev.off()
+
+# crop pnv to conus
+pnv_250 <- rast(paste0(p_dat, "/Habitats/PNV/Hengl2019/250m/pnv_biome.type_biome00k_c_250m_s0..0cm_2000..2017_v0.2.tif"))
+pnv_conus <- crop(pnv_250, conus)
+
+# reproject pnv to aea
+pnv_conus_aea <- terra::project(x = pnv_conus, 
+                         y = "+proj=aea +lat_0=23 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
+                         filename = paste0(p_dat, "Habitats/PNV/pnv_conus_aea.tif"))
+
+plot(pnv_conus_aea) # it worked!
+plot(conus_aea$geometry, add = T)
+
+
+# extract only forested or reforestable areas:
+pnv_classes <- read_csv("/Users/christophercrawford/Downloads/pnv_classes.csv")
+
+filter(pnv_classes, reforestable == "yes")$Number # reforestable classes
+filter(pnv_classes, reforestable == "yes")$Number
+pnv_classes
+
+# you can then reclassify to get a mask that's just those "reforestable" areas, with something like:
+tic()
+pnv_reforestable_mask <- 
+  classify(pnv_conus_aea,
+           # note, it takes way longer to change values to 0 than to NA_real_
+           rcl = tibble("is" = 1:32, 
+                        becomes = if_else(is %in% filter(pnv_classes, reforestable == "yes")$Number, 1, NA_real_)),
+           othersNA = TRUE,
+           filename = paste0(p_dat, "LU/pnv_reforestable_mask.tif"),
+           overwrite = TRUE)
+toc()  # 23 seconds
+
+# plot the pasture mask
+# pdf()
+pdf(file = paste0(p_dat, "LU/pnv_reforestable_mask.pdf"), width = 7, height = 4)
+# plot(pnv_conus_aea)
+plot(pnv_reforestable_mask, main = "PNV Reforestable Areas Mask")
+plot(conus_aea$geometry, add = T, border = "gray70")
+dev.off()
+
+
+print(gg_time_to_range_all_l3)
+dev.off()
+
+# then you can go about getting the resolution to match, etc.
+
+# just doing it with a smaller subset:
+
+nj <- usa %>% filter(name == "New Jersey")
+mi <- usa %>% filter(name == "Michigan")
+
+# to crop the nlcd to nj, first reproject the nj sf object to aea
+nj_aea <- st_transform(nj, crs(nlcd))
+plot(nj_aea$geometry)
+plot(nj$geometry)
+
+# make sure 
+pnv_nj <- crop(pnv_250, nj)
+tic()
+nlcd_nj <- crop(nlcd, nj_aea)
+toc() # 1 second
+plot(nlcd_nj)
+plot(pnv_nj)
+
+nlcd_nj_pasture <- 
+  classify(nlcd_nj,
+           # takes way longer to change values to 0 than to NA_real_
+           rcl = tibble("is" = nlcd_values, becomes = if_else(is == 81, 1, NA_real_)), 
+           filename = paste0(p_dat, "LU/nlcd_nj_2019_pasture_mask.tif"),
+           overwrite = TRUE)
+plot(nlcd_nj_pasture)
+plot(nj_aea$geometry, add = T)
+
+rasterOptions(todisk = TRUE)
+
+
+pnv_nj_aea <- project(x = pnv_nj, y = nlcd_nj, filename = paste0(p_dat, "Habitats/PNV/pnv_nj_aea.tif"))
+
+# it worked!
+plot(nlcd_nj)
+plot(pnv_nj_aea, add = T)
+plot(nj_aea$geometry, add = T)
+```
+
+
+
+
+## Ecoregions (TNC/WWF)
+
+```{r biomes}
+# use this version to match to PREDICTS
+tic()
+ecoregions <- st_read(paste0(p_dat, "Habitats/terr-ecoregions-TNC/tnc_terr_ecoregions.shp")) %>%
+  st_make_valid()
+toc() # 20 seconds about. (making the geometries valid is quick!)
+
+
+# rename the column for WWF_MHTNAM to biome (this matches PREDICTS)
+ecoregions <- ecoregions %>% mutate(biome = WWF_MHTNAM)
+ecoregions %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
+
+# union ecoregions within each biome
+biome_names <- ecoregions %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
+biome_l <- vector(mode = "list", length = 16L)
+names(biome_l) <- biome_names
+
+tic()
+for(i in 1:16) {
+  biome_l[[i]] <- ecoregions %>% 
+    filter(biome == biome_names[i]) %>%
+    st_union() %>%
+    st_sf() %>%
+    mutate(biome = biome_names[i])
+}
+toc() # took a bit of a while - maybe 60 seconds.
+
+biomes <- bind_rows(biome_l)
+
+# I tried aggregate, st_union, st_combine, merge, etc., and I couldn't find a simple way to dissolve an sf object based on an attribute, other than doing them all individually, then binding them back together. 
+
+
+# save biomes sf file
+st_write(biomes, dsn = paste0(p_dat, "Habitats/biomes.shp"))
+save(biomes, file = paste0(p_dat, "Habitats/biomes.rds"))
+
+biomes <- st_read(paste0(p_dat, "Habitats/biomes.shp"))
+
+plot(st_geometry(biomes[4,]))
+
+
+# Crop ecoregions to the sites:
+
+site_ecoregions <- lapply(1:11, function(i) {
+  temp <- st_crop(ecoregions, terra::ext(lc[[i]]))
+  temp <- temp %>% mutate(site = site_df$site[i])
+  temp
+}) %>% bind_rows()
+
+obj_size(site_ecoregions)
+st_write(site_ecoregions, dsn = paste0(p_derived, "site_ecoregions.shp"))
+
+site_ecoregions <- st_read(paste0(p_derived, "site_ecoregions.shp"))
+
+```
+
+```{r ecoregions-2017}
+tic()
+ecoregions2017 <- st_read(paste0(p_dat, "Habitats/Ecoregions2017/Ecoregions2017.shp")) %>%
+  st_make_valid()
+toc() # 20 seconds about. (making the geometries valid is quick!)
+
+
+# rename the column for WWF_MHTNAM to biome (this matches PREDICTS)
+ecoregions <- ecoregions %>% mutate(biome = WWF_MHTNAM)
+ecoregions %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
+
+
+
+# simplify polygons:
+ecoregions2017_simple <- st_simplify(ecoregions2017, dTolerance = 10000, preserveTopology = TRUE)
+obj_size(ecoregions2017_simple)
+
+# plot with Cook-Patton
+plot(cook_patton_abg, col = brewer_pal(palette = "Greens")(9), colNA = "gray80")
+
+# add just savannas in red:
+ecoregions2017_simple %>% 
+  select(ECO_NAME, BIOME_NAME) %>%
+  filter(BIOME_NAME %in% grep("Savanna",
+                         ecoregions2017_simple$BIOME_NAME,
+                         value = TRUE, invert = FALSE)
+         ) %>%
+  st_geometry() %>% plot(border = "red", add = TRUE)
+
+site_sf$geometry %>% plot(border = "orange", add= TRUE)
+
+
+# crop to sites:
+site_ecoregions2017 <- lapply(1:11, function(i) {
+  temp <- st_crop(ecoregions2017, terra::ext(lc[[i]]))
+  temp <- temp %>% mutate(site = site_df$site[i])
+  temp
+}) %>% bind_rows()
+
+warnings()
+
+plot(site_ecoregions2017$geometry)
+obj_size(site_ecoregions2017)
+site_ecoregions2017 %>% st_drop_geometry()
+names(site_ecoregions2017)
+
+site_ecoregions2017$ECO_NAME %>% unique()
+site_ecoregions2017$BIOME_NAME %>% unique()
+
+
+
+st_write(site_ecoregions2017, dsn = paste0(p_derived, "site_ecoregions2017.shp"))
+site_ecoregions2017 <- st_read(paste0(p_derived, "site_ecoregions2017.shp"))
+
+st_write(ecoregions2017_simple, dsn = paste0(p_derived, "ecoregions2017_simple.shp"))
+ecoregions2017_simple <- st_read(paste0(p_derived, "ecoregions2017_simple.shp"))
+```
+
+
+```{r plot-ecoregions}
+
+site_ecoregions %>% st_drop_geometry() %>%
+  select(ECO_NAME, biome, site) %>%
+  as_tibble() %>% print(n = 30)
+
+site_ecoregions2017 %>% names()
+
+site_ecoregions2017 %>% st_drop_geometry() %>%
+  select(ECO_NAME, BIOME_NAME, site) %>%
+  as_tibble() %>% print(n = 30)
+
+
+# plot ecoregions by site:
+  
+i
+gg_ecoregions_all <-
+  ggplot(data = site_ecoregions %>%
+           filter(site == site_df$site[i]), 
+         aes(fill = str_wrap(ECO_NAME, 15))) +
+  theme_classic() + 
+  geom_sf() + 
+  labs(fill = "Ecoregion") +
+  theme(legend.position = "right"#,
+        # legend.text = element_text(size = 7)
+        ) #+ 
+  # guides(fill = guide_legend(ncol = 2)) +
+  # scale_fill_manual(values = biome_pal, labels = str_wrap(names(biome_pal), 24)
+                    # ) + 
+  # facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
+
+gg_ecoregions_all_2017 <-
+  ggplot(data = site_ecoregions2017 %>%
+           filter(site == site_df$site[i]), 
+         aes(fill = str_wrap(ECO_NAME, 15))) +
+  theme_classic() + 
+  geom_sf() + 
+  labs(fill = "Ecoregion") +
+  theme(legend.position = "right")
+  
+ecoregions_by_site <-
+  lapply(1:11, function(i){
+    ggplot(data = site_ecoregions %>% 
+             filter(site == site_df$site[i]), 
+           aes(fill = str_wrap(ECO_NAME, 15))) +
+      theme_classic() + 
+      geom_sf() + 
+      labs(fill = NULL) +
+      theme(legend.position = "right",
+            axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) + 
+      guides(fill = guide_legend(ncol = 1)) + 
+      # scale_fill_manual(labels = str_wrap(names(biome_pal), 24)) +
+      # scale_fill_manual(values = biome_pal) + 
+      facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
+  })
+
+gg_ecoregions_by_site_2017 <-
+  lapply(1:11, function(i){
+    ggplot(data = site_ecoregions2017 %>% 
+             filter(site == site_df$site[i]), 
+           aes(fill = str_wrap(ECO_NAME, 15))) +
+      theme_classic() + 
+      geom_sf() + 
+      labs(fill = NULL) +
+      theme(legend.position = "right",
+            axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) + 
+      guides(fill = guide_legend(ncol = 1)) + 
+      # scale_fill_manual(labels = str_wrap(names(biome_pal), 24)) +
+      # scale_fill_manual(values = biome_pal) + 
+      facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
+  })
+
+
+ggsave(plot = 
+         # plot_grid(
+           plot_grid(
+             plotlist = ecoregions_by_site, 
+             ncol = 4, nrow = 3),
+           # as_ggplot(biome_legend),
+           # nrow = 2, rel_heights = c(2, 0.2)),
+       filename = paste0(p_plots, "ecoregions_by_site_wide.pdf"), 
+    width = 15, height = 9, units = "in"
+)
+
+ggsave(plot = 
+         # plot_grid(
+           plot_grid(
+             plotlist = gg_ecoregions_by_site_2017, 
+             ncol = 4, nrow = 3),
+           # as_ggplot(biome_legend),
+           # nrow = 2, rel_heights = c(2, 0.2)),
+       filename = paste0(p_plots, "ecoregions2017_by_site_wide.pdf"), 
+    width = 15, height = 9, units = "in"
+)
+
+
+```
+
+```{r savanna-ecoregion}
+
+ecoregions$ECO_NAME %>% grep("Ordos", ., value = TRUE)
+
+site_ecoregions %>% 
+  st_drop_geometry() %>%
+  select(site, ECO_NAME)
+
+ecoregions %>% 
+  filter(ECO_NAME == "Ordos Plateau Steppe") %>%
+  st_geometry() %>%
+  plot()
+
+
+plot(ext(lc$shaanxi$y2017) + 2)
+plot(ext(lc$shaanxi$y2017), add = T, border = "green")
+ecoregions %>% 
+  # filter(ECO_NAME == "Ordos Plateau Steppe") %>%
+  st_geometry() %>%
+  plot(add = T, col = "gray")
+
+crop1 <- st_crop(ecoregions, terra::ext(lc[[9]]) + 3)
+crop1 %>% st_drop_geometry()
+plot(crop1["biome"], leg = "bottom")
+plot(crop1$geometry)
+
+plot(ext(lc$shaanxi$y2017), add = T, border = "green")
+
+# ------------------------------------------------ #
+# simplify ecoregions sf file so that plotting at a global scale is manageable
+# ------------------------------------------------ #
+
+ecoregions_simple <- st_simplify(ecoregions, dTolerance = 10000, preserveTopology = TRUE)
+obj_size(ecoregions_simple)
+biomes_simple <- st_simplify(biomes, dTolerance = 10000, preserveTopology = TRUE)
+obj_size(biomes_simple)
+
+ecoregions_simple %>% 
+  st_drop_geometry() %>% select(biome) %>% unique() %>% nrow()
+
+# ------------------------------------------------ #
+# filter and plot
+# ------------------------------------------------ #
+plot(forest_c, col = brewer_pal(palette = "Greens")(9), colNA = "gray80")
+
+ecoregions_simple %>% 
+  select(ECO_NAME, biome) %>%
+  filter(ECO_NAME %in% 
+           grep("Forest|Desert|Woodlands|Mountain|Range|Tundra|Mangroves|Lake|Ice", 
+                ecoregions_simple$ECO_NAME, 
+                value = TRUE, invert = TRUE)) %>%
+  st_geometry() %>% plot(add = T)
+
+
+
+
+
+# subset region:
+my_ext <- terra::draw()
+
+plot(forest_c, col = brewer_pal(palette = "Greens")(9), colNA = "gray80",
+     ext = my_ext + 1.5)
+
+ecoregions_simple %>% select(ECO_NAME) %>% plot(add = TRUE)
+plot(usa$geometry, add = TRUE)
+
+
+
+# ------------------------------------------------ #
+# simplest filtering: just "savanna" biome
+# ------------------------------------------------ #
+
+# add just savannas in red:
+ecoregions_simple %>% 
+  select(ECO_NAME, biome) %>%
+  filter(biome %in% grep("Savanna",
+                         ecoregions_simple$biome,
+                         value = TRUE, invert = FALSE)
+         ) %>%
+  st_geometry() %>% plot(border = "red", add = TRUE)
+
+# Complex filtering
+ecoregions_simple %>% 
+  # st_drop_geometry() %>% 
+  select(ECO_NAME, biome) %>%
+  # .$ECO_NAME %>%
+  filter(ECO_NAME %in%
+           grep("Forest|Desert|Mountain|Range|Tundra|Mangroves|Lake|Ice", 
+                ecoregions_simple$ECO_NAME, 
+                value = TRUE, invert = TRUE),
+         biome %in%
+           grep("Forest|Tundra|Desert",
+                ecoregions_simple$biome,
+                value = TRUE, invert = TRUE)) %>%
+  st_geometry() %>% plot(border = "red", add = TRUE)
+  plot(extent = my_ext)
+
+plot(usa$geometry, graticule = TRUE, axes = TRUE, add = T, border = "red")
+
+
+
+ecoregions_simple %>% 
+  filter(ECO_NAME == "Ordos Plateau Steppe") %>%
+  st_geometry() %>% plot()
+  # plot(add = T, col = "gray")
+
+biomes_simple["biome"] %>% 
+  # st_drop_geometry() %>%
+  # filter(biome %in% grep("Savanna", biomes_simple$biome, value = TRUE)) %>%
+  # st_geometry() %>%
+  plot()
+
+grep("Savanna", biomes_simple$biome, value = TRUE)
+
+biomes_simple %>%
+  filter()
+  st_geometry() %>%
+  plot()
+
+site_ecoregions %>% 
+  filter(site == site_df$site[i])
+
+# ecoregions_by_site
+
+```
+
+
+```{r plot-biomes}
+# load biomes - see "biomes" chunk above
+biomes <- st_read(paste0(p_dat, "Habitats/biomes.shp"))
+
+
+ggplot() + theme_classic() + 
+  geom_sf(data = biomes, aes(fill = biome))
+
+# "Biomes ... are defined by The Nature Conservancy's terrestrial ecoregions of the world dataset"
+
+# make a list of cropped biomes cropped to each site:
+site_biomes <- lapply(1:11, function(i) {
+  temp <- st_crop(biomes, ext(lc[[i]]))
+  temp <- temp %>% mutate(site = site_df$site[i])
+  temp
+}) %>% bind_rows()
+
+st_write(site_biomes, dsn = paste0(p_derived, "site_biomes.shp"))
+
+
+site_biome_names <- site_biomes %>% 
+  st_drop_geometry() %>% select(biome) %>% 
+  arrange(biome) %>% unique() %>% .$biome
+
+# all site - but facet_wrap doesn't work with geom_sf with free scales
+ggplot() + theme_classic() + 
+  geom_sf(data = site_biomes, aes(fill = biome)) + 
+  # theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
+  facet_wrap(vars(site))
+
+
+biome_pal <- gg_color_hue(9)
+names(biome_pal) <- site_biome_names
+
+site_df
+site_biomes %>% st_drop_geometry() %>% select(biome, site) %>%
+  
+
+
+str_wrap(names(biome_pal), 20)
+
+site_biomes %>% 
+  st_drop_geometry() %>% select(biome, site)
+  
+gg_biomes_all <-
+  ggplot(data = site_biomes, aes(fill = biome)) +
+  theme_classic() + 
+  geom_sf() + 
+  labs(fill = NULL) +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 7)) + 
+  guides(fill = guide_legend(ncol = 2)) +
+  scale_fill_manual(values = biome_pal, labels = str_wrap(names(biome_pal), 24)
+                    ) + 
+  facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
+
+  
+biomes_by_site <-
+  lapply(1:11, function(i){
+    ggplot(data = site_biomes %>% filter(site == site_df$site[i]), aes(fill = biome)) +
+      theme_classic() + 
+      geom_sf() + 
+      labs(fill = NULL) +
+      theme(legend.position = "none",
+            axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) + 
+      guides(fill = guide_legend(ncol = 1)) + 
+      scale_fill_manual(values = biome_pal) + 
+      facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
+  })
+
+biome_legend <- ggpubr::get_legend(gg_biomes_all + 
+                                     guides(fill = guide_legend(nrow = 2)) +
+                                     theme(legend.position = "bottom"))
+
+ggsave(plot = 
+         plot_grid(
+           plot_grid(plotlist = biomes_by_site, ncol = 4, nrow = 3),
+           as_ggplot(biome_legend),
+           nrow = 2, rel_heights = c(2, 0.2)),
+       filename = paste0(p_plots, "biomes_by_site.pdf"), 
+    width = 7.5, height = 6.75, units = "in"
+)
+
+
+# ------------------------------------------------------------ #
+# Ecoregions 2017 - biomes
+# ------------------------------------------------------------ #
+
+biome2017_pal <- gg_color_hue(9)
+names(biome2017_pal) <- site_ecoregions2017 %>% 
+  st_drop_geometry() %>% select(BIOME_NAME) %>% 
+  arrange(BIOME_NAME) %>% unique() %>% .$BIOME_NAME
+
+
+gg_biomes2017_by_site <-
+  lapply(1:11, function(i){
+    ggplot(data = site_ecoregions2017 %>% 
+             filter(site == site_df$site[i]), 
+           aes(fill = BIOME_NAME)) +
+      theme_classic() + 
+      geom_sf() + 
+      labs(fill = NULL) +
+      theme(legend.position = "none",
+            axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) + 
+      guides(fill = guide_legend(ncol = 1)) + 
+      scale_fill_manual(values = biome2017_pal) + 
+      facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
+  })
+
+gg_biomes2017_all <-
+  ggplot(data = site_ecoregions2017, aes(fill = BIOME_NAME)) +
+  theme_classic() + 
+  geom_sf() + 
+  labs(fill = NULL) +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 7)) + 
+  guides(fill = guide_legend(ncol = 2)) +
+  scale_fill_manual(values = biome2017_pal, 
+                    labels = str_wrap(names(biome2017_pal), 24)
+                    ) + 
+  facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
+
+biome2017_legend <- ggpubr::get_legend(gg_biomes2017_all + 
+                                     guides(fill = guide_legend(nrow = 2)) +
+                                     theme(legend.position = "bottom"))
+
+ggsave(plot = 
+         plot_grid(
+           plot_grid(plotlist = gg_biomes2017_by_site, ncol = 4, nrow = 3),
+           as_ggplot(biome2017_legend),
+           nrow = 2, rel_heights = c(2, 0.2)),
+       filename = paste0(p_plots, "biomes2017_by_site.pdf"), 
+    width = 7.5, height = 6.75, units = "in"
+)
+
+
+```
+
+```{r mn-biome}
+usa <- ne_states(returnclass = "sf", country = "United States of America")
+mn <- usa %>%
+  filter(name == "Minnesota")
+
+wi <- usa %>% filter(name == "Wisconsin")
+plot(mn$geometry)
+plot(wi$geometry)
+mn_biome <- st_crop(biomes, extent(mn))
+wi_biome <- st_crop(biomes, extent(wi))
+
+ggplot() +
+  theme_classic() + 
+  geom_sf(data = mn_biome, aes(fill = biome))
+
+ggplot() +
+  theme_classic() + 
+  geom_sf(data = wi_biome, aes(fill = biome))
+
+ggplot() + theme_classic() + 
+  geom_sf(data = mn_biome, aes(fill = biome)) +
+  geom_sf(data = wi_biome, aes(fill = biome))
+
+
+```
+
+
+```{r biome-with-raster}
+ggplot() +
+  theme_classic() + 
+  geom_sf(data = biomes_crop %>% filter(site == "shaanxi"), aes(fill = biome)) + 
+  labs(fill = NULL) +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 7)) + 
+  guides(fill = guide_legend(ncol = 2)) +
+  scale_fill_manual(values = biome_pal, labels = str_wrap(names(biome_pal), 24)
+                    ) + 
+  facet_wrap(vars(site), labeller = as_labeller(cap_update_labels)) + 
+  geom_raster(age_r$shaanxi$y2017, mapping = aes(fill = y2017))
+
+
+plot(biomes_crop %>% filter(site == "shaanxi") %>% select(biome))
+
+p <- gplot(age_r$shaanxi$y2017) + 
+  geom_raster(aes(fill = value)) +
+  # facet_wrap(~ variable) +
+  scale_fill_gradientn(colours = terrain.colors(100)) +
+  coord_quickmap()
+
+```
