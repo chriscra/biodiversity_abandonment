@@ -73,8 +73,8 @@ pnv_area_df <- lapply(site_df$site,
   # Select just the lc and abandonment age for 2017, calculate area, and combine into a SpatRaster
   t17 <- terra::rast(
     list(
-      lc[[i]]$y2017, # land cover in 2017 (Raster*)
-      age_t[[i]]$y2017, # abandonment age in 2017 (Raster*),
+      lc[[i]]$y2017, # land cover in 2017
+      age_t[[i]]$y2017, # abandonment age in 2017,
       site_pnv_30[[i]], # PNV, resampled to 30 m
       terra::cellSize(age_t[[i]]$y2017, unit = "ha", mask = FALSE)
     )
@@ -160,12 +160,10 @@ names(my_new_labels) <- pnv_table_sub$Number
 names(my_new_colors)<- pnv_table_sub$Number
 
 my_new_labels[pnv_prop_abn_df$pnv %>% unique()]
-grep("2", pnv_table$Number)
-grep("2", pnv_table$Number)
+
 pnv_table_sub <- filter(pnv_table, Number %in% sort(unique(pnv_prop_abn_df$pnv)))
 
 
-pnv_table$cols[]
 
 # plot
 gg_pnv_prop_abn <-

@@ -3,6 +3,7 @@
 # directories to ignore
 derived/
 output/
+presentations/
 resources/
 scripts/AOH
 scripts/ee
