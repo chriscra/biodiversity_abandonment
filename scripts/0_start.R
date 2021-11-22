@@ -44,8 +44,8 @@ needed_packages <- c(
   "devtools", "Hmisc", "acepack",
   
   # spatial, ecological packages, extra:
-  "rnaturalearth", "smoothr", "spatialEco", "maps", "rangeBuilder",
-  "rredlist",
+  "rnaturalearth", "smoothr", "spatialEco", "maps", #"rangeBuilder",
+  # "rredlist",
   "landscapemetrics", "landscapetools",
   
   # rmarkdown
@@ -115,9 +115,9 @@ install_missing_packages(needed_packages)
 # ---- #
 # load
 github_packages <- c(
-  "dtraster", "lmisc", "agroEcoTradeoff",
+  "dtraster", "lmisc", # "agroEcoTradeoff",
   "rnaturalearthdata", "rnaturalearthhires",
-  "dismotools", 
+  # "dismotools", 
   "cowplot", 
   "colorblindr")
 

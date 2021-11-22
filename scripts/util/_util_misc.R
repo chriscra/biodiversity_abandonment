@@ -22,3 +22,25 @@ gg_color_hue <- function(n) {
 
 # to define a color palette for plotting, first make a character vector with the colors, then assign names to match the factor levels.
 # use this as scale_fill_manual(values = your_custom_palette)
+
+# ------ land cover map plots ------- #
+
+# define color palette for plotting:
+# 1. Non-veg
+# 2. Woody veg
+# 3. Crop
+# 4. Grassland
+lc_plot_cols <- data.frame(
+  color = c("gray80", # gray, 1. Non-veg
+            terrain.colors(9)[1], # "#00A600" # dark green, 2. Woody veg
+            terrain.colors(9)[5], # "#E8C32E" # gold, 3. Crop
+            terrain.colors(9)[3]  # "#8BD000" # light green, 4. Grassland
+  ),
+  name = c("1 Non veg.", 
+           "2 Forest", 
+           "3 Crop", 
+           "4 Grassland"),
+  breaks = c(1, 2, 3, 4))
+
+
+

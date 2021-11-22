@@ -30,11 +30,11 @@ dt_to_spatraster <- function(dt){
 # ------------------------- #
 # analogous to Lyndon's function dtraster::as.data.table.raster()
 
-spatraster_to_dt <- function(spt) {
+spatraster_to_dt <- function(spt, xy_switch = TRUE) {
   dt <- spt %>%
     terra::as.data.frame(
       na.rm = FALSE, # na.rm=TRUE is default
-      xy = TRUE) %>% 
+      xy = xy_switch) %>% 
     as.data.table()
   
   dt

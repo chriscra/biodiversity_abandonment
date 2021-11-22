@@ -12,6 +12,7 @@ p_output <- paste0(p_proj, "output/")
 p_plots <- paste0(p_proj, "output/plots/")
 
 p_dat <- "/Volumes/GoogleDrive/My Drive/data/"
+p_ee <- "/Volumes/GoogleDrive-107266184156135828486/My Drive/ee/"
 
 # from the original abandonment_trajectories directory
 p_dat_derived <- "/Users/christophercrawford/work/projects/abandonment_trajectories/data_derived/"
