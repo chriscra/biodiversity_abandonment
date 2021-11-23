@@ -13,9 +13,7 @@ source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_star
 # packageVersion("terra")
 # library(terra)
 
-```
-
-```{r load-files}
+# load files:
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/util/_util_files.R")
 ```
 
@@ -575,3 +573,425 @@ template_raster <- extend(small_mask, extent(as.Spatial(sf_file)), value = 0)
 
 
 ```
+
+## AOH dev (based on Yiwen's script)
+
+```{r load-files-AOH}
+# see Yiwen's script: "scripts/ref/AOH_firstGo_whichSpecies.R"
+
+load(file = paste0(p_derived, "species_ranges/vert_sites.RData"), verbose = TRUE)
+species_ranges <- filter(vert_sites, vert_class != "gard")
+
+site_index <- 11
+
+### Which species to use ? ###
+# ref <- read.csv("~/Dropbox/PostDoc4_Princeton/Species Traits/Mammal_base_Matched.csv", row.names=1) # just the IUCN spreadsheet, species list.
+species_list <- species_ranges %>% 
+  st_drop_geometry() %>%
+  select(site, vert_class, binomial) %>% 
+  unique() %>% as_tibble() %>% 
+  arrange(site, vert_class, binomial)
+
+
+
+#### -------- load habitat map ---------- ####
+
+### Loading suitable habitats from IUCN/IIASA #####
+# iucnHabitatClass <- raster("~/Dropbox/PostDoc4_Princeton/Species Traits/iucn_habitatclassification_composite_lvl2_ver003_resampled.tif")
+
+# jung_l2 <- rast(paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_composite_lvl2_ver004.tif"))
+
+
+habitat_map <- 
+# site_jung_l2_30 <- 
+  lapply(
+  list.files(paste0(p_derived, "site_jung"), full.names = TRUE) %>% 
+    grep("l2_30.tif", ., value = TRUE), 
+  function(i) rast(i)
+)
+names(habitat_map) <- site_df$site
+
+# load elevation raster
+elevation_t <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "elevation/", site_df$site[i], "_srtm_crop.tif"))
+  }
+  )
+names(elevation_t) <- site_df$site
+
+# plot(elevation_t)
+
+
+# ----------------------- #
+# --- pixel area (ha) --- #
+# ----------------------- #
+site_area_ha <- lapply(
+  list.files(paste0(p_derived, "site_area_ha"), full.names = TRUE), 
+  function(i) rast(i)
+)
+names(site_area_ha) <- site_df$site
+
+
+# ---------------------------------------------- #
+# Jung table crosswalk
+# ---------------------------------------------- #
+iucnHabitatTranslator <- read_csv(paste0(p_proj, "/resources/IUCNhabitatMap_translator.csv"))
+
+IUCN_crosswalk <- read_csv(paste0(p_derived, "/IUCN_lc_crosswalk.csv")) %>%
+  left_join(iucnHabitatTranslator, by = "map_code") %>% 
+  arrange(map_code)
+  # mutate("is" = map_code, "becomes" = lc)
+
+IUCN_crosswalk %>% arrange(lc, map_code) %>% print(n = 45)
+IUCN_crosswalk %>% arrange(map_code) %>% print(n = 45)
+
+habitat_prefs$code %>% unique() %>% sort()
+
+IUCN_crosswalk %>% 
+  left_join(iucnHabitatTranslator, by = "map_code") %>% .$code %>% unique() %>% sort()
+
+```
+
+
+```{r load-IUCN-files}
+## translator ##
+# iucnHabitat <- read.csv("~/Dropbox/PostDoc4_Princeton/Species Traits/MammalsIUCN/habitats.csv")
+
+habitat_prefs <- lapply(c("LC", "nonLC"), function(i) {
+  read_csv(
+    file = paste0(p_dat, "bd/IUCN/redlist_2021_11_17_", i, "/habitats.csv")#, n_max = 10
+  ) %>% 
+    select(binomial = scientificName, code, name:suitability, assessmentId, internalTaxonId)
+}) %>% 
+  bind_rows() %>% 
+  filter(binomial %in% unique(species_list$binomial))
+
+habitat_details <- lapply(c("LC", "nonLC"), function(i) {
+  read_csv(
+    file = paste0(p_dat, "bd/IUCN/redlist_2021_11_17_", i, "/assessments.csv")#, n_max = 10
+  ) %>% 
+    select(binomial = scientificName, redlistCategory, rationale, habitat, threats, population)
+}) %>% 
+  bind_rows() %>% 
+  filter(binomial %in% unique(species_list$binomial))
+
+species_synonyms <- lapply(c("LC", "nonLC"), function(i) {
+  read_csv(
+    file = paste0(p_dat, "bd/IUCN/redlist_2021_11_17_", i, "/synonyms.csv")#, n_max = 10
+  ) %>% 
+    select(binomial = scientificName, genusName, speciesName) %>%
+    mutate(synonym = paste0(genusName, " ", speciesName))
+}) %>% 
+  bind_rows() %>% 
+  filter(synonym %in% unique(species_list$binomial))
+
+
+species_synonyms %>% filter(synonym %in% unique(non_match$binomial)) %>% arrange(synonym) %>% print(n = 30)
+
+vert_sites %>% filter(binomial == "Antigone canadensis")
+
+
+unique(non_match$binomial) %>% sort()
+
+
+
+# check to make sure each range has habitat prefs, elevation prefs:
+habitat_prefs %>% select(binomial) %>% unique() # 2205
+
+ref %>% select(binomial) %>% unique() # 2230
+vert_sites %>% st_drop_geometry() %>% filter(vert_class != "gard") %>% select(binomial) %>% unique() %>% nrow() # 2230
+habitat_details %>% select(binomial) %>% unique() # 2205
+
+unique(habitat_details$binomial) %>% length()
+unique(species_list$binomial) %>% length()
+
+non_match <- species_list %>% filter(!binomial %in% unique(habitat_details$binomial))
+non_match$binomial %>% unique() # 25 species without a match. 
+
+habitat_details %>% filter(binomial == "Capricornis sumatraensis")
+
+
+species_list %>% filter(binomial == "Capricornis sumatraensis")
+vert_sites %>% filter(binomial == "Capricornis sumatraensis")
+vert_sites %>% filter(binomial == "Capricornis milneedwardsii") %>% st_geometry() %>% plot()
+
+
+non_match %>% select(vert_class, binomial) %>% arrange(vert_class, binomial) %>% unique() %>% print(n = 25)
+
+# column names to extract
+# binomials
+# habitat prefs
+# elevation prefs
+
+
+
+### Loading elevation data ####
+# elevation_prefs <- read.csv("~/Dropbox/PostDoc4_Princeton/Species Traits/MammalsIUCN/ElevationOnly.csv", row.names=1)
+
+
+elevation_prefs <- lapply(c("LC", "nonLC"), function(i) {
+  read_csv(
+    file = paste0(p_dat, "bd/IUCN/redlist_2021_11_17_", i, "/all_other_fields.csv")#, n_max = 10
+    ) %>%
+    select(binomial = scientificName, elevation_lower = ElevationLower.limit, elevation_upper = ElevationUpper.limit)
+}) %>% 
+  bind_rows() %>%
+  
+  # extract records for only those species of interest 
+  filter(binomial %in% unique(species_list$binomial)) %>%
+  
+  # update elevation to account for NA
+  mutate(elevation_lower = ifelse(is.na(elevation_lower), 0, elevation_lower),
+         elevation_upper = ifelse(is.na(elevation_upper), 9999999, elevation_upper)
+         )
+```
+
+
+```{r aoh-dev}
+
+# create an empty data.frame to store results from the for loop:
+species_list[, "binomial"]
+species_list[, 3]
+results <- tibble(species = species_list[, "binomial"],
+                  IUCN_AOO = NA,
+                  IUCN_AOH = NA)
+
+
+
+i <- 1
+for(i in seq_along(species_list$binomial)) {
+  # ------------------------------------------------------------------------- #
+  ### starts here ###
+  # ------------------------------------------------------------------------- #
+  
+  # ---- extract species range polygons at the site ---- #
+  
+x1 <- species_ranges[species_ranges$binomial == paste0(species_list[i, "binomial"]),] # select a subset of species range polygons based on binomial
+species_name <- "Lithobates palustris"
+
+x1 <- vert_sites[vert_sites$binomial == "Lithobates palustris", ] %>% 
+  st_cast() # update all features to multipolygon, for 
+
+
+# ---- crop the land cover map in question to the extent of the range map ---- #
+tic()
+y1 <- terra::crop(#iucnHabitatClass,
+  habitat_map[[11]], # site_jung_l2_30[[11]],
+  x1) #%>% raster()
+toc()
+
+site_area_ha[[site_index]]
+
+
+
+# ---- turn the species range polygons (sf) into a raster ---- #
+# this involves creating a template raster to match the dimensions of the IUCN Habitat map, 
+# and then using fasterize().
+# if using this method, must first convert all sf objects to the same type (i.e., multipolygon)
+# I can also do this using terra::rasterize(), but it's slightly slower. (~ 1 second for Wisconsin)
+
+tic()
+template_raster1 <- raster::raster(
+  resolution = terra::res(site_area_ha[[site_index]]),
+  ext = raster::extent(terra::ext(site_area_ha[[site_index]])[1:4]),
+  ncols = terra::ncol(site_area_ha[[site_index]]),
+  nrows = terra::nrow(site_area_ha[[site_index]]))
+
+
+template_raster <- raster::raster(
+  resolution = terra::res(y1),
+  ext = raster::extent(terra::ext(y1)[1:4]),
+  ncols = terra::ncol(y1),
+  nrows = terra::nrow(y1))
+
+x2 <- fasterize(x1, 
+                template_raster# 
+                # raster(y1)
+                ) %>% rast()
+
+x21 <- fasterize(x1,
+                template_raster1# 
+                # raster(y1)
+                ) %>% rast()
+
+toc()
+
+plot(x2)
+ext(x2)
+ext(lc$wisconsin$y2017)
+
+# writeRaster(x2,
+            # filename = paste0(p_derived, "aoh/tmp/random_tmp.tif"), 
+            # overwrite=TRUE)
+# x2 <- rast(paste0(p_derived, "aoh/tmp/random_tmp.tif"))
+
+
+# fasterize is faster than terra::rasterize(), but the step of writing the raster to file, then reloading as SpatRaster takes much longer.
+# tic()
+# x2t <- terra::rasterize(vect(x1), y1, # must convert sf to spatvector:
+#                         #field="", 
+#                         #fun = length#, sum = FALSE, 
+#                         # filename = paste0(p_derived, "aoh/tmp/rasterize_tmp.tif"), overwrite=TRUE
+#           )
+# toc()
+# 
+# plot(x2t)
+
+
+ # ---- update cell values to mask ---- #
+
+# tic()
+# x3 <- calc(x2_r, function(x) {x[!is.na(x)] <- 0; return(x)}) # passes a function setting all of the cell values that are not NAs to 0
+# toc()
+
+tic()
+x3 <- subst(x2, 1, 0) # change cell value from 1 to 0.
+# x3 <- x2 - 1 # can also do this, maybe just very slightly faster
+toc()
+
+# Calculate the Area Of Occurrence (AOO), before filtering by habitat and elevation
+# expanse() is much faster! But... it doesn't work with large rasters of the extent of some of my sites.
+
+# results$IUCN_AOO[i] <- expanse(x2, unit = "km") # in km2
+
+print(results, n = 30)
+
+tic()
+x2_area_test <- x3 %>%
+  terra::cellSize(., unit = "ha", mask = TRUE) %>% 
+  global(fun = "sum", na.rm = TRUE) %>% 
+  as.numeric()
+
+x2_area_test
+toc()
+
+tic()
+x2_area_test1 <- terra::cellSize(x21, unit = "ha", mask = TRUE) %>% 
+  global(fun = "sum", na.rm = TRUE)
+x2_area_test1
+toc()
+
+
+plot(x2)
+plot(x3 + site_area_ha[[site_index]])
+tic()
+global(x3 + site_area_ha[[site_index]], fun = "sum", na.rm = TRUE)
+toc()
+tic()
+global(x2 * site_area_ha[[site_index]], fun = "sum", na.rm = TRUE)
+toc()
+
+x2 * site_area_ha[[site_index]] %>%
+  global(., fun = "sum", na.rm = TRUE)
+
+
+# by calculating cellSize()
+tic()
+x2_area <- 
+  terra::cellSize(x2, unit = "ha", mask = TRUE) %>% 
+  global(fun = "sum", na.rm = TRUE)
+toc()
+
+results$IUCN_AOO[i] <- x2_area
+
+site_area_ha[[11]]
+plot(site_area_ha[[11]])
+
+# mask the IUCN habitat map to the range raster
+y2 <- x3 + y1
+# y2 <- app(c(x3, y1), sum) # the same, but slightly slower
+# y2 <- terra::mask(x3, y1)
+
+plot(y2)
+
+# ------------------------------------------------------------------------- #
+### Habitat Filter ###
+# ------------------------------------------------------------------------- #
+species_list[i, "binomial"]
+
+z1 <- habitat_prefs %>% 
+  filter(binomial == species_name,
+         suitability == "Suitable") # extract the habitat classifications for the species in question
+
+suitable_habitat_codes <- IUCN_crosswalk %>% 
+  filter(code %in% unique(z1$code)) %>%
+  # .$lc %>% 
+  .$map_code %>% 
+  unique() # extract the lc code from my crosswalk that correspond to the IUCN habitat codes
+
+suitable_habitat_rcl <- IUCN_crosswalk %>% 
+  filter(code %in% unique(z1$code))
+
+
+# my thoughts on how to do the land cover translation
+# I have decided what proportion of "forest" go into what habitat type at each site. I don't know where though, so I'll just attribute this proportionally, evenly across the whole site. So, what I should do is apply this proportionally *after* I have clipped out the suitable habitats. 
+
+# So, I need to build a translator for the IUCN habitat prefs, and then extract by that.
+# I can then, in a separate step, multiply by the proportion in question.
+# I can calculate the area in each habitat type, and if a species has a subset of one habitat type that is suitable (e.g., grassland, but not savanna or shrubland), I will then adjust the habitat area down by the proportion of my lc "grassland (4)" that is considered the IUCN habitat type grassland at that site. 
+
+tic()
+y3 <- 
+  classify(y2,
+           rcl = select(suitable_habitat_rcl, is = map_code) %>% mutate(becomes = 0),
+           othersNA = TRUE,
+           filename = paste0(p_derived, "aoh/tmp/aoh_tmp.tif"),
+           overwrite = TRUE)
+toc()  # 1.894  seconds
+
+# calculate area after habitat filter
+tic()
+y3_area <- 
+  terra::cellSize(y3, unit = "ha", mask = TRUE) %>% 
+  global(fun = "sum", na.rm = TRUE)
+toc()
+
+plot(y3)
+# ------------------------------------------------------------------------- #
+### Elevation Filter ###
+# ------------------------------------------------------------------------- #
+elevation_t
+elevation_t[[site_index]]
+
+elevation_mask <- elevation_t[[site_index]] + y3
+plot(elevation_mask)
+
+y3_r <- raster(elevation_mask)
+
+tic()
+y3 <- 
+  classify(y2,
+           rcl = select(suitable_habitat_rcl, is = map_code) %>% mutate(becomes = 0),
+           othersNA = TRUE,
+           filename = paste0(p_derived, "aoh/tmp/aoh_tmp.tif"),
+           overwrite = TRUE)
+toc()
+
+elevation_mask
+elevation_rcl <- elevation_prefs %>% filter(binomial == species_name)
+
+e1 <- elevation_prefs[elevation_prefs$binomial==paste0(species_list[i,1]), ]
+
+terra::app(y3, )
+ele6_t <- elevation_mask
+plot(ele6_t)
+
+
+
+tic()
+ele6_rcl <- classify(elevation_mask, 
+                     rcl = tibble(from = el_rcl$elevation_lower,
+                                  to = el_rcl$elevation_upper, 
+                                  becomes = 0),
+                     include.lowest = TRUE, right = TRUE)
+toc() # sweet! much faster.
+
+plot(ele6_rcl, colNA = "pink")
+
+# mask the range polygon by the habitat mask and the elevation mask
+
+
+print(i)
+write.csv(results,"~/Dropbox/PostDoc4_Princeton/Species Traits/FutureAOH.csv")
+}
+```
+
