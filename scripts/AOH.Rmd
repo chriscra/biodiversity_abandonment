@@ -574,21 +574,49 @@ template_raster <- extend(small_mask, extent(as.Spatial(sf_file)), value = 0)
 
 ```
 
-## AOH dev (based on Yiwen's script)
 
-```{r load-files-AOH}
-# set up parameters:
-site_index <- 11
-yr_index <- 31
+## Misc
+
+```{r create-blank-template-rasters}
+site_index
+
+
+lapply(1:11, function(i) {
+  template_r <- terra::rast(
+    resolution = res(lc[[i]]),
+    extent = ext(lc[[i]])
+  )
   
-# see Yiwen's script: "scripts/ref/AOH_firstGo_whichSpecies.R"
+  
+
+  terra::writeRaster(template_r, 
+                     filename = paste0(p_derived, "templates/", site_df$site[i], "_template.tif"),
+                     overwrite = TRUE,
+                     names = paste0(site_df$site[i], "_template"))
+  })
+
+
+rasterOptions()
+rasterOptions(tmpdir = "/scratch/gpfs/clc6/biodiversity_abn/derived/tmp/")
+tmp_r <- raster(ncols = 10, 
+                nrows = 10, 
+                resolution = 50)
+
+values(tmp_r) <- 1:ncell(tmp_r)
+
+plot(tmp_r)
+plot(template_r)
+
+```
+
+
+# IUCN Data
+
+```{r load-ranges}
+# cropped range maps
 load(file = paste0(p_derived, "species_ranges/vert_sites.RData"), verbose = TRUE)
 
-species_ranges <- vert_sites %>%
-  filter(vert_class != "gard",
-         site == site_df$site[site_index]) # filter to just the site in question
 
-# number of unique runs:
 vert_sites %>%
   st_drop_geometry() %>%
   filter(vert_class != "gard") %>%
@@ -596,20 +624,302 @@ vert_sites %>%
   unique() %>% 
   as_tibble() %>% 
   arrange(site, vert_class, binomial)
+```
 
-  
+```{r IUCN-synonyms}
 
+species_synonyms <- lapply(c("LC", "nonLC"), function(i) {
+  read_csv(
+    file = paste0(p_dat, "bd/IUCN/redlist_2021_11_17_", i, "/synonyms.csv")#, n_max = 10
+  ) %>% 
+    select(binomial = scientificName, genusName, speciesName) %>%
+    mutate(synonym = paste0(genusName, " ", speciesName))
+}) %>% 
+  bind_rows() %>% 
+  filter(synonym %in% unique(species_list$binomial) | 
+           binomial %in% unique(species_list$binomial))
 
-### Which species to use ? ###
-# ref <- read.csv("~/Dropbox/PostDoc4_Princeton/Species Traits/Mammal_base_Matched.csv", row.names=1) # just the IUCN spreadsheet, species list.
+# 25 species with names that do not match:
 
-species_list <- species_ranges %>% 
+vert_sites %>% st_drop_geometry() %>% 
+  filter(vert_class != "gard") %>% 
+  select(binomial) %>% unique() %>% nrow() # 2230
+
+habitat_prefs$binomial %>% unique() %>% length()
+species_ranges$binomial %>% unique() %>% length()
+
+# remove reptiles
+
+# list of unique species-site combinations at my sites
+non_match <- vert_sites %>% 
   st_drop_geometry() %>%
+  filter(vert_class != "gard") %>%
   select(site, vert_class, binomial) %>% 
   unique() %>% 
-  as_tibble() %>% 
-  arrange(site, vert_class, binomial)
+  filter(!binomial %in% unique(habitat_prefs$binomial))
 
+non_match$binomial %>% unique() # 25 species without a match.
+
+# play with synonyms:
+species_synonyms
+
+species_synonyms %>% filter(synonym %in% unique(non_match$binomial)) %>% arrange(synonym) %>% print(n = 30)
+species_w_syn <- species_synonyms %>% 
+  filter(synonym %in% unique(non_match$binomial)) %>% 
+  arrange(synonym)# %>% .$synonym
+
+habitat_prefs %>% filter(binomial == "Naemorhedus griseus")
+elevation_prefs %>% filter(binomial == "Naemorhedus griseus")
+grep("Naemorhedus", habitat_prefs$binomial)
+
+
+# all species?
+habitat_prefs_all <- lapply(c("LC", "nonLC"), function(i) {
+  read_csv(
+    file = paste0(p_dat, "bd/IUCN/redlist_2021_11_17_", i, "/habitats.csv")#, n_max = 10
+  ) %>% 
+    select(binomial = scientificName, code, name:suitability, assessmentId, internalTaxonId)
+}) %>% 
+  bind_rows()
+
+habitat_prefs_all %>% filter(binomial == "Naemorhedus griseus")
+grep("Naemorhedus", habitat_prefs$binomial)
+grep("Naemorhedus", habitat_prefs_all$binomial, value = TRUE) %>% unique()
+
+habitat_prefs_all[grep("Naemorhedus", habitat_prefs_all$binomial), ]
+
+
+habitat_prefs_all %>% filter(binomial %in% grep("Naemorhedus", habitat_prefs_all$binomial, value = TRUE))
+filter(synonyms)
+
+species_synonyms %>% filter(synonym == non_match$binomial[1])
+
+non_match %>% filter(!binomial %in% species_w_syn$synonym) %>% .$binomial %>% unique
+
+filter(species_synonyms, synonym %in% unique(species_list$binomial))
+
+species_list %>% filter(binomial == "Capricornis sumatraensis")
+vert_sites %>% filter(binomial == "Capricornis sumatraensis")
+vert_sites %>% filter(binomial == "Capricornis milneedwardsii") %>% st_geometry() %>% plot()
+
+
+# column names to extract
+# binomials
+# habitat prefs
+# elevation prefs
+```
+
+
+```{r update-species-list-and-ranges}
+# --------------------------------------------------- #
+# create species_list, a list of unique species-site combinations at my sites
+# --------------------------------------------------- #
+
+species_list <- vert_sites %>%
+  st_drop_geometry() %>%
+  filter(vert_class != "gard") %>% 
+  select(site, vert_class, binomial) %>% unique() %>%
+  arrange(site, vert_class, binomial) %>% as_tibble() %>% 
+  
+  # update list species synonyms:
+  # filter(binomial %in% species_w_syn$synonym) %>%
+  left_join(select(species_w_syn, new_binomial = binomial, synonym), by = c("binomial" = "synonym")) %>%
+  mutate(binomial = ifelse(!is.na(new_binomial), new_binomial, binomial)) %>%
+  left_join(select(species_w_syn, binomial, synonym), by = "binomial") %>%
+  select(-new_binomial)
+
+
+# number of unique runs:
+species_list %>% nrow()
+
+species_list %>% 
+  group_by(site, vert_class) %>% 
+  summarise(num_sp = n()) 
+
+# update based on habitat suitability
+
+# ----------------
+# fix and filter based on habitat suitability and presence (must load habitat_prefs - see below)
+# ----------------
+habitat_prefs$binomial %>% unique() %>% length() # the only species that still doesn't have a match is the Chinese goral (Naemorhedus griseus)
+non_match
+
+species_ranges$binomial %>% unique() %>% length()
+species_list$binomial %>% unique() %>% length()
+
+suitable_sp <- habitat_prefs %>% 
+  filter(binomial %in% species_list$binomial, 
+         suitability == "Suitable") %>%
+  .$binomial %>% unique()
+
+length(suitable_sp)
+
+tmp_sp <- species_list %>%
+  filter(!binomial %in% suitable_sp) %>% 
+  .$binomial %>% unique()
+
+# all of these excluded species have unknown suitabilities
+habitat_prefs %>% filter(binomial %in% tmp_sp)
+habitat_prefs %>% filter(binomial %in% suitable_sp) # extract the habitat classifications for the species in question
+
+# filter to just those species with suitable habitat that occurs at one of the sites.
+# this excludes about 40 species
+species_w_habitat <- 
+  habitat_prefs %>% 
+  filter(suitability == "Suitable",
+         code %in% jung_hab_type_area_df$code)
+
+species_w_habitat %>% .$binomial %>% unique() %>% length()
+species_list %>% filter(binomial %in% species_w_habitat$binomial) %>% .$binomial %>% unique() %>% length()
+
+
+species_list <- species_list %>%
+  filter(binomial %in% species_w_habitat$binomial)
+
+
+species_list %>% .$binomial %>% unique() %>% length() # 2188 species
+species_list %>% nrow() # 3979 unique runs
+
+
+write_csv(species_list, 
+          file = paste0(p_derived, "/species_list.csv")
+)
+
+
+
+# --------------------------------------------------- #
+# create species_ranges, a subset of vert_sites
+# --------------------------------------------------- #
+# make sure to update species_ranges with synonyms
+
+species_ranges <-
+  vert_sites %>% 
+  filter(vert_class != "gard") %>%
+  
+  # filter(binomial %in% species_w_syn$synonym) %>%
+  left_join(select(species_w_syn, new_binomial = binomial, synonym), by = c("binomial" = "synonym")) %>%
+  mutate(binomial = ifelse(!is.na(new_binomial), new_binomial, binomial)) %>%
+  left_join(select(species_w_syn, binomial, synonym), by = "binomial") %>%
+  select(site:binomial, synonym, everything(), -new_binomial)
+  
+save(species_ranges, file = paste0(p_derived, "species_ranges/species_ranges.RData"))
+
+
+species_list$binomial %>% unique() %>% length() # 2188 species
+species_list %>% nrow() # 3979 unique runs
+species_ranges$binomial %>% unique %>% length
+```
+
+
+```{r load-IUCN-assessment-data}
+# ---------------------------------------------- #
+# Jung IUCN habitat types map crosswalk
+# ---------------------------------------------- #
+# iucnHabitatTranslator <- read_csv(paste0(p_proj, "/resources/IUCNhabitatMap_translator.csv"))
+# 
+# iucn_crosswalk <- read_csv(paste0(p_derived, "/iucn_lc_crosswalk.csv")) %>%
+#   left_join(iucnHabitatTranslator, by = "map_code") %>% 
+#   arrange(map_code)
+# 
+# iucn_crosswalk %>% write_csv(paste0(p_derived, "/iucn_lc_crosswalk.csv"))
+
+iucn_crosswalk <- read_csv(paste0(p_derived, "/iucn_lc_crosswalk.csv"))
+```
+
+
+```{r habitat_prefs}
+habitat_prefs <- lapply(c("LC", "nonLC"), function(i) {
+  read_csv(
+    file = paste0(p_dat, "bd/IUCN/redlist_2021_11_17_", i, "/habitats.csv")#, n_max = 10
+  ) %>% 
+    select(binomial = scientificName, code, name:suitability, assessmentId, internalTaxonId)
+}) %>% 
+  bind_rows() %>% 
+  filter(binomial %in% unique(species_list$binomial))
+
+
+
+habitat_details <- lapply(c("LC", "nonLC"), function(i) {
+  read_csv(
+    file = paste0(p_dat, "bd/IUCN/redlist_2021_11_17_", i, "/assessments.csv")#, n_max = 10
+  ) %>% 
+    select(binomial = scientificName, redlistCategory, rationale, habitat, threats, population)
+}) %>% 
+  bind_rows() %>% 
+  filter(binomial %in% unique(species_list$binomial))
+
+
+# ----------------
+# save updated file
+# ----------------
+
+write_csv(habitat_prefs, 
+          file = paste0(p_derived, "/iucn_habitat_prefs_subset.csv")
+)
+
+```
+
+```{r elevation_prefs}
+
+
+# ---------------------------------------------------------- #
+### Loading elevation data ####
+# elevation_prefs <- read.csv("~/Dropbox/PostDoc4_Princeton/Species Traits/MammalsIUCN/ElevationOnly.csv", row.names=1)
+
+
+elevation_prefs <- lapply(c("LC", "nonLC"), function(i) {
+  read_csv(
+    file = paste0(p_dat, "bd/IUCN/redlist_2021_11_17_", i, "/all_other_fields.csv")#, n_max = 10
+    ) %>%
+    select(binomial = scientificName, 
+           elevation_lower = ElevationLower.limit,
+           elevation_upper = ElevationUpper.limit)
+}) %>% 
+  bind_rows() %>%
+  
+  # extract records for only those species of interest 
+  filter(binomial %in% unique(species_list$binomial)) %>%
+  
+  # update elevation to account for NA
+  mutate(elevation_lower = ifelse(is.na(elevation_lower), 0, elevation_lower),
+         elevation_upper = ifelse(is.na(elevation_upper), 9999, elevation_upper)
+         )
+
+#
+elevation_prefs %>%
+  filter(elevation_upper == 0)
+
+# Rana temporaria has its upper and lower elevations mixed up.
+# Fix.
+elevation_prefs <- elevation_prefs %>%
+  mutate(elevation_lower = ifelse(binomial == "Rana temporaria",
+                                  0, elevation_lower),
+         elevation_upper = ifelse(binomial == "Rana temporaria",
+                                  2700, elevation_upper)
+  ) #%>% filter(binomial == "Rana temporaria")
+
+# ----------------
+# save updated file
+# ----------------
+
+write_csv(elevation_prefs, 
+          file = paste0(p_derived, "/iucn_elevation_prefs_subset.csv")
+)
+
+
+
+elevation_prefs %>% 
+  mutate(check = elevation_upper - elevation_lower) %>%
+  filter(check < 0)
+
+```
+
+
+# AOH 
+
+## {terra} AOH dev (based on Yiwen's script)
+
+```{r load-map-files-AOH}
 #### -------- load habitat map ---------- ####
 
 ### Loading suitable habitats from IUCN/IIASA #####
@@ -625,136 +935,23 @@ habitat_map <- rast(paste0(p_derived, "site_jung/", site_df$site[site_index], "_
 habitat_map <- lc[[site_index]][[yr_index]]
 plot(habitat_map)
 
-# load elevation raster
-elevation_t <- rast(paste0(p_derived, "elevation/", site_df$site[site_index], "_srtm_crop.tif"))
+# load elevation raster list
 
-# plot(elevation_t)
+elevation_map <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "elevation/", 
+              site_df$site[i], "_srtm_crop.tif")
+       )
+  })
 
-
-# ----------------------- #
-# --- pixel area (ha) --- #
-# ----------------------- #
 site_area_ha <- lapply(
   list.files(paste0(p_derived, "site_area_ha"), full.names = TRUE), 
   function(i) rast(i)
 )
 names(site_area_ha) <- site_df$site
 
-
-# ---------------------------------------------- #
-# Jung table crosswalk
-# ---------------------------------------------- #
-iucnHabitatTranslator <- read_csv(paste0(p_proj, "/resources/IUCNhabitatMap_translator.csv"))
-
-IUCN_crosswalk <- read_csv(paste0(p_derived, "/IUCN_lc_crosswalk.csv")) %>%
-  left_join(iucnHabitatTranslator, by = "map_code") %>% 
-  arrange(map_code)
-  
-
-IUCN_crosswalk %>% arrange(lc, map_code) %>% print(n = 45)
-IUCN_crosswalk %>% arrange(map_code) %>% print(n = 45)
-
-habitat_prefs$code %>% unique() %>% sort()
-
 ```
-
-
-```{r load-IUCN-files}
-## translator ##
-# iucnHabitat <- read.csv("~/Dropbox/PostDoc4_Princeton/Species Traits/MammalsIUCN/habitats.csv")
-
-habitat_prefs <- lapply(c("LC", "nonLC"), function(i) {
-  read_csv(
-    file = paste0(p_dat, "bd/IUCN/redlist_2021_11_17_", i, "/habitats.csv")#, n_max = 10
-  ) %>% 
-    select(binomial = scientificName, code, name:suitability, assessmentId, internalTaxonId)
-}) %>% 
-  bind_rows() %>% 
-  filter(binomial %in% unique(species_list$binomial))
-
-habitat_details <- lapply(c("LC", "nonLC"), function(i) {
-  read_csv(
-    file = paste0(p_dat, "bd/IUCN/redlist_2021_11_17_", i, "/assessments.csv")#, n_max = 10
-  ) %>% 
-    select(binomial = scientificName, redlistCategory, rationale, habitat, threats, population)
-}) %>% 
-  bind_rows() %>% 
-  filter(binomial %in% unique(species_list$binomial))
-
-species_synonyms <- lapply(c("LC", "nonLC"), function(i) {
-  read_csv(
-    file = paste0(p_dat, "bd/IUCN/redlist_2021_11_17_", i, "/synonyms.csv")#, n_max = 10
-  ) %>% 
-    select(binomial = scientificName, genusName, speciesName) %>%
-    mutate(synonym = paste0(genusName, " ", speciesName))
-}) %>% 
-  bind_rows() %>% 
-  filter(synonym %in% unique(species_list$binomial))
-
-
-species_synonyms %>% filter(synonym %in% unique(non_match$binomial)) %>% arrange(synonym) %>% print(n = 30)
-
-vert_sites %>% filter(binomial == "Antigone canadensis")
-
-
-unique(non_match$binomial) %>% sort()
-
-
-
-# check to make sure each range has habitat prefs, elevation prefs:
-habitat_prefs %>% select(binomial) %>% unique() # 2205
-
-ref %>% select(binomial) %>% unique() # 2230
-vert_sites %>% st_drop_geometry() %>% filter(vert_class != "gard") %>% select(binomial) %>% unique() %>% nrow() # 2230
-habitat_details %>% select(binomial) %>% unique() # 2205
-
-unique(habitat_details$binomial) %>% length()
-unique(species_list$binomial) %>% length()
-
-non_match <- species_list %>% filter(!binomial %in% unique(habitat_details$binomial))
-non_match$binomial %>% unique() # 25 species without a match. 
-
-habitat_details %>% filter(binomial == "Capricornis sumatraensis")
-
-
-species_list %>% filter(binomial == "Capricornis sumatraensis")
-vert_sites %>% filter(binomial == "Capricornis sumatraensis")
-vert_sites %>% filter(binomial == "Capricornis milneedwardsii") %>% st_geometry() %>% plot()
-
-
-non_match %>% select(vert_class, binomial) %>% arrange(vert_class, binomial) %>% unique() %>% print(n = 25)
-
-# column names to extract
-# binomials
-# habitat prefs
-# elevation prefs
-
-
-
-### Loading elevation data ####
-# elevation_prefs <- read.csv("~/Dropbox/PostDoc4_Princeton/Species Traits/MammalsIUCN/ElevationOnly.csv", row.names=1)
-
-
-elevation_prefs <- lapply(c("LC", "nonLC"), function(i) {
-  read_csv(
-    file = paste0(p_dat, "bd/IUCN/redlist_2021_11_17_", i, "/all_other_fields.csv")#, n_max = 10
-    ) %>%
-    select(binomial = scientificName, elevation_lower = ElevationLower.limit, elevation_upper = ElevationUpper.limit)
-}) %>% 
-  bind_rows() %>%
-  
-  # extract records for only those species of interest 
-  filter(binomial %in% unique(species_list$binomial)) %>%
-  
-  # update elevation to account for NA
-  mutate(elevation_lower = ifelse(is.na(elevation_lower), 0, elevation_lower),
-         elevation_upper = ifelse(is.na(elevation_upper), 9999999, elevation_upper)
-         )
-```
-
 
 ```{r aoh-dev}
-
 # create an empty data.frame to store results from the for loop:
 species_list[, "binomial"]
 species_list[, 3]
@@ -919,13 +1116,13 @@ z1 <- habitat_prefs %>%
   filter(binomial == species_name,
          suitability == "Suitable") # extract the habitat classifications for the species in question
 
-suitable_habitat_codes <- IUCN_crosswalk %>% 
+suitable_habitat_codes <- iucn_crosswalk %>% 
   filter(code %in% unique(z1$code)) %>%
   # .$lc %>% 
   .$map_code %>% 
   unique() # extract the lc code from my crosswalk that correspond to the IUCN habitat codes
 
-suitable_habitat_rcl <- IUCN_crosswalk %>% 
+suitable_habitat_rcl <- iucn_crosswalk %>% 
   filter(code %in% unique(z1$code))
 
 
@@ -956,10 +1153,10 @@ plot(y3)
 # ------------------------------------------------------------------------- #
 ### Elevation Filter ###
 # ------------------------------------------------------------------------- #
-elevation_t
-elevation_t[[site_index]]
+elevation_map
+elevation_map[[site_index]]
 
-elevation_mask <- elevation_t[[site_index]] + y3
+elevation_mask <- elevation_map[[site_index]] + y3
 plot(elevation_mask)
 
 y3_r <- raster(elevation_mask)
@@ -1002,7 +1199,182 @@ write.csv(aoh_df,"~/Dropbox/PostDoc4_Princeton/Species Traits/FutureAOH.csv")
 }
 ```
 
-```{r aoh-trim}
+```{r aoc-direct-testing}
+
+# cc_AOH_terra <- function(index,
+#                        site_index,
+#                        year_index,
+#                        calc_lc = TRUE) {
+  # ------------------------------------------------------------------------- #
+  ### starts here ###
+  # ------------------------------------------------------------------------- #
+  tic.clearlog()
+  tic(paste0("run ", index, ":", site_df$site[site_index], ", ", year_index))
+  aoh_test_mg
+  aoh_test_s
+  index <- 3
+  site_index <- 9 # 6 = mato_grosso
+  year_index <- 2010:2017
+  calc_lc <- TRUE
+  calc_AOO <- TRUE
+  
+  species_ranges <- vert_sites %>%
+  filter(vert_class != "gard",
+         site == site_df$site[site_index]) # filter to just the site in question
+  
+  species_list <- species_ranges %>% st_drop_geometry() %>%
+    select(site, vert_class, binomial) %>% unique() %>%
+    arrange(site, vert_class, binomial)
+
+  species_name <- species_list$binomial[index]
+  # species_name <- "Lithobates palustris"
+  
+  habitat_map <- if (calc_lc) {
+    lc[[site_index]][[paste0("y", year_index)]]
+  } else {
+    rast(paste0(p_derived, "site_jung/", site_df$site[site_index], "_jung_l2_30.tif"))
+  }
+  
+  elevation_map <- rast(paste0(p_derived, "elevation/", site_df$site[site_index], "_srtm_crop.tif"))
+  
+  # ---- extract species range polygons at the site ---- #
+  range_sf <- st_cast(species_ranges[species_ranges$binomial == species_name, ]) # select a subset of species range polygons based on binomial, and update all features to multipolygon, for fasterize()
+  plot(range_sf$geometry)
+  
+  # plot(lc[[site_index]][[year_index]])
+  plot(habitat_map)
+  plot(range_sf$geometry, border = "red", add = TRUE)
+
+  # ---- turn the species range polygons (sf) into a raster ---- #
+    
+  range_t <- 
+    fasterize(range_sf,
+              raster::raster(resolution = terra::res(habitat_map),
+                             ext = raster::extent(terra::ext(habitat_map)[1:4]))
+              ) %>% 
+    rast() %>% # convert to SpatRaster 
+    subst(1, 0) # update cell values from 1 to 0.
+  
+  plot(range_t)
+  # ------------------------------------------------------------------------- #
+  ### Habitat Filter ###
+  # ------------------------------------------------------------------------- #
+  z1 <- habitat_prefs %>% 
+    filter(binomial == species_name,
+           suitability == "Suitable") # extract the habitat classifications for the species in question
+  
+  habitat_prefs %>% 
+    filter(binomial == species_name) %>%
+    arrange(suitability) %>% print(n = 25)
+  
+  habitat_details %>% filter(binomial == species_name) %>% .$habitat
+  
+  # extract the lc codes from my crosswalk that correspond to the IUCN habitat codes
+  suitable_habitat_rcl <- iucn_crosswalk %>% 
+    filter(code %in% unique(z1$code))
+  
+  freq(habitat_map)
+  iucn_crosswalk %>% print(n = 42)
+  plot(site_jung_l2$mato_grosso, breaks = c(105.9,106.1))
+  plot(site_jung_l2_30$mato_grosso, breaks = c(105.9,106.1))
+  plot(site_jung_l2_30$mato_grosso, breaks = c(506.9,507.1))
+  plot(site_jung_l2$mato_grosso, breaks = c(405.9,406.1))
+  freq(site_jung_l2_30$mato_grosso)
+  
+  # reclassify habitat raster to 
+  habitat_map1 <- lc[[site_index]][["y2017"]]
+  habitat_map <- lc[[8]]#[[paste0("y", 2010:2017)]]
+  
+  tic()
+  habitat_map_rcl <- 
+    classify(
+      # habitat_map1,
+      habitat_map,
+      rcl = select(suitable_habitat_rcl, 
+                   is = ifelse(calc_lc, "lc", "map_code")
+                   ) %>% unique() %>% 
+               mutate(becomes = 0),
+             othersNA = TRUE,
+             # filename = paste0(p_derived, "aoh/tmp/aoh_tmp.tif"),
+             overwrite = TRUE)
+  toc() # 5 seconds for 1, 8.178 s for 3, 11 s for 8, 28 seconds s for all 31
+  
+  31*5
+  28
+  plot(habitat_map_rcl[[1:4]])
+  
+  plot(habitat_map_rcl)
+  # ------------------------------------------------------------------------- #
+  ### Elevation Filter ###
+  # ------------------------------------------------------------------------- #
+  elevation_prefs_rcl <- elevation_prefs %>% filter(binomial == species_name)
+  
+  elevation_map_rcl <- 
+    classify(
+      elevation_map,
+      rcl = tibble(from = elevation_prefs_rcl$elevation_lower,
+                   to = elevation_prefs_rcl$elevation_upper,
+                   becomes = 0),
+      include.lowest = TRUE, right = TRUE)
+  
+  plot(elevation_map_rcl, colNA = "pink")
+  
+  # mask the range polygon by the habitat mask and the elevation mask
+  plot(range_t)
+  tic()
+  aoh <- range_t + elevation_map_rcl
+  aoh <- aoh + habitat_map_rcl
+  toc() # 26 seconds for all 31, # 1.4 for 1 layer 
+  
+
+  # ------------------------------------------------------------------------- #
+  ### Calculate areas:
+  # ------------------------------------------------------------------------- #
+  
+  # Calculate the Area Of Occurrence (AOO), before filtering by habitat and elevation
+  if (calc_AOO) {
+    range_aoo_ha <- 
+    terra::cellSize(range_t, unit = "ha", mask = TRUE) %>% 
+    global(fun = "sum", na.rm = TRUE) %>% .$sum
+    }
+  
+  # Calculate the Area Of Occurrence (AOO), before filtering by habitat and elevation
+  tic()
+  range_aoh_ha <- 
+    terra::cellSize(aoh, unit = "ha", mask = TRUE) %>% 
+    global(fun = "sum", na.rm = TRUE) %>% .$sum
+  toc() # 1.8 seconds for 1, 8 seconds for 5 layers, 40 s for all 31
+  
+  toc(log = T)
+  
+  aoh_tmp <- 
+    tibble(site = site_df$site[site_index],
+           binomial = species_name,
+           year = year_index,
+           # IUCN_aoo_ha = range_aoo_ha,
+           IUCN_aoh_ha = range_aoh_ha)
+  
+  if (calc_AOO) {
+    aoh_tmp <- aoh_tmp %>%
+      mutate(IUCN_aoo_ha = range_aoo_ha)
+  }
+  
+  if (include_time) {
+    aoh_tmp <- aoh_tmp %>%
+      mutate(time = 
+               tic.log(format = F) %>% bind_rows() %>%
+               mutate(time = toc - tic) %>% .$time)
+  }
+  
+  # Note: the slight difference between areas before and after habitat filtering is
+  # the result of a small amount of 0s added to the Yin et al. 2020 land cover maps. 
+  
+  cat("calculated AOH for", species_name, "=", range_aoh_ha, "ha", fill = TRUE)
+  aoh_tmp
+
+```
+
+```{r aoh-function-testing}
 
 # create an empty data.frame to store results from the for loop:
 species_list[, "binomial"]
@@ -1013,6 +1385,10 @@ aoh_df <- tibble(site = site_df$site[site_index],
                  IUCN_aoo_ha = NA,
                  IUCN_aoh_ha = NA)
 
+
+# things to load:
+load(file = paste0(p_derived, "species_ranges/vert_sites.RData"), verbose = TRUE)
+
 # for a specific site, compile list of species
 species_list
 aoh_df
@@ -1021,125 +1397,970 @@ aoh_df
 
 # what if I do the lc maps in batches, do I save time? 
 
-cc_run_AOH <- function(index,
-                       site_index,
-                       year_index,
-                       calc_lc = TRUE) {
-  # ------------------------------------------------------------------------- #
-  ### starts here ###
-  # ------------------------------------------------------------------------- #
-  tic(paste0("run ", index, ":", site_df$site[site_index], ", ", year_index))
+
+
+tic("test1")
+toc(log=T)
+tic("test2")
+toc(log=T)
+
+tic.clearlog()
+tic.log(format = T) %>% unlist() 
+tic.log(format = F) %>% bind_rows() %>%
+  mutate(time = toc - tic) %>% .$time
+
+
+aoh_test <- lapply(1:5, function(i) {
+  cc_AOH_terra(index = i, site_index = 11, year_index = 31, calc_lc = FALSE)
+}) %>% bind_rows()
+
+seq_along(species_list$binomial)
+
+aoh_test2 <- lapply(1:2, function(i) {
+  cc_AOH_terra(index = i, site_index = 11, year_index = 31, calc_lc = FALSE)
+}) %>% bind_rows()
+
+aoh_test_mg <- lapply(1:5, function(i) {
+  cc_AOH_terra(index = i, site_index = 6, year_index = 31, calc_lc = FALSE)
+}) %>% bind_rows()
+
+
+aoh_test_s2 <- lapply(1:5, function(i) {
+  cc_AOH_terra(index = i, site_index = 9, year_index = 2017, calc_lc = FALSE)
+}) %>% bind_rows()
+
+aoh_test_s[1:5,]
+aoh_test_s2
+
+
+aoh_test_lc_s <- lapply(1:5, function(i) {
+  cc_AOH_terra(index = i, site_index = 9, year_index = 2017, calc_lc = TRUE)
+}) %>% bind_rows()
+aoh_test_lc_s
+aoh_tmp
+
+vert_sites %>% filter(binomial == "Rana chensinensis", 
+                      site == "shaanxi" ) %>% 
+  st_geometry() %>% 
+  plot(add = T, col = "red")
+
+site_sf %>% filter(site == "shaanxi" ) %>% st_geometry() %>% plot()
+
+aoh_test_s1
+
+aoh_test_mg
+habitat_details %>% filter(binomial == "Adenomera andreae") %>% .$habitat
+habitat_prefs %>% filter(binomial == "Adenomera andreae") %>% .$habitat
+
+synonyms 
+species_synonyms %>% filter(binomial == "Adenomera andreae")
+
+aoh_test4 <- 
+  lapply(1:11, function(site_index) {
+    tmp <- lapply(1, function(i) {
+      cc_AOH_terra(index = i, site_index = site_index, year_index = 31, calc_lc = FALSE)
+      }) %>% bind_rows()
+  }) %>% bind_rows()
   
-  species_name <- species_list$binomial[index]
-  # species_name <- "Lithobates palustris"
-  
-  # ---- extract species range polygons at the site ---- #
-  range_sf <- st_cast(species_ranges[species_ranges$binomial == species_name, ]) # select a subset of species range polygons based on binomial, and update all features to multipolygon, for fasterize()
-    
-  # ---- turn the species range polygons (sf) into a raster ---- #
-    
-  range_t <- fasterize(
-    range_sf, 
-    raster::raster(
-      resolution = terra::res(habitat_map),
-      ext = raster::extent(terra::ext(habitat_map)[1:4])
-      )
-    ) %>% 
-    rast() %>% # convert to SpatRaster 
-    subst(1, 0) # update cell values from 1 to 0.
-  
-  # ------------------------------------------------------------------------- #
-  ### Habitat Filter ###
-  # ------------------------------------------------------------------------- #
-  z1 <- habitat_prefs %>% 
-    filter(binomial == species_name,
-           suitability == "Suitable") # extract the habitat classifications for the species in question
-  
-  # extract the lc codes from my crosswalk that correspond to the IUCN habitat codes
-  suitable_habitat_rcl <- IUCN_crosswalk %>% 
-    filter(code %in% unique(z1$code))
-  
-  # reclassify habitat raster to 
-  habitat_map_range_rcl <- 
-    classify(
-      habitat_map,
-      rcl = select(suitable_habitat_rcl, 
-                   is = ifelse(calc_lc, "lc", "map_code")
-                   ) %>% unique() %>% 
-               mutate(becomes = 0),
-             othersNA = TRUE,
-             filename = paste0(p_derived, "aoh/tmp/aoh_tmp.tif"),
-             overwrite = TRUE)
-  
-  plot(habitat_map_range_rcl)
-  
-  # ------------------------------------------------------------------------- #
-  ### Elevation Filter ###
-  # ------------------------------------------------------------------------- #
-  elevation_rcl <- elevation_prefs %>% filter(binomial == species_name)
-  
-  elevation_range_rcl <- 
-    classify(
-      elevation_t,
+
+aoh_test_mult_s <- 
+  lapply(3, function(i) {
+  cc_AOH_terra(index = i, site_index = 9, year_index = 2015:2017, 
+             calc_lc = TRUE, calc_AOO = FALSE, include_time = TRUE)
+}) %>% bind_rows()
+
+aoh_test_mult_s %>% tail
+
+aoh_test_mult_s
+
+
+
+
+aoh_tmp
+aoh_test_mult_s
+
+aoh_test_s
+
+
+aoh_test3
+aoh_test4
+
+# between 24-32 seconds
+
+# run 1:wisconsin, 31: 29.43 sec elapsed
+# calculated AOH for Acris crepitans = 630173.7 ha
+# run 2:wisconsin, 31: 32.413 sec elapsed
+# calculated AOH for Ambystoma laterale = 1962498 ha
+# run 3:wisconsin, 31: 26.02 sec elapsed
+# calculated AOH for Ambystoma maculatum = 1260343 ha
+# run 4:wisconsin, 31: 24.47 sec elapsed
+# calculated AOH for Ambystoma tigrinum = 905840.2 ha
+# run 5:wisconsin, 31: 25.846 sec elapsed
+# calculated AOH for Anaxyrus americanus = 2938938 ha
+# > aoh_test
+
+aoh_test
+aoh_df[1:5,]
+
+aoh_test4
+
+write_csv(aoh_test,
+          file = paste0(p_derived, "aoh/aoh_df.csv"))
+
+```
+
+
+
+```{r remove-0s-from-lc}
+
+# this doesn't really matter! I'm just comparing the AOH anyways...
+
+tic()
+lc_clean <- subst(lc[[8]][[1:4]], from = 0, to = NA_real_)
+toc()
+# 63 seconds for just four layers of the biggest site. 
+
+compareGeom(lc_clean, lc[[9]])
+
+df1 <- freq(lc_clean)
+df2 <- freq(lc[[9]][[1:4]])
+
+df1 %>% as_tibble() %>% arrange(value)
+df2 %>% as_tibble() %>% arrange(value)
+
+lc_clean <- classify(
+      lc[[9]][[1:4]],
       rcl = tibble(from = elevation_rcl$elevation_lower,
                    to = elevation_rcl$elevation_upper,
                    becomes = 0),
       include.lowest = TRUE, right = TRUE)
+
+plot(lc[[9]][[1]], breaks = c(-0.1, 0.1), maxcell = 1e8)
+
+
+
+terra::trim()
+
+plot(lc_clean)
+
+tic()
+lc_clean2 <- trim(lc[[9]][[1:4]], value = 0)
+toc()
+
+
+df3 <- freq(lc_clean2)
+
+df3 %>% as_tibble() %>% arrange(value)
+
+```
+
+# {data.table} AOH
+
+```{r load-files-for-dt-AOH}
+# set parameters:
+
+index <- 3
+site_df
+site_index <- 3
+year_index <- 2011:2017
+calc_lc <- TRUE
+include_time <- TRUE
+range_maps <- species_ranges
+
+# ------------------------------------------------------------------------- #
+### load in required elements prior to running the data.table function
+# ------------------------------------------------------------------------- # 
+# all the loading of the habitat maps before:
+tic("load layers")
+
+  hab_dt <- fread(input = paste0(p_dat_derived, "input_data.tables/",
+                                 site_df$site[site_index], ".csv"))
+
+  elevation_map <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "elevation/", 
+              site_df$site[i], "_srtm_crop.tif")
+       )
+  })
   
-  plot(elevation_range_rcl, colNA = "pink")
+  site_area_ha <- lapply(
+    list.files(paste0(p_derived, "site_area_ha"), full.names = TRUE), 
+    function(i) rast(i)
+    )
+
+  el_area_dt <- spatraster_to_dt(
+    spt = c(site_area_ha[[site_index]],
+            elevation_map)#, xy_switch = FALSE
+    )
+
+  setnames(el_area_dt, 
+           old = grep("area", names(el_area_dt), value = T), 
+           new = "area_ha")
   
-  # mask the range polygon by the habitat mask and the elevation mask
-  aoh <- range_t + habitat_map_range_rcl + elevation_range_rcl
+  stopifnot(
+    all.equal(hab_dt$x, el_area_dt$x),
+    all.equal(hab_dt$y, el_area_dt$y)
+    )
   
-  # ------------------------------------------------------------------------- #
-  ### Calculate areas:
-  # ------------------------------------------------------------------------- #
+  # combine hab_dt and el_area_dt into a single data.table
+  hab_dt[, ':='(area_ha = el_area_dt$area_ha,
+                elevation = el_area_dt$elevation)]
   
-  # Calculate the Area Of Occurrence (AOO), before filtering by habitat and elevation
-  range_aoo_ha <- 
-    terra::cellSize(range_t, unit = "ha", mask = TRUE) %>% 
-    global(fun = "sum", na.rm = TRUE) %>%
-    as.numeric()
-  
-  # Calculate the Area Of Occurrence (AOO), before filtering by habitat and elevation
-  range_aoh_ha <- 
-    terra::cellSize(aoh, unit = "ha", mask = TRUE) %>% 
-    global(fun = "sum", na.rm = TRUE) %>%
-    as.numeric()
-  
-  toc(log = T)
-  
-  aoh_tmp <- 
-    tibble(site = site_df$site[site_index],
-           binomial = species_name,
-           year = year_index + 1986,
-           IUCN_aoo_ha = range_aoo_ha,
-           IUCN_aoh_ha = range_aoh_ha)
-    
-  cat("calculated AOH for", species_name, "=", range_aoh_ha, "ha", fill = TRUE)
-  aoh_tmp
-}
+  rm(el_area_dt) # to save memory on my machine.
 
-aoh_test <- lapply(1:5, function(i) {
-  cc_run_AOH(index = i, site_index = 11, year_index = 31, calc_lc = FALSE)
-}) %>% bind_rows()
-
-
-
-aoh_test
-aoh_df[1:5,]
-i <- 1
-for(i in 1:5#seq_along(species_list$binomial)
-    ) {
-
-}
-
-tic.log(format = T)
-
-write.csv(aoh_df,"~/Dropbox/PostDoc4_Princeton/Species Traits/FutureAOH.csv")
-
-
+  toc() #
 
 
 ```
+
+
+
+```{r compare-results-dt-AOH}
+tic("terra method")
+aoh_terra_test_mult_s <- 
+  lapply(1:5, function(i) {
+  cc_AOH_terra(index = i, site_index = 9, year_index = 1987:2017, 
+             calc_lc = TRUE, calc_AOO = FALSE, include_time = TRUE)
+}) %>% bind_rows()
+toc()
+
+# tic()
+# one_sp <- cc_AOH_terra(index = 3, site_index = 9, year_index = 2017, 
+#              calc_lc = TRUE, calc_AOO = FALSE, include_time = TRUE)
+# toc()
+
+tic("data.table method")
+aoh_dt_test_mult_s <- lapply(1:5, function(i) {
+  cc_AOH_data.table(index = i, site_index = 9, year_index = 1987:2017, 
+             calc_lc = TRUE, include_time = TRUE)
+}) %>% bind_rows()
+toc()
+
+# times: 
+# terra: 555.635 s
+# data.table: 262.04
+aoh_terra_test_mult_s$time %>% unique %>% sum /
+  aoh_dt_test_mult_s$time %>% unique %>% sum
+# 2.11 x faster to do it with data.table
+
+# compare results
+aoh_terra_test_mult_s
+aoh_dt_test_mult_s %>% 
+  select(site, binomial, year, IUCN_aoh_ha, time) %>% unique
+
+# they match
+identical(aoh_terra_test_mult_s$IUCN_aoh_ha, aoh_dt_test_mult_s %>% 
+  select(site, binomial, year, IUCN_aoh_ha, time) %>% unique %>%
+  .$IUCN_aoh_ha)
+
+
+# 3 three heavy lifts: hab rcl, elevation rcl, and the final masking
+
+# time comparison 124 for terra function vs. 159 for data.table method
+# now, having switched the order of the data.table filtering, the data.table method takes closer to 50 seconds.
+```
+
+```{r adjust-by-lc-prop}
+
+# what proportion of the area in each of my four land cover codes is in 
+# so, if a species 
+z1
+
+adj_df <- jung_hab_type_area_df %>%
+  filter(site == site_df$site[site_index],
+         code %in% unique(z1$code)) %>%
+  group_by(lc) %>%
+  summarise(adjustment = sum(prop_lc))
+
+jung_hab_type_area_df %>% select(-IUCNLevel) %>%
+  filter(site == site_df$site[9])
+
+
+aoh_dt_test_mult_s
+aoh_dt_test_mult_s
+
+aoh_dt_test_mult_s <- aoh_dt_test_mult_s %>% 
+  as_tibble() %>% 
+  left_join(adj_df, by = "lc") %>% 
+  mutate(adj_area_ha = area_ha * adjustment)
+
+aoh_dt_test_mult_s %>% 
+  select(-IUCN_aoh_ha) %>%
+  left_join(aoh_dt_test_mult_s %>% 
+              group_by(site, binomial, year) %>%
+              summarise(IUCN_aoh_ha = sum(area_ha),
+                        adj_IUCN_aoh_ha = sum(adj_area_ha)),
+            by = c("site", "binomial", "year")
+  )
+
+df_tmp
+
+```
+
+```{r test-wisc}
+# testing with Wisconsin data.table
+# FYI it takes about 45 seconds to load all the data required at the start.
+hab_dt
+
+# too memory intensive.
+
+tic("terra method")
+aoh_terra_test_mult_w <- 
+  lapply(1:5, function(i) {
+  cc_AOH_terra(index = i, site_index = 11, year_index = 1987:2017, 
+             calc_lc = TRUE, calc_AOO = FALSE, include_time = TRUE)
+}) %>% bind_rows()
+toc()
+
+tic("data.table method")
+aoh_dt_test_mult_w <- lapply(1:5, function(i) {
+  cc_AOH_data.table(index = i, site_index = 11, year_index = 1987:2017, 
+             calc_lc = TRUE, include_time = TRUE)
+}) %>% bind_rows()
+toc()
+
+aoh_dt_test_mult_w %>% select(site, binomial, time) %>% unique() %>%
+  mutate(time_p_run = time/31)
+
+
+```
+
+
+## Melting data.tables
+
+Can I gain speed by melting the data.table in order to get the area by year and land cover code in one single data.table call? 
+Ultimately, no. 
+This method seems to be slower by a factor of 1.3. 
+Good to have learned how to melt data.tables, but table this method for now.
+
+```{r melt-dt}
+# in order to use the by function correctly, I need to melt the data.table from wide to long format, and have a column for year. 
+hab_dt
+
+# add a new index, drop x and y
+hab_dt[, key := 1:nrow(.SD)]
+hab_dt[, c("x", "y", paste0("y", 1987:2000)) := NULL]
+
+tdt <- hab_dt[1:200, .(key, y2001, y2002, y2003)]
+
+tdt
+
+# reshape
+
+melt_dt <- melt(tdt, id.vars = c("key"), measure.vars = paste0("y", 2001:2003))
+
+obj_size(tdt)
+obj_size(melt_dt)
+
+
+# test with big one:
+hab_dt
+
+tic()
+hab_dt_melt <- data.table::melt(hab_dt, id.vars = c("key"), measure.vars = paste0("y", 2001:2017))
+toc()
+
+obj_size(hab_dt)
+obj_size(hab_dt_melt) # three times as big.
+
+# how would I summarize now?
+hab_dt_melt
+
+
+hab_dt
+
+# first, filter by range, elevation, etc.:
+hab_dt
+
+hab_filtered_range_el
+
+obj_size(hab_filtered_range_el)
+
+# --------------------- #
+# add a key
+rm(hab_dt)
+hab_filtered_range_el[, key := 1:nrow(.SD)]
+
+# adding a key added this much space:
+(3702098608 - 3792393688) / 10^6 # 90 MB!
+(3792393688 - 3070033520) / 10^6 # deleting X, Y, elevation, and range saves 722 MB 
+obj_size(hab_filtered_range_el) / 10^9 # 3.792 GB
+
+hab_filtered_range_el[, c("x", "y") := NULL]
+obj_size(hab_filtered_range_el) # 3.431 GB
+
+
+hab_filtered_range_el[, c("elevation", "range") := NULL]
+obj_size(hab_filtered_range_el) # 3.070 GB
+
+
+# subset:
+obj_size(hab_filtered_range_el)
+
+names(hab_filtered_range_el)
+hab_filtered_range_el[, c(paste0("y", 1987:2010)) := NULL]
+
+
+obj_size(hab_filtered_range_el)
+
+tic()
+hab_dt_melt <- data.table::melt(hab_filtered_range_el, 
+                                id.vars = c("key", "area_ha"), 
+                                measure.vars = paste0("y", 2011:2017))
+
+hab_dt_melt[value %in% habitat_prefs_rcl, 
+            sum(area_ha), 
+            by = c("variable", "value")]
+
+toc()
+
+
+tic()
+aoh_dt_test_melt_comp_s <- lapply(3, function(i) {
+  cc_AOH_data.table(index = i, site_index = 9, year_index = 2011:2017, 
+             calc_lc = TRUE, include_time = TRUE)
+}) %>% bind_rows()
+toc()
+aoh_dt_test_melt_comp_s
+
+# 
+#     variable value       V1
+#  1:    y2011     1 147962.5
+#  2:    y2011     2 123306.9
+#  3:    y2012     1 150692.8
+#  4:    y2012     2 135720.2
+#  5:    y2013     1 156040.7
+#  6:    y2013     2 135630.5
+#  7:    y2014     1 154844.5
+#  8:    y2014     2 132604.9
+#  9:    y2015     1 156117.8
+# 10:    y2015     2 140025.3
+# 11:    y2016     1 155746.2
+# 12:    y2016     2 145278.5
+# 13:    y2017     1 154090.6
+# 14:    y2017     2 151717.8
+
+```
+
+```{r time-melt}
+hab_dt
+
+# having loaded hab_dt before
+tic("full melt time")
+species_ranges <- vert_sites %>%
+  filter(vert_class != "gard",
+         site == site_df$site[site_index]) # filter to just the site in question
+
+species_list <- species_ranges %>% st_drop_geometry() %>%
+  select(site, vert_class, binomial) %>% unique() %>%
+  arrange(site, vert_class, binomial)
+
+species_name <- species_list$binomial[index]
+# species_name <- "Lithobates palustris"
+cat("Species name:", species_name, fill = TRUE)
+
+# ---- extract species range polygons at the site ---- #
+# select a subset of species range polygons based on binomial, and 
+# update all features to multipolygon, for fasterize()
+range_sf <- st_cast(species_ranges[species_ranges$binomial == species_name, ]) 
+
+# ---- turn the species range polygons (sf) into a raster ---- #
+range_t <- 
+  fasterize(range_sf,
+            raster::raster(resolution = terra::res(elevation_map),
+                           ext = raster::extent(terra::ext(elevation_map)[1:4]))
+  ) %>% 
+  rast() #%>% # convert to SpatRaster 
+# subst(1, 0,
+#       filename = paste0(tmp_location, "range_t_tmp.tif"),
+#       overwrite = T) # update cell values from 1 to 0.
+
+# plot(range_t)
+
+range_dt <- spatraster_to_dt(spt = range_t)
+
+# a quick test to make sure the x and y columns match, to circumvent the need
+# to round x and y to get the data.table::merge() to work correctly.
+stopifnot(
+  all.equal(hab_dt$x, range_dt$x),
+  all.equal(hab_dt$y, range_dt$y)
+)
+
+# add range to the data.table as a column
+hab_dt[, range := range_dt$layer]
+
+# ------------------------------------------------------------------------- #
+### Habitat Filter ###
+# ------------------------------------------------------------------------- #
+z1 <- habitat_prefs %>% 
+  filter(binomial == species_name,
+         suitability == "Suitable") # extract the habitat classifications for the species in question
+
+# extract the lc codes from my crosswalk that correspond to the IUCN habitat codes
+habitat_prefs_rcl <- 
+  iucn_crosswalk %>% 
+  filter(code %in% unique(z1$code)) %>%
+  select(codes = ifelse(calc_lc, "lc", "map_code")) %>% # select lc class codes, or IUCN habitat map codes, depending on the "calc_lc" switch
+  unique() %>% .$codes
+
+# ------------------------------------------------------------------------- #
+### Elevation Filter ###
+# ------------------------------------------------------------------------- #
+elevation_prefs_rcl <- elevation_prefs %>% filter(binomial == species_name)
+
+# ------------------------------------------------------------------------- #
+### Calculate AOH, broken down by habitat type ###
+# ------------------------------------------------------------------------- #
+
+# subset data.table to only pixels within both species range and elevation range, first:
+hab_filtered_range_el <- hab_dt[!is.na(range) &
+                                  elevation <= elevation_prefs_rcl$elevation_upper &
+                                  elevation >= elevation_prefs_rcl$elevation_lower]
+
+
+
+# begin melt chunk:
+rm(hab_dt)
+hab_filtered_range_el[, key := 1:nrow(.SD)]
+hab_filtered_range_el[, c("x", "y", "elevation", "range",
+                          paste0("y", 1987:2010)) := NULL]
+
+hab_dt_melt <- data.table::melt(hab_filtered_range_el, 
+                                id.vars = c("key", "area_ha"), 
+                                measure.vars = paste0("y", 2011:2017))
+
+hab_dt_melt[value %in% habitat_prefs_rcl, 
+            sum(area_ha), 
+            by = c("variable", "value")]
+
+toc() # 22.604 seconds for just 7 layers, which is less than the original data.table code, which runs through each column individually. Just stick with that code.
+```
+
+
+
+# Age of habitat
+
+```{r}
+vert_sites %>% st_drop_geometry() %>%
+  group_by(vert_class) %>%
+  names()
+  
+vert_sites %>%
+  st_drop_geometry() %>%
+  # filter(vert_class != "gard") %>%
+  select(site, vert_class, binomial) %>%
+  unique() %>% 
+  group_by(site) %>% summarise(records = length(unique(binomial))) 
+
+vert_sites %>%
+  st_drop_geometry() %>%
+  filter(vert_class != "gard") %>%
+  select(vert_class, binomial) %>%
+  unique() %>% 
+  group_by(vert_class) %>% summarise(records = length(unique(binomial)))
+
+172 + 1498 + 560 # 2230 unique species at my sites.
+
+```
+
+```{r lc-of-abn-terra}
+# write code to calculate the land cover in each pixel 5 years and older
+lc
+age_t
+
+# 
+plot(age_t[[site_index]][[31]])
+plot(age_t_bins[[site_index]])
+
+tbb <- classify(age_t_bins[[site_index]],
+               rcl = tibble(from = 1, to = 5, becomes = 1),
+               othersNA = TRUE, include.lowest = TRUE, right = TRUE
+               )
+tb <- classify(age_t[[site_index]][[31]],
+               rcl = tibble(from = 5, to = 30, becomes = 1),
+               othersNA = TRUE, include.lowest = TRUE, right = TRUE
+               )
+tb_all <- classify(age_t[[site_index]][[31]],
+               rcl = tibble(from = 1, to = 30, becomes = 1),
+               othersNA = TRUE, include.lowest = TRUE, right = TRUE
+               )
+
+plot(tbb)
+plot(tb)
+plot(tb-tbb)
+plot(tbb - tb_all)
+
+tb <- subst(tb, NA, 0)
+tbb <- subst(tbb, NA, 0)
+tb_all <- subst(tb_all, NA, 0)
+
+plot(tbb)
+plot(tb)
+plot(tb-tbb)
+plot(tb_all - tb_all)
+
+
+# mask the lc map by the age map
+site_index <- 9
+
+plot(age_t[[site_index]][[31]])
+
+tic()
+age_mask <- lapply(1:11, function(i) {
+  age_mask_tmp <- 
+    classify(
+      age_t[[i]],
+      rcl = tibble(from = 5,
+                   to = 30,
+                   becomes = 0),
+      othersNA = TRUE,
+      include.lowest = TRUE, right = TRUE,
+      filename = paste0("/Users/christophercrawford/work/projects/abandonment_trajectories/data_derived/age_rasters/abn_mask/",
+                        site_df$site[i], "_abn_5_30_mask.tif"),
+      names = paste0("y", 1987:2017),
+      overwrite = TRUE)
+})
+toc()
+
+names(age_mask) <- site_df$site
+
+plot(age_mask)
+plot(lc[[site_index]][[28:31]])
+
+i <- 9
+tic()
+lc_of_abn <- lapply(9, function(i) {
+  tmp <- age_mask[[i]] + lc[[i]]
+  writeRaster(tmp, 
+              filename = paste0(p_derived, "abn_lc_rasters/",
+                        site_df$site[i], "_abn_lc.tif"), 
+              overwrite = TRUE,
+              names = names(tmp))
+})
+toc()
+
+# check into whether this is the same as abn_lc_rasters as created in "5_biodiversity_dev.Rmd"
+
+plot(tmp)
+rasterTmpFile(prefix='r_tmp_')
+showTmpFiles()
+removeTmpFiles(h=24)
+
+
+
+tmp_df <- freq(tmp) # some pixels are in cropland... these must have  because these must have 
+tmp_df %>% as_tibble() %>% arrange(value) %>% print(n = 100)
+
+raster()
+
+plot(age_t_bins[[site_index]])
+test_lc <- terra::mask(x = lc[[site_index]][[31]],
+                       mask = age_t_bins[[site_index]],
+                       maskvalues = c(1:5), 
+                       updatevalue = NA,
+                       inverse = TRUE
+                       )
+plot(test_lc)
+
+plot(lc[[site_index]][[31]])
+
+```
+
+
+# Cluster results
+```{r 11-test}
+aoh_dt_11_test <- read_csv(paste0(p_derived, "aoh/aoh_dt_11_test.csv"))
+
+species_list %>% 
+  group_by(site)
+```
+
+
+```{r missing-sp}
+
+# how many did it actually run?
+aoh_dt_11_test %>% 
+  group_by(site) %>% 
+  summarise(n = length(unique(binomial)))
+
+runs_actual <- aoh_dt_11_test %>% 
+  select(site, binomial) %>%
+  unique()
+
+# what happened to Rana temporaria
+runs <- lapply(1:11, function(i) {
+  species_list %>%
+    filter(site == site_df$site[i]) %>%
+    head(n = 10) %>%
+    mutate(index = 1:10)}) %>% bind_rows()
+
+runs %>% print(n = 100)
+runs %>% select(site, binomial)
+runs_actual
+
+missing_sp <- runs %>% 
+  filter(!binomial %in% unique(runs_actual$binomial))
+
+aoh_dt_11_test %>% 
+  filter(binomial %in% missing_sp$binomial)
+
+species_ranges %>%
+  filter(binomial %in% missing_sp$binomial) %>% .[1,] %>%
+  st_geometry() %>%
+  plot()
+
+aoh_dt_11_test %>% 
+  select(site, binomial) %>% 
+  group_by(site) %>%
+  unique() %>% 
+  print(n = 120)
+
+list.files(paste0(p_derived, "aoh/"))
+
+missing_sp
+species_list %>% filter(site == site_df$site[site_index]) %>% head(n = 10)
+
+# -------------------------------------- run function ---------------------------------- #
+aoh_test_c <- lapply(1:3, function(i) {
+  cc_AOH_data.table(index = i, site_index = site_index, year_index = 2011:2017, 
+             calc_lc = TRUE, include_time = TRUE,
+             hab_dt = hab_dt,
+             range_maps = vert_sites)
+}) %>% bind_rows()
+
+aoh_test_c %>% filter(binomial == sp_name)
+plot(lc[[site_index]][[31]])
+plot(range_sf$geometry, add = T, border = "red")
+plot(range_t, add = T)
+plot(range_t)
+
+
+
+# it's due to a mismatch in species names
+non_match
+missing_sp
+
+non_match %>% arrange(site, binomial) %>% print(n = 100)
+
+species_synonyms %>%
+  filter(binomial == sp_name)
+
+species_synonyms %>%
+  filter(synonym == "Babina daunchina")
+
+
+non_match %>%
+  filter(binomial == "Bufotes variabilis")
+
+
+
+missing_sp
+#  site      vert_class binomial                 index
+#   <chr>     <chr>      <chr>                    <int>
+# 1 belarus   amp        Rana temporaria              9   # due to elevation data entry error
+# 2 chongqing amp        Babina daunchina             3   # due to synonym issue
+# 3 iraq      bird       Acrocephalus melanopogon     3   # no suitable habitat within the site
+# 4 orenburg  amp        Bufotes variabilis           3   # suitability is unknown - removed due to this.
+# 5 orenburg  amp        Rana temporaria              8   # due to elevation data entry error
+
+
+missing_sp$binomial
+
+habitat_prefs %>%
+  filter(binomial %in% missing_sp$binomial) %>%
+  print(n = 100)
+
+```
+
+
+
+```{r why-NA?}
+# some values are NA... what causes this?
+# this stems from cases where there is no 
+aoh_dt_11_test %>% 
+  filter(is.na(adj_IUCN_aoh_ha))
+
+# why is the adjustment NA??
+sp_name <- "Bufo bufo"
+site_index <- 1
+
+aoh_dt_11_test %>%
+  filter(site == site_df$site[site_index], binomial == sp_name)
+
+
+habitat_prefs %>%
+  filter(binomial == sp_name) %>%
+  arrange(code)
+
+z1 %>% arrange(code) %>% print(n = 30)
+# test_codes <- 
+  z1 %>%
+  left_join(iucn_crosswalk, by = "code") %>%
+  select(binomial, code, map_code, lc, name, IUCNLevel) #%>%
+  # print(n = 110) %>%
+  # .$lc %>% unique
+
+# based on the habitat_prefs, this species finds 1, 2, 3, and 4 suitable.
+# but, there are no 14.4 habitat type at the site.. so when I join to adj_df, it gives an NA
+aoh_dt_11_test %>%
+  filter(site == site_df$site[site_index], binomial == sp_name) %>%
+  select(site:area_ha) %>%
+  
+  
+
+z1$code %>% sort() %>% length
+unique(z1$code) %>% length
+
+habitat_prefs_rcl
+
+jung_hab_type_area_df %>%
+  filter(site == site_df$site[site_index],
+         #code %in% unique(z1$code)
+         ) %>%
+  arrange(habitat_type)
+
+
+freq(site_jung_l2_30$belarus)
+
+# the iucn crosswalk includes just those IUCN habitat types that Jung's map includes at my sites.
+# based on the way that my adjustment works, I adjust the area of each of the four land cover types based on the proportion of the broader category at each site that is made up of that particular habitat type.
+
+
+iucn_crosswalk <- read_csv(paste0(p_derived, "iucn_lc_crosswalk.csv"))
+print(iucn_crosswalk, n = 100)
+jung_hab_type_area_df %>% filter(site == site_df$site[site_index])
+z1 %>% arrange(code) %>% print(n = 100)
+
+
+# fix the NAs in the summarise function
+aoh_dt_11_test <- aoh_dt_11_test %>%
+  # filter(site == site_df$site[site_index], binomial == sp_name) %>%
+  group_by(site, binomial, year) %>% 
+  summarise(IUCN_aoh_ha = sum(area_ha),
+            adj_IUCN_aoh_ha = sum(adj_area_ha, na.rm = TRUE)) #%>%
+  # filter(is.na(adj_IUCN_aoh_ha))
+```
+
+
+```{r plot-aoh}
+ggplot(data = aoh_dt_11_test #%>% filter(site == "shaanxi")
+       ,
+                     mapping = aes(x = year, y = adj_IUCN_aoh_ha, color = binomial)) + 
+  geom_line() +
+  facet_wrap(vars(site), scales = "free")
+
+```
+
+
+
+```{r parallelize-aoh}
+species_list
+
+aoh_dt_11_test
+
+aoh_dt_11_test %>% 
+  select(site, binomial, time) %>% unique() %>% print(n = 200)
+
+comparing_times <- aoh_dt_11_test %>% 
+    group_by(site) %>%
+    summarise(max_time = max(time),
+              mean_time = mean(time)) %>% 
+  mutate(time_rel_max = max_time / max(max_time),
+         ncell = sapply(1:11, function(i) {ncell(lc[[i]])}),
+         ncell_rel_max = ncell / max(ncell),
+         factor = pmax(time_rel_max, ncell_rel_max),
+         record_multiplier = max(factor)/factor
+         )
+
+# time scales straightforwardly with the number of cells (linearly)
+# so, I can run about X times as many records at smaller sites.
+
+vert_sites %>%
+  st_drop_geometry() %>%
+  filter(vert_class != "gard") %>%
+  select(site, vert_class, binomial) %>%
+  unique() %>% as_tibble() %>% nrow()
+
+# 4038 unique site-vert records, before filtering
+
+species_list %>% nrow() # 3979 unique runs, after filting
+
+records_by_site <- species_list %>%
+  group_by(site) %>% summarise(runs = length(unique(binomial))) 
+
+# calculate the number of cores, across a range of batch sizes
+core_tests <- sapply(50:150, function(i) {
+    comparing_times %>% 
+  select(site, max_time, mean_time, factor, record_multiplier) %>%
+  left_join(records_by_site, by = "site") %>%
+  mutate(sp_per_core = i * record_multiplier,
+         cores_needed = runs/sp_per_core,
+         cores_rounded = ceiling(cores_needed),
+         runs_per_core = ceiling(runs/cores_rounded),
+         time_needed_hr = runs_per_core*max_time / 60 / 60,
+         diff = cores_rounded - cores_needed) %>%
+    .$diff %>% sum()
+})
+
+tibble(number_runs = 50:150,
+       diff = core_tests) %>% 
+  # print(n = 110) %>%
+  arrange(diff)
+
+# looks like 101 is the best mix of size and time, while minimizing the "unused" cores
+# with 101 runs per core
+calc_cores <-
+  comparing_times %>% 
+  select(site, max_time, mean_time, factor, record_multiplier) %>%
+  left_join(records_by_site, by = "site") %>%
+  mutate(sp_per_core = 101 * record_multiplier,
+         cores_needed = runs/sp_per_core,
+         cores_rounded = ceiling(cores_needed),
+         runs_per_core = ceiling(runs/cores_rounded),
+         time_needed_hr = runs_per_core*max_time / 60 / 60,
+         diff = cores_rounded - cores_needed)
+
+calc_cores
+
+sum(calc_cores$cores_rounded)
+sum(calc_cores$diff)
+
+
+# construct a vector of index numbers based on the number of cores, the species per core, etc.
+
+della_index <- lapply(1:11, function(i) {
+  tmp <- calc_cores %>% filter(site == site_df$site[i])
+  index <- rep(1:tmp$cores_rounded, each = tmp$runs_per_core)
+  index <- index[1:tmp$runs]
+  
+  if(i>1) {index <- index + sum(calc_cores$cores_rounded[1:(i-1)])}
+  
+  index
+}) %>% unlist()
+
+della_index[1:1000 + 2*1000]
+length(della_index)
+
+# add index to the species_list
+# species_list <- species_list %>% select(-index)
+species_list <- species_list %>%
+  mutate(core_index = della_index)
+
+
+write_csv(species_list, 
+          file = paste0(p_derived, "/species_list.csv")
+)
+
+
+species_list %>% filter(site %in% c("shaanxi", "chongqing")) %>% .$core_index %>% unique()
+calc_cores
+```
+
+
+
+
+
+
+
+
+
 
