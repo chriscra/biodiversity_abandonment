@@ -10,9 +10,8 @@ source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_star
 # install.packages("terra")
 # packageVersion("terra")
 # library(terra)
-```
 
-```{r load-files}
+# load files:
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/util/_util_files.R")
 ```
 
@@ -236,7 +235,8 @@ os %>%
 
 os %>% print(n = 20)
 
-rm(list = os$object[c(3, 4:8, 11, 10, 13, 14, 15:20)])
+
+rm(list = os$object[c(1:2)])
 
 
 tmpFiles(current=TRUE, orphan=FALSE, old=FALSE, 

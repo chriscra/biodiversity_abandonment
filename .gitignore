@@ -9,7 +9,7 @@ scripts/AOH
 scripts/ee
 scripts/old/
 scripts/cluster/old/
-scripts/cluster/slurm/
+scripts/cluster/slurm_out/
 scripts/ref/
 scripts/backups/
 writing/
