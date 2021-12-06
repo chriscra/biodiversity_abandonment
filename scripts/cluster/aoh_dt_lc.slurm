@@ -64,3 +64,11 @@ Rscript ./aoh_dt_lc.R $SLURM_ARRAY_TASK_ID
 # scp clc6@della:/scratch/network/clc6/abandonment_trajectories/data_derived/input_rasters/length_distill_df_2021_03_13.csv /Users/christophercrawford/Google\ Drive/_Projects/abandonment_trajectories/data_derived/_2021_03_13
 
 # paste0(p_derived, "aoh_tmp", time_stamp, "_c", core, ".csv")
+
+# download slurm_out:
+# scp -r clc6@della:/home/clc6/biodiversity_abn/scripts/slurm_out/ /Users/christophercrawford/work/projects/biodiversity_abn/scripts/cluster
+
+# download results
+# scp clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/aoh_tmp_2021_12_05_c* /Users/christophercrawford/work/projects/biodiversity_abn/derived/aoh/
+
+
