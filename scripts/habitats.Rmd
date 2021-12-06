@@ -13,9 +13,7 @@ source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_star
 # packageVersion("terra")
 # library(terra)
 
-```
 
-```{r load-files}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/util/_util_files.R")
 ```
 
@@ -705,7 +703,85 @@ site_jung_l2_30_freq %>%
   write_csv(file = paste0(p_derived, "site_jung_l2_30_freq.csv"))
 
 
+site_jung_l2_30_freq <- read_csv(file = paste0(p_derived, "site_jung_l2_30_freq.csv"))
+
+
 ```
+
+```{r calc-area-per-habitat-type}
+
+# load jung maps
+site_jung_l2_30
+sapply(site_jung_l2_30, ncell)
+sapply(site_area_ha, ncell)
+
+# calculate the area of the spatraster
+site_area_ha <- lapply(
+    list.files(paste0(p_derived, "site_area_ha"), full.names = TRUE), 
+    function(i) rast(i)
+    )
+
+# combine the two, convert to data.table (without x and y coordinates), and calculate the area in each habitat type across each site.
+
+jung_hab_type_area_df <- 
+  lapply(1:11, function(i) {
+    jung_dt <- spatraster_to_dt(
+      spt = c(site_area_ha[[i]],
+              site_jung_l2_30[[i]]
+              ),
+      xy_switch = FALSE)
+    
+    names(jung_dt) <- c("area_ha", "habitat_type")
+    
+    tmp_df <- 
+      jung_dt[, sum(area_ha), 
+              by = habitat_type] %>%
+      as_tibble() %>%
+      rename(area_ha = "V1") %>%
+      arrange(habitat_type) %>%
+      mutate(site = site_df$site[i])
+    
+    # return
+    tmp_df
+    }) %>% 
+  bind_rows()
+
+
+
+
+
+jung_hab_type_area_df %>% print(n = 161)
+
+# join to jung/IUCN ~ Yin et al. 2021 lc crosswalk
+# ---------------------------------------------- #
+# Jung table crosswalk
+# ---------------------------------------------- #
+iucn_crosswalk
+
+jung_hab_type_area_df <- jung_hab_type_area_df %>%
+  left_join(iucn_crosswalk, by = c("habitat_type" = "map_code")) %>%
+  select(site, habitat_type, lc, area_ha, everything())
+
+# adjusting the area of habitat amount based on habitat preferences
+jung_hab_type_area_df <- jung_hab_type_area_df %>%
+  arrange(site, lc, habitat_type) %>%
+  left_join(
+    jung_hab_type_area_df %>%
+      group_by(site, lc) %>%
+      summarise(total_area_per_lc = sum(area_ha)),
+    by = c("site", "lc")) %>%
+  mutate(prop_lc = area_ha / total_area_per_lc)
+
+
+# write to file
+jung_hab_type_area_df %>%
+  write_csv(file = paste0(p_derived, "jung_hab_type_area_df.csv"))
+
+
+
+jung_hab_type_area_df <- read_csv(file = paste0(p_derived, "jung_hab_type_area_df.csv"))
+```
+
 
 ```{r save-plot-jung}
 # jung_table
@@ -978,13 +1054,15 @@ jung_table %>%
   select(map_code, Coarse_Name, IUCNLevel)
 
 
+
 # ---------------------------------------------- #
 # Jung table crosswalk
 # ---------------------------------------------- #
-IUCN_crosswalk <- read_csv(paste0(p_derived, "/IUCN_lc_crosswalk.csv")) # %>%
+iucn_crosswalk <- read_csv(paste0(p_derived, "/iucn_lc_crosswalk.csv")) # %>%
   # mutate("is" = map_code, "becomes" = lc)
 
-IUCN_crosswalk %>% arrange(lc, map_code) %>% print(n = 40)
+iucn_crosswalk %>% arrange(lc, map_code) %>% print(n = 45)
+iucn_crosswalk %>% arrange(map_code) %>% print(n = 45)
 
 ```
 
@@ -1074,13 +1152,13 @@ jung_l2_table_clr
 jung_table %>% 
   select(map_code, Coarse_Name) 
 
-select(IUCN_crosswalk, "is" = map_code, "becomes" = lc)
+select(iucn_crosswalk, "is" = map_code, "becomes" = lc)
 
 lc_plot_cols$name
 
 # reclassify level 2 habitat types
 
-IUCN_crosswalk <- IUCN_crosswalk %>% 
+iucn_crosswalk <- iucn_crosswalk %>% 
   mutate(
     #lc is where savanna is grassland (4) and shrubland is forest (2)
     
@@ -1096,7 +1174,7 @@ IUCN_crosswalk <- IUCN_crosswalk %>%
     lc4 = ifelse(map_code >= 200 & map_code < 300, 2, lc2) 
   )
 
-IUCN_crosswalk %>% select(map_code:lc, lc2:lc4, IUCNLevel) %>% print(n = 50)
+iucn_crosswalk %>% select(map_code:lc, lc2:lc4, IUCNLevel) %>% print(n = 50)
 
 
 tic()
@@ -1107,7 +1185,7 @@ site_jung_l2_30_rcl <-
         site_jung_l2_30[[site]],
         
         # cycles through lc, lc2, lc3, and lc4 as the "lc_type", to convert the map_code to.
-        rcl = IUCN_crosswalk %>% select("is" = map_code, "becomes" = lc_type),
+        rcl = iucn_crosswalk %>% select("is" = map_code, "becomes" = lc_type),
         filename = paste0(p_derived, "site_jung/", site_df$site[site], "_jung_l2_rcl_", lc_type,".tif"),
         overwrite=TRUE)
       }
