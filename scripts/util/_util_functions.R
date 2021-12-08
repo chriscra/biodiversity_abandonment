@@ -535,6 +535,77 @@ cc_AOH_terra <- function(index,
 }
 
 
+# data.table ----
+
+# -------------------------------------------------------------------------- #
+# 5-year & 8-year moving window temporal filters, specifically for land cover
+# (Developed December 6th, 2021)
+# -------------------------------------------------------------------------- #
+cc_temporal_filter_lc <- function(dt) {
+  # Five- and eight-year moving window filters designed to address potential misclassification errors
+  # in the Yin et al. 2020 land cover time series.
+  
+  # This function is a complement to cc_temporal_filter(), which works with the 
+  # binary abandonment data.tables (which have been converted to just 0s and 1s).
+  # This function passes the temporal filter over the raw land cover data, before 
+  # it is processed further.
+  # This is designed primarily to produce a cleaned version of the land cover maps
+  # to then use to determine the land cover of abandoned 
+  
+  # Goal: address the lingering cropland classifications that persist in 
+  # abn_lc.
+  
+  # check that dt starts with x & y
+  if (!identical(names(dt)[1:2], c("x", "y"))) {
+    stop("x and y must be the first two columns in the data.table")
+  }
+  
+
+  # ---------------------------------------------------------- #
+  # five year moving window: 
+  # fill 1-1-2-1-1, 1-1-3-1-1, & 1-1-4-1-1
+  for(lc_class in 1:4) {
+    for (i in 5:(ncol(dt) - 2)) {
+      dt[get(names(dt)[i-2]) == lc_class &
+           get(names(dt)[i-1]) == lc_class & 
+           get(names(dt)[i]) %in% c(1:4)[1:4 != lc_class] & 
+           get(names(dt)[i+1]) == lc_class & 
+           get(names(dt)[i+2]) == lc_class,
+         names(dt)[i] := 999#lc_class # update value
+      ]
+    }
+  }
+  
+  # ---------------------------------------------------------- #
+  # eight year moving window filter:
+  # fill 1-1-1-2-2-1-1-1, 1-1-1-3-3-1-1-1, & 1-1-1-4-4-1-1-1
+  
+  for(lc_class in 1:4) {
+    blip_values <- c(1:4)[1:4 != lc_class]
+    
+    for (i in 6:(ncol(dt) - 4)) {
+      dt[get(names(dt)[i-3]) == lc_class &
+           get(names(dt)[i-2]) == lc_class &
+           get(names(dt)[i-1]) == lc_class &
+           # .e.g., if lc_class is 1, then these are 
+           # (V4 == 2 & V5 == 2) | (V4 == 3 & V5 == 3) | (V4 == 4 & V5 == 4)
+           ((get(names(dt)[i]) == blip_values[1] & get(names(dt)[i+1]) == blip_values[1]) | 
+              (get(names(dt)[i]) == blip_values[2] & get(names(dt)[i+1]) == blip_values[2]) |
+              (get(names(dt)[i]) == blip_values[3] & get(names(dt)[i+1]) == blip_values[3])) &
+           get(names(dt)[i+2]) == lc_class &
+           get(names(dt)[i+3]) == lc_class &
+           get(names(dt)[i+4]) == lc_class, 
+         
+         c(names(dt)[i], 
+           names(dt)[i+1]) := 888#lc_class
+      ]
+    }
+  }
+  
+  dt # return the dt
+}
+
+
 # Miscellaneous ----
 
 # ------------------------- #
