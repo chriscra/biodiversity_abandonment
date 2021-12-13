@@ -87,7 +87,7 @@ site_index <- grep(unique(species_list_tmp$site), site_df$site)
 # load and prep data.table: habitat (land cover), elevation, area
 
 hab_dt <- fread(input = paste0(p_input_rasters, 
-                               site_df$site[site_index], ".csv"))
+                               site_df$site[site_index], "_clean.csv"))
 
 el_area_dt <- spatraster_to_dt(
   spt = c(site_area_ha[[site_index]],
