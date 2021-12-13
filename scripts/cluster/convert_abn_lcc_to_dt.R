@@ -23,8 +23,8 @@ source("/home/clc6/biodiversity_abn/scripts/util/_util_functions.R")
 
 
 # # array set up -------
-args <- commandArgs(TRUE) # access the slurm array variable
-site_index <- as.numeric(args[1])
+# args <- commandArgs(TRUE) # access the slurm array variable
+# site_index <- as.numeric(args[1])
 
 
 # ------- load files -------- #
@@ -39,16 +39,18 @@ abn_lcc <- lapply(1:11, function(i) {
 })
 names(abn_lcc) <- site_df$site
 
+for (i in 8:11) {
 # convert abn_lcc SpatRaster to data.table
-dt <- spatraster_to_dt(abn_lcc[[site_index]])
+  site_index <- i
+  dt <- spatraster_to_dt(abn_lcc[[site_index]])
 
-# write to file
-fwrite(dt, 
-       file = paste0(
-         p_derived,
-         site_df$site[site_index], "_abn_lcc.csv")
-       )
+  # write to file
+  fwrite(dt, 
+         file = paste0(
+           p_derived, "abn_lcc/",
+           site_df$site[site_index], "_abn_lcc.csv")
+         )
 
-
-cat(paste0("Success! Converted abn_lcc to data.table & passed temporal filter, for site: ", site_df$site[site_index]))
-
+  cat(paste0("Success! Converted abn_lcc to data.table for site: ", site_df$site[site_index]),
+      fill = TRUE)
+}
