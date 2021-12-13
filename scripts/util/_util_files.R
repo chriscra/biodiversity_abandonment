@@ -53,6 +53,25 @@ for (i in 1:11) {
     }}}
 
 
+# ------------------------------- load cleaned land cover maps --------------------------------------- #
+# prepared input rasters, passed through temporal filter on December 10th, 2021
+lcc <- lapply(1:11, function(i) {
+  terra::rast(paste0(p_dat_derived, "lc_r_clean/", site_df$site[i], "_clean.tif"))
+})
+names(lcc) <- site_df$site
+
+# rename raster layers:
+for (i in 1:11) {
+  if (names(lcc[i]) == "nebraska") {
+    names(lcc[[i]]) <- paste0("y", 1986:2018)
+  } else {
+    if (names(lcc[i]) == "wisconsin") {
+      names(lcc[[i]]) <- paste0("y", 1987:2018)
+    } else {
+      # everything else, just 1987:2017
+      names(lcc[[i]]) <- paste0("y", 1987:2017)
+    }}}
+
 
 # ----------------------------- load abandonment age rasters ---------------------------- #
 
@@ -89,16 +108,23 @@ abn_mask <- lapply(1:11, function(i){
 
 names(abn_mask) <- site_df$site
 
+# ----------------------- #
+# --- land cover class of abandoned land --- #
+# ----------------------- #
+abn_lc <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "abn_lc_rasters/",
+              site_df$site[i], "_abn_lc.tif"))
+})
+names(abn_lc) <- site_df$site
 
 # ----------------------- #
-# --- land cover class of abandoned land in 2017 --- #
+# --- land cover class of abandoned land in 2017 only --- #
 # ----------------------- #
 abn_lc_2017 <- lapply(1:11, function(i) {
   rast(paste0(p_derived, "abn_lc_rasters/", 
               site_df$site[i], "_abn_lc_2017.tif"))
 }
 )
-
 names(abn_lc_2017) <- site_df$site
 
 
@@ -168,6 +194,11 @@ names(site_jung_l2_30) <- site_df$site
 # distribution of habitat types at each site, for adjusting area of habitat estimates
 jung_hab_type_area_df <- read_csv(file = paste0(p_derived, "jung_hab_type_area_df.csv"))
 
+# 34 habitats that occur at my sites:
+site_habitats <- jung_hab_type_area_df %>%
+  select(lc, habitat_type, code, Coarse_Name, IUCNLevel) %>% 
+  unique() %>% arrange(habitat_type) #%>% .$code
+
 # ----------------------- #
 # ---- forest carbon ---- #
 # ----------------------- #
@@ -195,6 +226,8 @@ elevation_map <- lapply(1:11, function(i) {
               site_df$site[i], "_srtm_crop.tif")
   )
 })
+names(elevation_map) <- site_df$site
+
 
 
 
@@ -217,7 +250,9 @@ habitat_prefs <- read_csv(file = paste0(p_derived, "iucn_habitat_prefs_subset.cs
 elevation_prefs <- read_csv(file = paste0(p_derived, "iucn_elevation_prefs_subset.csv"))
 habitat_details <- read_csv(file = paste0(p_derived, "iucn_habitat_details_subset.csv"))
 species_synonyms <- read_csv(file = paste0(p_derived, "iucn_species_synonyms_subset.csv"))
+common_names <- read_csv(file = paste0(p_derived, "iucn_common_names_subset.csv"))
 
+habitat_age_req <- read_csv(file = paste0(p_derived, "iucn_habitat_age_req.csv"))
 
 
 
