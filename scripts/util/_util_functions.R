@@ -571,7 +571,7 @@ cc_temporal_filter_lc <- function(dt) {
            get(names(dt)[i]) %in% c(1:4)[1:4 != lc_class] & 
            get(names(dt)[i+1]) == lc_class & 
            get(names(dt)[i+2]) == lc_class,
-         names(dt)[i] := 999#lc_class # update value
+         names(dt)[i] := lc_class # update value
       ]
     }
   }
@@ -597,7 +597,7 @@ cc_temporal_filter_lc <- function(dt) {
            get(names(dt)[i+4]) == lc_class, 
          
          c(names(dt)[i], 
-           names(dt)[i+1]) := 888#lc_class
+           names(dt)[i+1]) := lc_class
       ]
     }
   }
