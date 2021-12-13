@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH --job-name=temporal_filter_lc                              # create a name for the job
+#SBATCH --job-name=temporal_filter_lc_r                              # create a name for the job
 #SBATCH --nodes=1 					                              # node count
 #SBATCH --ntasks=1	 				                              # total number of tasks across all nodes
 #SBATCH --cpus-per-task=1                                 # cpu-cores per task (>1 if multi-threaded tasks)
-#SBATCH --time=4:00:00 			                              # total run time limit (HH:MM:SS)
+#SBATCH --time=2:00:00 			                              # total run time limit (HH:MM:SS)
 #SBATCH --array=1-11                                      # array ID variables (i.e. like "i")
-#SBATCH --mem-per-cpu=80G			                          # memory per cpu-core (4 GB is default).
+# SBATCH --mem-per-cpu=80G			                          # memory per cpu-core (4 GB is default).
 #SBATCH --mail-type=all				                            
 #SBATCH --mail-user=clc6@princeton.edu
 #SBATCH --output=slurm_out/%x_%A_%a.txt             # "%x" = job name, "%A" = job ID, "%a" = array index
@@ -33,8 +33,9 @@ Rscript ./temporal_filter_lc.R $SLURM_ARRAY_TASK_ID
 # 2. site_df is uploaded
 # 3. util_functions.R is up to date
 
+
 # # send scripts
-# scp /Users/christophercrawford/work/projects/biodiversity_abn/scripts/cluster/temporal_filter_lc* clc6@della:/home/clc6/biodiversity_abn/scripts/
+# scp /Users/christophercrawford/work/projects/biodiversity_abn/scripts/cluster/temporal_filter_lc.* clc6@della:/home/clc6/biodiversity_abn/scripts/
 # scp /Users/christophercrawford/work/projects/biodiversity_abn/scripts/util/_util_functions.R clc6@della:/home/clc6/biodiversity_abn/scripts/util/
 # 
 # # send files
@@ -55,14 +56,16 @@ Rscript ./temporal_filter_lc.R $SLURM_ARRAY_TASK_ID
 # Use the following in the future to manually set memory:
 
 # final memory allocation:
-# sbatch --array [1,8,10] --mem-per-cpu=150G aoh_dt_lc.slurm
-# sbatch --array [2,4,5,7,11] --mem-per-cpu=125G aoh_dt_lc.slurm
-# sbatch --array [3,6,9] --mem-per-cpu=80G aoh_dt_lc.slurm
+# sbatch --array [1,8,10] --mem-per-cpu=200G temporal_filter_lc.slurm
+# sbatch --array [2,4,7,11] --mem-per-cpu=150G temporal_filter_lc.slurm
+# sbatch --array [3,5,6] --mem-per-cpu=90G temporal_filter_lc.slurm
+# sbatch --array [9] --mem-per-cpu=50G temporal_filter_lc.slurm
 
 
 # download from della with:
-# scp clc6@della:/scratch/network/clc6/abandonment_trajectories/data_derived/input_rasters/*result*2021_03_13* /Users/christophercrawford/Google\ Drive/_Projects/abandonment_trajectories/data_derived/_2021_03_13
-# scp clc6@della:/scratch/network/clc6/abandonment_trajectories/data_derived/input_rasters/length_distill_df_2021_03_13.csv /Users/christophercrawford/Google\ Drive/_Projects/abandonment_trajectories/data_derived/_2021_03_13
+# scp clc6@della:/scratch/gpfs/clc6/abandonment_trajectories/data_derived/input_rasters/*clean.tif /Users/christophercrawford/work/projects/abandonment_trajectories/data_derived/lc_r_clean
+# scp clc6@della:/scratch/gpfs/clc6/abandonment_trajectories/data_derived/input_rasters/*clean.csv /Users/christophercrawford/work/projects/abandonment_trajectories/data_derived/lc_dt_clean
+# scp clc6@della:/scratch/gpfs/clc6/abandonment_trajectories/data_derived/input_rasters/length_distill_df_2021_03_13.csv /Users/christophercrawford/Google\ Drive/_Projects/abandonment_trajectories/data_derived/_2021_03_13
 
 # paste0(p_derived, "aoh_tmp", time_stamp, "_c", core, ".csv")
 
