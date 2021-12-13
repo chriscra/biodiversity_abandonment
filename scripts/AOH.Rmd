@@ -740,6 +740,16 @@ habitat_prefs <- lapply(c("LC", "nonLC"), function(i) {
   bind_rows() %>% 
   filter(binomial %in% unique(species_ranges$binomial))
 
+# update: add map_code to habitat_prefs for more exact filtering and joining.
+habitat_prefs <- habitat_prefs %>% #select(code, name) %>% unique() %>% 
+  # arrange(code) %>%
+  left_join(iucn_crosswalk %>% filter(code != 5.1), by = "code") %>%
+  mutate(map_code = ifelse(code == 5.1, 
+                           ifelse(str_detect(name, "Tundra Wetlands"), 510, 501), 
+                           map_code)) %>%
+  select(-Coarse_Name, -lc, -IUCNLevel) %>%
+  left_join(select(iucn_crosswalk, -code), by = "map_code") #%>% print(n = 110)
+
 # all species:
 habitat_prefs_all <- lapply(c("LC", "nonLC"), function(i) {
   read_csv(
@@ -759,41 +769,13 @@ habitat_details <- lapply(c("LC", "nonLC"), function(i) {
   bind_rows() %>% 
   filter(binomial %in% unique(species_ranges$binomial))
 
-i<- "nonLC"
-
-
-common_names <- lapply(c("LC", "nonLC"), function(i) {
-  read_csv(
-    file = paste0(p_dat, "bd/IUCN/redlist_2021_11_17_", i, "/common_names.csv")#, n_max = 10
-  ) %>% 
-    select(binomial = scientificName, common_name = name 
-           # , redlistCategory, rationale, habitat, threats, population
-           )
-}) %>% 
-  bind_rows() %>% 
-  filter(binomial %in% unique(species_ranges$binomial))
-
-common_names %>%
-  group_by(binomial) %>%
-  summarise(names = str_c(common_name, collapse = "; "))
-  
-
-species_list %>%
-  group_by(binomial, vert_class) %>%
-  summarise(site_presence = str_c(site, collapse = "; "))
-
-c()
-
-common_names$binomial %>% unique %>% length
-species_ranges$binomial %>% unique %>% length
-species_list$binomial %>% unique %>% length
-
 # ----------------
 # save updated file
 # ----------------
 write_csv(habitat_prefs, file = paste0(p_derived, "iucn_habitat_prefs_subset.csv"))
 write_csv(habitat_details, file = paste0(p_derived, "iucn_habitat_details_subset.csv"))
 ```
+
 
 ```{r elevation_prefs}
 # ---------------------------------------------------------- #
@@ -940,14 +922,14 @@ species_without_habitat %>% .$binomial %>% unique() %>% sort()
 # Sequentially figure out which species have habitat at each specific site, and filter to those
 
 species_to_remove <- lapply(1:11, function(i){
-  site_habitats <- sort(filter(jung_hab_type_area_df, site == site_df$site[i])$code)
+  site_habitats_tmp <- sort(filter(jung_hab_type_area_df, site == site_df$site[i])$code)
   site_species <- sort(filter(species_list, site == site_df$site[i])$binomial)
   
   # a list of species at a given site, with habitat at that site
   species_with_habitat_at_site <- habitat_prefs %>% 
     filter(binomial %in% site_species,
            suitability == "Suitable",
-           code %in% site_habitats) %>% 
+           code %in% site_habitats_tmp) %>% 
     .$binomial %>% unique()
   
   species_list %>% 
@@ -958,7 +940,7 @@ species_to_remove <- lapply(1:11, function(i){
 
 # ------ update species_list again -------- #
 species_list <- lapply(1:11, function(i){
-  site_habitats <- sort(filter(jung_hab_type_area_df, site == site_df$site[i])$code)
+  site_habitats_tmp <- sort(filter(jung_hab_type_area_df, site == site_df$site[i])$code)
   site_species <- sort(filter(species_list, site == site_df$site[i])$binomial)
   
   # a list of species at a given site, with habitat at that site
@@ -966,7 +948,7 @@ species_list <- lapply(1:11, function(i){
     habitat_prefs %>%
     filter(binomial %in% site_species,
            suitability == "Suitable",
-           code %in% site_habitats) %>% 
+           code %in% site_habitats_tmp) %>% 
     .$binomial %>% unique()
   
   species_list %>% 
@@ -1021,15 +1003,18 @@ species_list$binomial %>% unique %>% length # 2104 species
 species_list %>% nrow() # 3744 unique runs
 
 
-# ------------------------------------------------------------- #
-# Step. 4
-# Write out the final, filtered species_list
-# ------------------------------------------------------------- #
-write_csv(species_list, file = paste0(p_derived, "species_list.csv"))
+
 ```
 
 ```{r parallelize-aoh}
+
+# ------------------------------------------------------------- #
+# Step. 4
+# Parallelize species_list, with core index assignments
+# ------------------------------------------------------------- #
+
 species_list
+
 
 aoh_dt_11_test
 aoh_31_df %>% select(site, binomial, time) %>% unique()
@@ -1141,12 +1126,18 @@ species_list <- species_list %>%
 
 unique(species_list$core_index)
 
-write_csv(species_list, file = paste0(p_derived, "species_list.csv"))
-
-
 species_list %>% filter(site %in% c("shaanxi", "chongqing")) %>% .$core_index %>% unique()
 calc_cores
 ```
+
+```{r write-final-species-list}
+# ------------------------------------------------------------- #
+# Step. 5
+# Write out the final, filtered species_list
+# ------------------------------------------------------------- #
+write_csv(species_list, file = paste0(p_derived, "species_list.csv"))
+```
+
 
 ```{r load-IUCN-assessment-data}
 # ---------------------------------------------- #
@@ -1159,10 +1150,43 @@ calc_cores
 #   arrange(map_code)
 # 
 # iucn_crosswalk %>% write_csv(paste0(p_derived, "iucn_lc_crosswalk.csv"))
+iucn_crosswalk %>% print(n = 50)
 
 iucn_crosswalk <- read_csv(paste0(p_derived, "iucn_lc_crosswalk.csv"))
 ```
 
+```{r common-names}
+
+common_names <- lapply(c("LC", "nonLC"), function(i) {
+  read_csv(
+    file = paste0(p_dat, "bd/IUCN/redlist_2021_11_17_", i, "/common_names.csv")#, n_max = 10
+  ) %>% 
+    select(binomial = scientificName, common_name = name 
+           # , redlistCategory, rationale, habitat, threats, population
+           )
+}) %>% 
+  bind_rows() %>% 
+  filter(binomial %in% unique(species_ranges$binomial))
+
+
+write_csv(common_names, file = paste0(p_derived, "iucn_common_names_subset.csv"))
+
+
+common_names %>%
+  group_by(binomial) %>%
+  summarise(common_names = str_c(common_name, collapse = "; "))
+  
+
+species_list %>%
+  group_by(binomial, vert_class) %>%
+  summarise(site_presence = str_c(site, collapse = "; ")) %>% ungroup()
+
+
+common_names$binomial %>% unique %>% length
+species_ranges$binomial %>% unique %>% length
+species_list$binomial %>% unique %>% length
+
+```
 
 
 # AOH 
@@ -2363,7 +2387,7 @@ aoh_dt_11_test <- aoh_dt_11_test %>%
 ```
 
 
-```{r plot-aoh}
+```{r plot-aoh-test}
 ggplot(data = aoh_dt_11_test #%>% filter(site == "shaanxi")
        ,
                      mapping = aes(x = year, y = adj_IUCN_aoh_ha, color = binomial)) + 
@@ -2379,10 +2403,20 @@ run_time <- "_2021_12_05"
 aoh_lc_31_files <- list.files(paste0(p_derived, "aoh"), full.names = T) %>% 
   grep(paste0("aoh_tmp", run_time), ., value = T)
 
+aoh_31_df <- lapply(aoh_lc_31_files, read_csv) %>% bind_rows()
+
+aoh_31_df
 
 aoh_31_df %>%
   filter(binomial == "Chlidonias hybrida",
          site == "shaanxi")
+
+aoh_31_df %>%
+  filter(binomial == "Agamia agami") %>%
+  ggplot(mapping = aes(x = year, y = adj_IUCN_aoh_ha)) +
+  geom_line()
+
+
 
 s_sp <- aoh_31_df %>% 
   filter(site == site_df$site[9],
@@ -2477,6 +2511,23 @@ habitat_prefs %>% filter(binomial == i) %>% print()
 jung_hab_type_area_df %>% filter(site == site_df$site[9]) %>% arrange(habitat_type)
 ```
 
+```{r expl-seff}
+txt <- read_csv("scripts/cluster/seff_out.csv")
+txt
+
+seff <- tibble(core_index = 1:27,
+               time = str_subset(txt$out, "CPU Utilized"), 
+               mem = str_subset(txt$out, "Memory Utilized")
+               ) %>%
+  mutate(time = str_extract(time, "[0-9][0-9]:[0-9][0-9]:[0-9][0-9]"),
+         mem = str_extract(mem, "[0-9][0-9].[0-9][0-9]") %>% as.numeric())
+
+seff %>% print(n = 30)
+
+calc_cores
+
+```
+
 
 
 
@@ -2484,29 +2535,388 @@ jung_hab_type_area_df %>% filter(site == site_df$site[9]) %>% arrange(habitat_ty
 # Age of habitat
 
 ## IUCN assessment data
-```{r habitat-details}
+```{r prep-habitat-details}
 habitat_prefs %>%
   filter(suitability == "Suitable") %>%
   select(binomial) %>% unique()
 
+species_list$binomial %>% unique %>% length
+
 # -----------
-# extract a list of all siutable habitats for each species
+# extract a list of all suitable habitats for each species
 # -----------
-habitat_prefs %>%
+suitable_habitats_extract <- 
+  habitat_prefs %>%
   filter(suitability == "Suitable") %>%
-  # select(binomial, code, name) %>%
   mutate(combined = paste(code, name)) %>%
-  arrange(code) %>%
+  arrange(binomial, code) %>% 
+  select(binomial:name, combined) %>%
+  unique() %>%
   group_by(binomial) %>%
-  summarise(suitable_hab = str_c(combined, collapse = "; "))
+  summarise(suitable_codes = str_c(code, collapse = "; "),
+            suitable_habitats = str_c(combined, collapse = "; "))
 
 # -----------
-habitat_details
-habitat_prefs
+# extract a list of all habitats of Major Importance each species
+# -----------
+majorImportance_extract <- 
+  habitat_prefs %>%
+  filter(suitability == "Suitable",
+         majorImportance == "Yes") %>%
+  mutate(combined = paste(code, name)) %>%
+  arrange(binomial, code) %>% 
+  select(binomial:name, combined) %>%
+  unique() %>%
+  group_by(binomial) %>%
+  summarise(major_codes = str_c(code, collapse = "; "),
+            major_habitats = str_c(combined, collapse = "; "))
 
-habitat_details[1, ]$habitat
+
+# -----------
+# make a data.frame of each species with their habitat_description
+# -----------
+
+habitat_age_req <-
+  species_list %>% # first add the species binomial, class, and site presence
+  group_by(binomial, vert_class) %>%
+  summarise(site_presence = str_c(site, collapse = "; ")) %>% 
+  ungroup() %>%
+  
+  # then add the common names:
+  left_join(common_names %>% group_by(binomial) %>%
+              summarise(common_names = str_c(common_name, collapse = "; ")),
+            by = "binomial") %>%
+  
+  # now, add the habitat codes and names for both suitable habitats and major importance habitats
+  left_join(suitable_habitats_extract, by = "binomial") %>%
+  left_join(majorImportance_extract, by = "binomial") %>% 
+
+  left_join(select(habitat_details, binomial, redlistCategory, habitat), by = "binomial")
+
+# those species without specific habitat descriptions can be treated in two ways:
+# 1. conservatively - habitats are not suitable
+# 2. all habitats that are said to be suitable can be assumed to be suitable at any age 
+
+# clean up the html tags
+
+text_to_remove <- c('<strong>', '</strong>', '<em>', '</em>', '<p>', '</p>', 
+                    '<span style=\"font-weight: bold;\">', 
+                    '<span style=\"font-style: italic;\">', 
+                    '</span>', 
+                    '<B>', '</B>', 
+                    '<a name=\"OLE_LINK4\">',
+                    '<span lang=\"EN-US\">', 
+                    '<span lang=\"en-US\">',
+                    '<span lang=\"en\">', 
+                    '<span lang=\"EN-GB\">',
+                    '<br>', '<br/>', 
+                    '<sup>', '</sup>',
+                    '<span class=\"quotename\">',
+                    '<span class=\"msoIns\">', 
+                    '<span style=\"font-style: italic; \">', 
+                    '<span class=\"hps\">')
+
+habitat_age_req <- 
+  habitat_age_req %>%
+  mutate(habitat = gsub(paste(text_to_remove, collapse = "|"), "", habitat),
+         
+         # remove white space:
+         habitat = str_squish(habitat), 
+         habitat = str_trim(habitat)
+         )
+
+
+# lots of species do not have specific habitat descriptions - arrange by this
+habitat_age_req <- 
+  habitat_age_req %>%
+  mutate(has_desc = ifelse(is.na(habitat), 1, 0))
+
+
+# add columns for classification, reorder columns, and arrange
+habitat_age_req <- 
+  habitat_age_req %>%
+  mutate(age_req = NA,
+         specialty = NA) %>%
+  arrange(#has_desc, 
+          vert_class, binomial) %>% 
+  select(vert_class, binomial, common_names, 
+         suitable_habitats, habitat, age_req, specialty, 
+         site_presence,
+         everything())
+
+habitat_age_req
+
+# -----------
+# write to file
+# -----------
+
+
+write_csv(habitat_age_req, file = paste0(p_derived, "iucn_habitat_age_req.csv"))
 
 ```
+
+```{r separating-habitat-specialties}
+habitat_prefs %>%
+  filter(suitability == "Suitable",
+         majorImportance == "Yes") %>%
+  .$binomial %>% 
+  unique %>%
+  length
+
+# see _util_files.R
+site_habitats %>% print(n = 34)
+
+
+# forests exclusively (and majorImportance)
+
+# grasslands exclusively
+
+# testing
+
+site_habitats$IUCNLevel %>% str_subset(regex("forest|plantations", ignore_case = TRUE))
+site_habitats$IUCNLevel %>% str_subset(regex("grassland|savanna|shrubland|pasture", ignore_case = TRUE))
+site_habitats$IUCNLevel %>% str_subset(regex("wet", ignore_case = TRUE))
+site_habitats$IUCNLevel %>% str_subset(regex("arable|pasture|garden", ignore_case = TRUE))
+site_habitats$IUCNLevel %>% str_subset(regex("urban", ignore_case = TRUE))
+site_habitats$IUCNLevel %>% str_subset(regex("rocky", ignore_case = TRUE))
+site_habitats$IUCNLevel %>% str_subset(regex("desert", ignore_case = TRUE))
+
+
+# ------------------------- species habitat specialty --------------------------- # 
+habitat_age_req <- habitat_age_req %>%
+  mutate(forest_occ =     str_detect(suitable_habitats, regex("forest|plantations", ignore_case = TRUE)),
+         grass_occ =      str_detect(suitable_habitats, regex("grassland|savanna|shrubland|pasture", ignore_case = TRUE)),
+         wetlands_occ =   str_detect(suitable_habitats, regex("wet", ignore_case = TRUE)),
+         farmland_occ =   str_detect(suitable_habitats, regex("arable|pasture|garden", ignore_case = TRUE)),
+         urban_occ =      str_detect(suitable_habitats, regex("urban", ignore_case = TRUE)),
+         rocky_occ =      str_detect(suitable_habitats, regex("rocky", ignore_case = TRUE)),
+         desert_occ =     str_detect(suitable_habitats, regex("desert", ignore_case = TRUE)),
+         
+         # specialty_full = ifelse(forest_occ, ifelse(grass_occ, "both", "forest"), "grass"),
+         # comp = ifelse(forest_occ & !grass_occ & !wetlands_occ & !urban_occ & !rocky_occ & !desert_occ, "forest", "no"),
+         # sp_sums = rowSums(across(forest_occ:desert_occ)),
+         n_spec = rowSums(across(contains("occ"))),
+         specialty = case_when(
+           n_spec == 1 & forest_occ ~ "forest",
+           n_spec == 1 & grass_occ ~ "grass",
+           n_spec == 1 & wetlands_occ ~ "wetlands",
+           n_spec == 1 & farmland_occ ~ "farmland",
+           n_spec == 1 & urban_occ ~ "urban",
+           n_spec == 1 & rocky_occ ~ "rocky",
+           n_spec == 1 & desert_occ ~ "desert",
+           n_spec == 2 & forest_occ & grass_occ ~ "for_grass",
+           n_spec >= 5 ~ "generalist",
+           TRUE ~ "NA"),
+         # stuff = paste(contains(occ))
+         ) #%>%
+  # select(binomial, forest_occ:n_spec, specialty) %>%
+  # filter(n_specialty >= 0) %>%
+  # arrange(desc(n_spec)) %>% print(n = 50)
+
+
+str_detect(habitat_age_req$suitable_habitats[1:10], regex("forest", ignore_case = TRUE) | regex("wetlands", ignore_case = TRUE))
+
+
+
+# how many species only use cropland or some sort of farmland?
+habitat_age_req %>% filter(farmland_occ, n_spec == 1) %>% nrow() # 0!
+
+
+names(habitat_age_req)
+
+habitat_age_req %>%
+  filter(#vert_class != "amp",
+         farmland_occ,
+         # n_spec == 1
+         ) %>%
+  select(vert_class:common_names, redlistCategory, n_spec, suitable_codes, contains("occ")) %>%
+  arrange(n_spec, desc(grass_occ), desc(wetlands_occ)) # %>% View() 
+  
+  
+```
+
+
+```{r majorimportance}
+
+
+habitat_age_req %>%
+  mutate(forest_mi =     str_detect(suitable_habitats, regex("forest|plantations", ignore_case = TRUE)),
+         grass_occ =      str_detect(suitable_habitats, regex("grassland|savanna|shrubland|pasture", ignore_case = TRUE)),
+         wetlands_occ =   str_detect(suitable_habitats, regex("wet", ignore_case = TRUE)),
+         farmland_occ =   str_detect(suitable_habitats, regex("arable|pasture|garden", ignore_case = TRUE)),
+         urban_occ =      str_detect(suitable_habitats, regex("urban", ignore_case = TRUE)),
+         rocky_occ =      str_detect(suitable_habitats, regex("rocky", ignore_case = TRUE)),
+         desert_occ =     str_detect(suitable_habitats, regex("desert", ignore_case = TRUE)),
+         
+         # specialty_full = ifelse(forest_occ, ifelse(grass_occ, "both", "forest"), "grass"),
+         # comp = ifelse(forest_occ & !grass_occ & !wetlands_occ & !urban_occ & !rocky_occ & !desert_occ, "forest", "no"),
+         # sp_sums = rowSums(across(forest_occ:desert_occ)),
+         n_spec = rowSums(across(contains("occ"))),
+         specialty = case_when(
+           n_spec == 1 & forest_occ ~ "forest",
+           n_spec == 1 & grass_occ ~ "grass",
+           n_spec == 1 & wetlands_occ ~ "wetlands",
+           n_spec == 1 & farmland_occ ~ "farmland",
+           n_spec == 1 & urban_occ ~ "urban",
+           n_spec == 1 & rocky_occ ~ "rocky",
+           n_spec == 1 & desert_occ ~ "desert",
+           n_spec == 2 & forest_occ & grass_occ ~ "for_grass",
+           n_spec == 7 ~ "generalist",
+           TRUE ~ "NA"),
+         # stuff = paste(contains(occ))
+         )
+
+```
+
+
+
+```{r na}
+habitat_age_req$binomial %>% unique %>% length()
+habitat_age_req %>%
+  filter(!is.na(hab_clean)) %>% unique %>% nrow()
+
+# about 1000 of them have no specific habitat description
+
+habitat_age_req %>% 
+  filter(str_detect(suitable_habitats, "[Tt]emperate")) # can also use: filter(grepl("Acris", binomial))
+
+habitat_age_req %>% 
+  filter(str_detect(suitable_habitats, "[Tt]emperate")) # can also use: filter(grepl("Acris", binomial))
+
+jung_hab_type_area_df %>%
+  select(habitat_type, lc, IUCNLevel, Coarse_Name) %>% unique %>% arrange(habitat_type) %>% print(n = 35)
+
+```
+
+
+
+```{r match-text}
+species_ranges %>%
+  filter(binomial == "Agamia agami") %>%
+  st_geometry() %>%
+  plot()
+
+plot(site_jung_l2$mato_grosso)
+
+plot(lc$mato_grosso$y2017)
+
+habitat_age_req %>%
+  select(binomial, vert_class, suitable_habitats, hab_clean) %>%
+  filter(str_detect(hab_clean, "mature|primary|old")) # can also use: filter(grepl("Acris", binomial))
+
+habitat_age_req %>%
+  select(binomial, vert_class, suitable_habitats, hab_clean) %>%
+  filter(str_detect(suitable_habitats, "forest")) # can also use: filter(grepl("Acris", binomial))
+
+# --------------------------------------- #
+# separate species by habitat type
+habitat_age_req %>%
+  select(binomial, vert_class, suitable_habitats, hab_clean) %>%
+  filter(grepl("forest", suitable_habitats, ignore.case = T))
+
+
+
+# --------------------------------------- #
+# separate species by habitat age preference
+habitat_age_req$binomial %>% unique() %>% length
+
+habitat_age_req %>%
+  select(binomial, vert_class, suitable_habitats, hab_clean) %>%
+  filter(grepl("mature|primary|old", hab_clean, ignore.case = T))
+
+habitat_age_req %>%
+  select(binomial, vert_class, suitable_habitats, hab_clean) %>%
+  filter(grepl("succession", hab_clean, ignore.case = T))
+
+habitat_age_req %>%
+  select(binomial, vert_class, suitable_habitats, hab_clean) %>%
+  filter(grepl("old", hab_clean, ignore.case = T))
+
+
+habitat_age_req %>%
+  select(binomial, vert_class, suitable_habitats, hab_clean) %>%
+  filter(str_detect(hab_clean, "old")) # can also use: filter(grepl("Acris", binomial))
+
+
+habitat_age_req %>%
+  select(binomial, vert_class, hab_clean) %>%
+  mutate(old_sp = ifelse(str_detect(hab_clean, "mature|primary"), 1, 0))
+  
+t1 <- habitat_age_req %>%
+  select(binomial, vert_class, hab_clean) %>%
+  filter(str_detect(hab_clean, "mature")) %>% # can also use: filter(grepl("Acris", binomial))
+  mutate(hab_clean = str_trim(unlist(hab_clean))) %>%
+  head()
+
+t1[2, 3] %>% unlist
+
+t1[2, 3] %>% unlist %>% str_trim()
+t1[2, 3] %>% unlist %>% str_squish()
+# when finding a record to update:
+  
+
+```
+
+
+# AOH of only Abandoned croplands
+
+```{r species-list-just-2-4}
+species_list
+  
+habitat_prefs %>% 
+  filter(suitability != "Suitable")
+
+habitat_prefs %>% .$binomial %>% unique() %>% length() # 2229
+
+# 2017 species of the 2229 species_range layer with 2 or 4
+habitat_prefs %>% 
+  filter(suitability == "Suitable",
+         lc %in% c(2, 4)) %>% 
+  .$binomial %>% unique() %>% length() 
+
+
+# 1122 species have 2 or 4 listed as a habitat of majorImportance
+habitat_prefs %>% 
+  filter(suitability == "Suitable",
+         majorImportance == "Yes",
+         lc %in% c(2, 4)) %>% 
+  .$binomial %>% unique() %>% length() 
+
+
+
+
+species_list %>% .$binomial %>% unique() %>% length() # 2104 total species in species list
+
+species_list %>%
+  filter(binomial %in% (habitat_prefs %>% 
+                          filter(suitability == "Suitable",
+                                 lc %in% c(2, 4)) %>% 
+                          .$binomial %>% unique())
+         ) %>% 
+  .$binomial %>% unique() %>% length() # 1938 species have grassland (2) or forest (4) listed as suitable habitats
+
+
+
+
+habitat_prefs$code %>% unique() %>% sort()
+site_habitats %>% print(n = 40)
+
+iucn_crosswalk %>% filter(code == 5.1)
+
+# having added map_code to habitat_prefs for more exact filtering and joining...
+habitat_prefs
+site_habitats
+iucn_crosswalk
+
+
+
+site_habitats
+jung_hab_type_area_df %>% select(habitat_type, code, lc, Coarse_Name, IUCNLevel) %>% unique() %>%
+  arrange(habitat_type)
+
+
+```
+
 
 ## lc of abandonment 
 
@@ -2542,74 +2952,99 @@ plot(abn_mask$shaanxi[[31]])
 plot(lc[[site_index]][[28:31]])
 ```
 
+```{r lcc-extent}
+lcc
+site_df$site[7]
+
+plot(abn_mask[[9]][[31]])
+
+
+
+
+for(i in 1:11) {
+  cat(site_df$site[i], fill = T)
+  print(compareGeom(abn_mask[[i]], lcc[[i]]))
+  }
+
+i <- 3
+plot(abn_mask[[i]])
+plot(lc[[i]][[31]])
+plot(lcc[[i]][[31]])
+
+for(i in 1:11) {
+  cat(site_df$site[i], fill = T)
+  # print(compareGeom(abn_mask[[i]], age_t[[i]]))
+  print(ext(abn_mask[[i]]))
+  print(ext(lcc[[i]]))
+  print(ncell(abn_mask[[i]]))
+  print(ncell(lcc[[i]]))
+  }
+
+freq(abn_mask[[9]][[31]])
+
+freq(lc[[9]][["y2006"]])
+freq(lcc[[9]][["y2006"]])
+
+freq(lc[[7]][["y2006"]])
+freq(lcc[[7]][["y2006"]])
+
+ncell(lc[[7]][["y2006"]]) - ncell(lcc[[7]][["y2006"]])
+
+compareGeom(lc[[9]][["y2006"]], lcc[[9]][["y2006"]])
+
+fread()
+
+lcc[[9]]
+
+lcct <- rast("/Users/christophercrawford/Downloads/shaanxi_clean.tif")
+lcct 
+names(lcct) <- paste0("y", 1987:2017)
+
+plot(lcc[[9]][["y2000"]] - lcct[["y2000"]])
+plot(lc[[9]][["y2000"]] - lcc[[9]][["y2000"]])
+```
+
+
 ```{r lc-of-abn-terra}
 # write code to calculate the land cover in each pixel 5 years and older
-lc
-age_t
-
-# 
-plot(age_t[[site_index]][[31]])
-plot(age_t_bins[[site_index]])
-
-tbb <- classify(age_t_bins[[site_index]],
-               rcl = tibble(from = 1, to = 5, becomes = 1),
-               othersNA = TRUE, include.lowest = TRUE, right = TRUE
-               )
-tb <- classify(age_t[[site_index]][[31]],
-               rcl = tibble(from = 5, to = 30, becomes = 1),
-               othersNA = TRUE, include.lowest = TRUE, right = TRUE
-               )
-tb_all <- classify(age_t[[site_index]][[31]],
-               rcl = tibble(from = 1, to = 30, becomes = 1),
-               othersNA = TRUE, include.lowest = TRUE, right = TRUE
-               )
-
-plot(tbb)
-plot(tb)
-plot(tb-tbb)
-plot(tbb - tb_all)
-
-tb <- subst(tb, NA, 0)
-tbb <- subst(tbb, NA, 0)
-tb_all <- subst(tb_all, NA, 0)
-
-plot(tbb)
-plot(tb)
-plot(tb-tbb)
-plot(tb_all - tb_all)
-
-
+i <- 9
+print(compareGeom(abn_mask[[i]], age_t[[i]]))
+print(compareGeom(abn_mask[[i]], lcc[[i]]))
 
 # Calculate the land cover of abandoned pixels for each year
 
+# redoing this with the cleaned version of lc: lcc
 tic()
-abn_lc <- lapply(c(7,11), function(i) {
+abn_lcc <- lapply(1:11, function(i) {
   # make sure to restrict lc to only 1987:2017 (Nebraska, Wisconsin)
-  tmp <- abn_mask[[i]] + lc[[i]][[paste0("y", 1987:2017)]]
+  # i <- 9
+  cat("Masking:", site_df$site[i], "...", fill = TRUE)
+  tmp <- abn_mask[[i]] + lcc[[i]][[paste0("y", 1987:2017)]]
   
+  cat("Writing SpatRaster to file:", site_df$site[i], "...", fill = TRUE)
   writeRaster(tmp, 
-              filename = paste0(p_derived, "abn_lc_rasters/",
-                        site_df$site[i], "_abn_lc.tif"), 
+              filename = paste0(p_derived, "abn_lcc/",
+                        site_df$site[i], "_abn_lcc.tif"), 
               overwrite = TRUE,
               names = names(tmp))
+  cat(site_df$site[i], "done!", fill = TRUE)
+
 })
 toc()
 
+
 # reload
-abn_lc <- lapply(1:11, function(i) {
-  rast(paste0(p_derived, "abn_lc_rasters/",
-              site_df$site[i], "_abn_lc.tif"))
+abn_lcc <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "abn_lcc/",
+              site_df$site[i], "_abn_lcc.tif"))
   })
-names(abn_lc) <- site_df$site
+names(abn_lcc) <- site_df$site
+
+
+plot(abn_lcc[[31]])
+
 
 # check into whether this is the same as abn_lc_rasters as created in "5_biodiversity_dev.Rmd"
-
-plot(tmp)
-rasterTmpFile(prefix='r_tmp_')
-showTmpFiles()
-removeTmpFiles(h=24)
-
-
 
 tmp_df <- freq(tmp) # some pixels are in cropland... these must have  because these must have 
 tmp_df %>% as_tibble() %>% arrange(value) %>% print(n = 100)
@@ -2652,6 +3087,20 @@ abn_lc_freq <- lapply(1:11, function(i) {
 }
 ) %>% bind_rows
 
+
+abn_lcc_freq <- lapply(9, function(i) {
+  # the first five years (1987:1991) are NA, due to abandonment definition.
+  tmp <- freq(abn_lcc[[paste0("y", 1992:2017)]]) %>% 
+    as_tibble() %>%
+    rename(year = layer, lc = value) %>%
+    mutate(year = year + 1991,
+           site = site_df$site[i]) %>%
+    select(site, year, lc, count)
+  
+  tmp
+}
+) %>% bind_rows
+
 # write to file
 write_csv(abn_lc_freq, file = paste0(p_derived, "abn_lc_freq.csv"))
 
@@ -2670,6 +3119,24 @@ abn_lc_freq %>%
   geom_line() + 
   labs(x = "Year", y = "Percent of all abandoned pixels", col = "Land cover class") +
   facet_wrap(vars(site), scales = "free") + theme(legend.position = "bottom")
+
+
+
+
+ggplot(data = abn_lcc_freq, 
+       mapping = aes(x = year, y = area_ha, col = as_factor(lc))) + 
+  geom_line() + 
+  labs(x = "Year", y = "Area (ha)", col = "Land cover class") +
+  # facet_wrap(vars(site), scales = "free") + 
+  theme(legend.position = "bottom")
+
+ggplot(data = abn_lcc_freq, 
+       mapping = aes(x = year, y = count, col = as_factor(lc))) + 
+  geom_line() + 
+  labs(x = "Year", y = "Pixels", col = "Land cover class") +
+  # facet_wrap(vars(site), scales = "free") + 
+  theme(legend.position = "bottom")
+
 ```
 
 
@@ -2793,7 +3260,8 @@ for(lc_class in 1:4) {
 ```
 
 ```{r explore-filtered-results}
-
+# /Users/christophercrawford/work/projects/abandonment_trajectories/data_derived/lc_dt_clean
+# /Users/christophercrawford/work/projects/abandonment_trajectories/data_derived/lc_r_clean/shaanxi_clean.tif
 ```
 
 # Tomorrow
@@ -2801,4 +3269,284 @@ for(lc_class in 1:4) {
 
 ```
 
+# Results
+
+```{r load-cluster-results}
+run_time <- "_2021_12_05"
+aoh_lc_31_files <- list.files(paste0(p_derived, "aoh"), full.names = T) %>% 
+  grep(paste0("aoh_tmp", run_time), ., value = T)
+
+aoh_31_df <- lapply(aoh_lc_31_files, read_csv) %>% bind_rows()
+aoh_df <- aoh_31_df
+
+# -------------- join IUCN status, common names ------------- #
+habitat_details
+
+aoh_df <- aoh_df %>% 
+  left_join(select(habitat_details, binomial, redlistCategory), by = "binomial")
+
+
+missing_sp_31 <- lapply(1:11, function(i){
+  sp_run <- aoh_df %>% 
+    filter(site == site_df$site[i]) %>%
+  select(site:year, adj_IUCN_aoh_ha) %>% unique() %>%
+  select(site, binomial) %>% unique()
+  
+  sp_not_run <- species_list %>% filter(site == site_df$site[i]) %>%
+    filter(!binomial %in% sp_run$binomial)
+  sp_not_run
+}) %>% bind_rows()
+
+
+# number of species at each site:
+species_list %>% 
+  group_by(site, 
+           vert_class
+           ) %>% 
+  summarise(num_sp = n())
+
+# number of unique species
+species_list %>% 
+  group_by(#site, 
+           vert_class
+           ) %>% 
+  summarise(num_sp = n(),
+            sp = length(unique(binomial)))
+```
+
+
+```{r prelim-plots}
+sp_to_plot <- "Agamia agami"
+
+aoh_df %>%
+  filter(binomial == sp_to_plot) %>%
+  ggplot(mapping = aes(x = year, y = adj_IUCN_aoh_ha)) +
+  geom_line() + 
+  labs(x = "Year", y = "AOH (ha)", caption = sp_to_plot)
+
+
+# -------------- extract just species and yearly aoh ------------- #
+aoh_df
+
+aoh_df %>% 
+  select(site, binomial, redlistCategory, year, adj_IUCN_aoh_ha) %>% 
+  unique() %>% 
+  # head(n = 10000) %>%
+  filter(binomial == sp_to_plot) %>%
+  mutate(binomial = as_factor(binomial)) %>%
+  ggplot(mapping = aes(x = year, 
+                       y = adj_IUCN_aoh_ha, 
+                       group = binomial,
+                       col = redlistCategory
+                       )) +
+  geom_line() + 
+  geom_smooth(method = "lm", se = 0.95) + 
+  labs(x = "Year", y = "AOH (ha)", title = "All species")
+
+
+dft <- aoh_df %>% 
+  select(site, binomial, redlistCategory, year, adj_IUCN_aoh_ha) %>% 
+  unique() %>% 
+  mutate(year = year - 1986)
+  
+
+dft
+
+# prelim model
+tmp_lm <- lm(adj_IUCN_aoh_ha ~ year, data = filter(dft, binomial == sp_to_plot))
+tidy(tmp_lm)
+glance(tmp_lm)
+augment(tmp_lm)
+
+
+ggplot(data = filter(dft, binomial == sp_to_plot), 
+       mapping = aes(x = year, y = adj_IUCN_aoh_ha)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = 0.95) + 
+  labs(x = "Year", y = "AOH (ha)", title = "All species") + 
+  # geom_function(fun = function(x) { (x-4) ^ (mean(coef(lm_log2_l[[9]]), na.rm = TRUE))},
+  #               mapping = aes(linetype = "Mean Decay Rate"),
+  #               color = "blue", size = 1, #linetype = "dashed", 
+  #               inherit.aes = FALSE) 
+geom_line(data = augment(tmp_lm), mapping = aes(x = year, y = .fitted), col = "green")
+
+
+# ---------- calculate trend for all species ---------- #
+filter(dft, binomial == sp_to_plot)
+tmp_all <- lm(adj_IUCN_aoh_ha ~ year*binomial - 0, 
+              data = filter(dft, binomial %in% species_list$binomial[1:5],
+                            site == "belarus"))
+aoh_lm_df <- tidy(tmp_all)
+
+run_indices <- dft %>%
+  left_join(select(species_list, site, binomial, vert_class), by = c("binomial", "site")) %>%
+  arrange(site, vert_class, binomial) %>%
+  select(site, vert_class, binomial) %>% unique() %>% 
+  mutate(run_index = 1:n())
+
+dft <- dft %>%
+  left_join(run_indices, by = c("binomial", "site"))
+
+dft$run_index %>% unique() %>% sort() %>% tail
+dft %>% select(site, binomial) %>% unique() %>% nrow
+
+
+# -------------------
+# run simple regression on each species' and extract AOH trend over time.
+# -------------------
+aoh_trends <- lapply(1:length(unique(dft$run_index)), function(i) {
+  dft %>% 
+    filter(run_index == i) %>%
+    lm(adj_IUCN_aoh_ha ~ year, 
+       data = .) %>%
+    tidy() %>% 
+    mutate(run_index = i)
+}) %>% bind_rows()
+
+# ------------------
+# determine the relative trend
+# ------------------
+i <- 10
+# plot trend for a given species:
+dft %>% filter(vert_class != "amp")
+
+dft %>% 
+  filter(run_index == i) %>%
+  ggplot(mapping = aes(x = year, y = adj_IUCN_aoh_ha)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = 0.95) + 
+  labs(x = "Year", y = "AOH (ha)", title = unique(filter(dft, run_index == i)$binomial))
+  
+
+
+aoh_change_df <- aoh_trends %>% #filter(run_index == i) %>%
+  select(run_index, term, estimate) %>%
+  mutate(term = ifelse(term == "(Intercept)", "intercept", "slope")) %>%
+  pivot_wider(run_index, names_from = term, values_from = estimate) %>%
+  mutate(aoh_start = slope*1 + intercept,
+         aoh_end = slope*31 + intercept,
+         rel_change = ((aoh_end/aoh_start) - 1))
+
+hist(aoh_change_df$rel_change)
+aoh_change_df %>%
+  arrange(rel_change) %>%
+  filter(rel_change < 5 & rel_change > -1) %>%
+  .$rel_change %>%
+  hist(breaks = 100)
+
+
+# ---------- plot histogram ----------- #
+aoh_change_df %>% 
+  left_join(dft %>% select(run_index, binomial, redlistCategory, vert_class) %>%
+              unique(), 
+            by = "run_index") %>%
+  filter(!is.na(vert_class),
+         rel_change < 2 & rel_change > -1) %>%
+  ggplot(mapping = aes(x = rel_change)) + 
+  geom_histogram(bins = 20
+                 ) +
+  geom_vline(xintercept = 0, linetype = 2, col = "gray70") +
+  theme_classic() +
+  facet_wrap(vars(redlistCategory), scales = "free")
+
+
+dft %>% filter(run_index == i) %>%
+  lm(adj_IUCN_aoh_ha ~ year, data = .) %>%
+  augment() %>%
+  filter(year %in% c(1, 31))
+
+
+trend_df0 %>% print(n = 35)
+trend_df %>% print(n = 30)
+
+# create df of just the increase/decrease trend
+
+trend_df <- aoh_trends %>% 
+  left_join(dft %>% 
+              select(site, run_index, binomial, redlistCategory, vert_class) %>%
+              unique(), 
+            by = "run_index") %>%
+  filter(term == "year",
+         p.value < 0.05,
+         !is.na(vert_class)
+         # estimate != 0
+         ) %>%
+  mutate(trend = ifelse(estimate > 0, "gain", "loss")) %>%
+  group_by(redlistCategory, trend, vert_class) %>%
+  summarise(trend_count = n())
+
+# ----------------------------------- #
+# plot the trend per species
+# ----------------------------------- #
+trend_df %>%
+  mutate(y = ifelse(trend == "gain", trend_count, -trend_count))
+
+trend_df %>%
+  mutate(y = ifelse(trend == "gain", trend_count, -trend_count)) %>%
+  # filter(vert_class) %>%
+  
+  ggplot(data = ., 
+       mapping = aes(x = redlistCategory, 
+                     y = trend_count,
+                     # group = as_factor(trend), 
+                     fill = vert_class,
+                     col = vert_class,
+                     alpha = as_factor(trend)
+                     )) +
+  geom_col(
+    position = position_dodge2(width = 0.9, preserve = "single")
+    # position = position_dodge()
+    ) + 
+  labs(y = "Number of Species") +
+  theme_classic() + 
+  scale_alpha_manual(name = "Trend",
+                     labels = c("gain" = "Gain",
+                                "loss" = "Loss"),
+                     values = c("gain" = 1,
+                                "loss" = 0.2)
+                     ) + 
+  facet_wrap(vars(redlistCategory), scales = "free")
+
+# species with zero estimates
+zero_index <- aoh_trends %>% 
+  filter(estimate == 0) %>%
+  .$run_index %>% unique() %>% sort()
+
+aoh_trends %>% filter(run_index %in% zero_index)
+
+dft %>% filter(is.na(vert_class))
+
+# na species:
+na_vert <- aoh_df %>% 
+  left_join(select(species_list, binomial, vert_class), by = "binomial") %>% 
+  filter(is.na(vert_class)) %>%
+  select(site, binomial) %>% unique()
+
+species_list %>% filter(binomial %in% na_vert$binomial)
+
+
+aoh_trends %>% 
+  left_join(unique(select(dft, site, binomial, redlistCategory, run_index, vert_class)), 
+            by = "run_index") %>%
+    filter(estimate == 0)
+
+species_list %>% filter(binomial == "Anthus pratensis")
+
+select(dft, site, binomial, redlistCategory, run_index, vert_class) %>% 
+    filter(is.na(vert_class))
+
+
+# ----------------
+# diagnostic plots
+i
+
+par(mfrow = c(2,2))
+dft %>% 
+    filter(run_index == i) %>%
+    lm(adj_IUCN_aoh_ha ~ year, 
+       data = .) %>% 
+  plot(., c(1,2))
+
+#
+```
 
