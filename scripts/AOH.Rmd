@@ -2961,6 +2961,37 @@ names(abn_mask) <- site_df$site
 
 plot(abn_mask$shaanxi[[31]])
 plot(lc[[site_index]][[28:31]])
+
+
+
+# ---------------------------------------------------------------- #
+# create mask of just 5-30 max_age
+
+tic()
+max_age_mask <- lapply(1:11, function(i) {
+  max_age_mask_tmp <- 
+    classify(
+      max_age_t[[i]],
+      rcl = tibble(from = 5,
+                   to = 30,
+                   becomes = 0),
+      othersNA = TRUE,
+      include.lowest = TRUE, right = TRUE,
+      filename = paste0("/Users/christophercrawford/work/projects/abandonment_trajectories/data_derived/max_age/max_age_mask/",
+                        site_df$site[i], "_max_age_5_30_mask.tif"),
+      names = "max_age_5_30_mask",
+      overwrite = TRUE)
+})
+toc()
+
+plot(max_age_mask[[1]])
+
+max_age_mask <- lapply(1:11, function(i){
+  rast(paste0("/Users/christophercrawford/work/projects/abandonment_trajectories/data_derived/max_age/max_age_mask/", site_df$site[i], "_max_age_5_30_mask.tif"))
+})
+
+names(max_age_mask) <- site_df$site
+
 ```
 
 ```{r lcc-extent}
@@ -3072,6 +3103,45 @@ test_lc <- terra::mask(x = lc[[site_index]][[31]],
 plot(test_lc)
 
 plot(lc[[site_index]][[31]])
+
+
+
+
+
+
+
+# ---------------------------------------------------------------- #
+# calculate lc of all pixels that were ever abandoned
+# ---------------------------------------------------------------- #
+
+max_age_mask
+
+tic()
+max_abn_lcc <- lapply(1:11, function(i) {
+  # make sure to restrict lc to only 1987:2017 (Nebraska, Wisconsin)
+  # i <- 9
+  cat("Masking:", site_df$site[i], "...", fill = TRUE)
+  tmp <- max_age_mask[[i]] + lcc[[i]][[paste0("y", 1987:2017)]]
+  
+  cat("Writing SpatRaster to file:", site_df$site[i], "...", fill = TRUE)
+  writeRaster(tmp, 
+              filename = paste0(p_derived, "abn_lcc/",
+                        site_df$site[i], "_max_abn_lcc.tif"), 
+              overwrite = TRUE,
+              names = paste0("y", 1987:2017))
+  cat(site_df$site[i], "done!", fill = TRUE)
+
+})
+toc()
+
+
+# reload
+max_abn_lcc <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "abn_lcc/",
+              site_df$site[i], "_max_abn_lcc.tif"))
+  })
+names(max_abn_lcc) <- site_df$site
+
 
 ```
 
@@ -3988,7 +4058,7 @@ aoh_combo %>%
   # print(n = 80)
   
   ggplot(mapping = aes(x = year, y = aoh, col = type)) + 
-  geom_line()
+  geom_line() #+ theme_classic()
 
 
 
