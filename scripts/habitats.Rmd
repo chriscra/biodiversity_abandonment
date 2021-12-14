@@ -900,6 +900,68 @@ dev.off()
 
 ```
 
+```{r plot-jung-one-site}
+i <- 9
+
+mval <- 1.5
+plot(site_jung_l2_30[[i]], maxcell = 5000000,
+     main = paste0("IUCN Habitat Types, Level 2: ", names(site_jung_l2_30[i])),
+     # mar = c(mval+0.5, mval, mval + 1.2, mval + 2), # bltr
+     type = "classes", #legend = FALSE,
+     col = jung_table %>%
+       arrange(map_code) %>%
+       filter(map_code %in% filter(site_jung_l2_30_freq,
+                                   site == site_df$site[i])$map_code) %>%
+       .$cols,
+     # levels = jung_table %>%
+     #   arrange(map_code) %>%
+     #   filter(map_code %in% filter(site_jung_l2_30_freq,
+     #                               site == site_df$site[i])$map_code) %>%
+     #   .$map_code
+     levels =
+         filter(arrange(jung_table, map_code),
+                map_code %in% filter(site_jung_l2_30_freq,
+                                     site == site_df$site[i])$map_code)$label
+)
+
+
+pdf(file = paste0(p_output, "plots/jung_shaanxi_legend.pdf"), width = 7.5, height = 7.5)
+plot.new()
+plot(site_jung_l2_30[[i]], maxcell = 5000000,
+     type = "classes",
+     legend = "left",
+     plg = list(cex = 1,
+                title = "IUCN Habitat Types",
+                                # text.width = 100,
+                title.adj = 0#,
+                # y.intersp	= 1.1
+                # xjust = 0.5
+                ),
+     legend.only = TRUE,
+     levels = jung_table %>%
+       arrange(map_code) %>%
+       filter(map_code %in% filter(site_jung_l2_30_freq,
+                                     site == site_df$site[i])$map_code) %>%
+       .$label,
+     col = jung_table %>%
+       arrange(map_code) %>%
+       filter(map_code %in% filter(site_jung_l2_30_freq,
+                                   site == site_df$site[i])$map_code) %>%
+       .$cols
+     )
+
+dev.off()
+
+plot(site_jung_l2_30[[i]], type = "classes")
+```
+
+```{r misc}
+pdf(file = paste0(p_output, "plots/shaanxi_elevation.pdf"), width = 5, height = 4)
+plot(elevation_map[[i]], main = "Elevation (m)")
+dev.off()
+
+```
+
 
 ```{r habitat-old}
 # color palette information #
@@ -1038,7 +1100,7 @@ jung_l2_table_clr <- read_delim(
 jung_table <- read_csv(paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/Habitatmapping-004/IUCN_mapping_legend.csv")) %>%
   rename("map_code" = "NewCode") %>%
   mutate(IUCNLevel = gsub(" – | –", " - ", IUCNLevel)) %>%
-  left_join(select(jung_table_clr, map_code, cols, Coarse_Name = Name), by = "map_code") %>%
+  left_join(select(jung_l2_table_clr, map_code, cols, Coarse_Name = Name), by = "map_code") %>%
   mutate(label = paste0(map_code, ": ", IUCNLevel))
 
 jung_table %>% select(map_code, IUCNLevel) %>% print(n = 126)
@@ -1376,6 +1438,74 @@ plot(pnv_lc, ext = ext(lc[[i]]$y2017 + 1), maxcell = 1e8)
 
 ```
 
+## Plot Yin et al. 2020 land cover:
+```{r plot-lc}
+inset_map_titles <- paste0("(", gsub("_", "", site_df$label), ") ", site_df$description)
+# cat(inset_map_titles, sep = "; ")
+new_titles <- inset_map_titles
+new_titles[1] <- "(b) Vitebsk, Belarus /\nSmolensk, Russia"
+new_titles[8] <- "(o) Orenburg, Russia /\nUralsk, Kazakhstan"
+
+
+
+pdf(file = paste0(p_output, "plots/land_cover_1987.pdf"), width = 10, height = 7.5)
+mval <- 1.5
+par(mfrow = c(3, 4), 
+      # mar=c(0,0,0,0), 
+      oma=c(1,1,0,0),
+      adj = 0,
+      cex.main = 1#,
+      # tcl = -0.2
+      )
+    
+# i <- 3
+# i <- 2
+
+# if you use maxcell, the 0s start showing up, which messes up the color scale... beware!
+for(i in 1:11) {
+  plot(lcc[[i]]$y1987, col = lc_plot_cols$color, levels = lc_plot_cols$name, 
+     mar = c(mval+0.5, mval, mval + 1.2, mval), # bltr     
+     legend = FALSE, #maxcell = 5000000,
+     type = "classes", main = new_titles[i]#"Land cover, 2015",
+     )
+  }
+
+# pdf(file = paste0(p_output, "plots/jung_sites_colors_legend.pdf"), width = 7.5, height = 7.5)
+plot.new()
+plot(lcc[[i]]$y2017, type = "classes",
+     col = lc_plot_cols$color, levels = lc_plot_cols$name,
+     legend = "left",
+     plg = list(cex = 2,
+                title = "Land cover classes",
+                                # text.width = 100,
+                title.adj = 0#,
+                # y.intersp	= 1.1
+                # xjust = 0.5
+                ),
+     legend.only = TRUE)
+
+dev.off()
+```
+```{r lc-legend}
+pdf(file = paste0(p_output, "plots/lc_legend2.pdf"), width = 6, height = 3.5)
+plot.new()
+plot(lcc[[i]]$y2017, type = "classes",
+     col = lc_plot_cols$color, 
+     # levels = lc_plot_cols$name,
+     levels = c("1 Non veg.", "2 Woody veg. (Forest)", "3 Cropland", "4 Herbaceous veg. (Grassland)"),
+     legend = "left",
+     plg = list(cex = 1.8,
+                title = "Land cover classes",
+                                # text.width = 100,
+                title.adj = 0#,
+                # y.intersp	= 1.1
+                # xjust = 0.5
+                ),
+     legend.only = TRUE)
+
+dev.off()
+```
+
 
 
 ## Plot sites with abandonment, lc, PNV, and habitat types
@@ -1389,8 +1519,8 @@ site_pnv_lc
 # 3. PNV land cover
 # 4. IUCN Habitat types
 i <- 9
-for (i in 1:11) {
-pdf(file = paste0(p_output, "plots/site_4x4_", site_df$site[i],"_l2.pdf"), width = 7.5, height = 7.5)
+for (i in 9) {
+pdf(file = paste0(p_output, "plots/site_4x4_", site_df$site[i],"_l2_el.pdf"), width = 7.5, height = 7.5)
   
 mval <- 1.5
 par(mfrow = c(2, 2), 
@@ -1404,7 +1534,7 @@ par(mfrow = c(2, 2),
 
 plot(lc[[i]]$y2017, col = lc_plot_cols$color, levels = lc_plot_cols$name, 
      mar = c(mval+0.5, mval, mval + 1.2, mval + 4), # bltr     
-     type = "classes", main = "Land cover, 2015")
+     type = "classes", main = "Land cover, 2017")
 
 plot(age_t_bins[[i]]$y2017, colNA = "gray95", main = "Abandonment age (years), 2017",
      mar = c(mval+0.5, mval, mval + 1.2, mval + 3), # bltr     
@@ -1412,43 +1542,47 @@ plot(age_t_bins[[i]]$y2017, colNA = "gray95", main = "Abandonment age (years), 2
      levels = c("5-10", "11-15", "16-20", "21-25", "26-30"))
 
 
+# # PNV
+# plot(site_pnv_lc[[i]], maxcell = 5000000,
+#        main = paste0("PNV Land Cover, ", names(site_pnv_lc[i])),
+#        mar = c(mval+0.5, mval, mval + 1.2, mval + 4), # bltr     
+#        type = "classes", #legend = FALSE,
+#        # col = filter(arrange(copernicus_table, map_code),
+#        #              map_code %in% filter(site_pnv_lc_freq,
+#        #                                   site == site_df$site[i])$map_code
+#        #              )$cols
+#      levels = filter(arrange(copernicus_table, map_code), 
+#                   map_code %in% filter(site_pnv_lc_freq, 
+#                                        site == site_df$site[i])$map_code)$Name %>%
+#        str_wrap(., width = 14),
+#      col = filter(arrange(copernicus_table, map_code), 
+#                   map_code %in% filter(site_pnv_lc_freq, 
+#                                        site == site_df$site[i])$map_code)$cols,
+#      plg = list(y.intersp = 1.5)
+# )
 
-plot(site_pnv_lc[[i]], maxcell = 5000000,
-       main = paste0("PNV Land Cover, ", names(site_pnv_lc[i])),
-       mar = c(mval+0.5, mval, mval + 1.2, mval + 4), # bltr     
-       type = "classes", #legend = FALSE,
-       # col = filter(arrange(copernicus_table, map_code),
-       #              map_code %in% filter(site_pnv_lc_freq,
-       #                                   site == site_df$site[i])$map_code
-       #              )$cols
-     levels = filter(arrange(copernicus_table, map_code), 
-                  map_code %in% filter(site_pnv_lc_freq, 
-                                       site == site_df$site[i])$map_code)$Name %>%
-       str_wrap(., width = 14),
-     col = filter(arrange(copernicus_table, map_code), 
-                  map_code %in% filter(site_pnv_lc_freq, 
-                                       site == site_df$site[i])$map_code)$cols,
-     plg = list(y.intersp = 1.5)
-)
+# Elevation
 
+# plot(elevation_map[[i]], main = "Elevation (m)")
 
 # Level 2:
 # i <- 3
-plot(site_jung_l2[[i]], maxcell = 5000000,
-       main = paste0("IUCN Habitat Types, Level 2: ", names(site_jung_l2[i])),
+plot(site_jung_l2_30[[i]], maxcell = 5000000,
+       main = paste0("IUCN Habitat Types, Level 2: ", names(site_jung_l2_30[i])),
        mar = c(mval+0.5, mval, mval + 1.2, mval + 2), # bltr
        type = "classes", #legend = FALSE,
        col = jung_table %>%
        arrange(map_code) %>%
-       filter(map_code %in% filter(site_jung_l2_freq,
+       filter(map_code %in% filter(site_jung_l2_30_freq,
                                 site == site_df$site[i])$map_code
            ) %>% .$cols,
        levels = jung_table %>%
     arrange(map_code) %>%
-    filter(map_code %in% filter(site_jung_l2_freq,
+    filter(map_code %in% filter(site_jung_l2_30_freq,
                                 site == site_df$site[i])$map_code
            ) %>% .$map_code
     )
+
 
 # Level 1:
 # site_jung_l1_30
