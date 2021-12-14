@@ -750,6 +750,9 @@ habitat_prefs <- habitat_prefs %>% #select(code, name) %>% unique() %>%
   select(-Coarse_Name, -lc, -IUCNLevel) %>%
   left_join(select(iucn_crosswalk, -code), by = "map_code") #%>% print(n = 110)
 
+habitat_prefs %>%
+  filter(is.na(map_code))
+
 # all species:
 habitat_prefs_all <- lapply(c("LC", "nonLC"), function(i) {
   read_csv(
@@ -774,6 +777,12 @@ habitat_details <- lapply(c("LC", "nonLC"), function(i) {
 # ----------------
 write_csv(habitat_prefs, file = paste0(p_derived, "iucn_habitat_prefs_subset.csv"))
 write_csv(habitat_details, file = paste0(p_derived, "iucn_habitat_details_subset.csv"))
+```
+
+```{r}
+jung_hab_type_area_df %>%
+  select(habitat_type, lc, Coarse_Name, IUCNLevel, code) %>%
+  unique() %>% arrange(habitat_type) %>% print(n = 40)
 ```
 
 
@@ -2512,12 +2521,14 @@ jung_hab_type_area_df %>% filter(site == site_df$site[9]) %>% arrange(habitat_ty
 ```
 
 ```{r expl-seff}
-txt <- read_csv("scripts/cluster/seff_out.csv")
+txt <- read_csv("scripts/ref/seff_out_aoh_abn_lc.csv")
+txt <- read_csv("scripts/ref/seff_out_aoh_abn_lc.csv")
 txt
 
-seff <- tibble(core_index = 1:27,
+seff <- tibble(core_index = 1:18,
                time = str_subset(txt$out, "CPU Utilized"), 
-               mem = str_subset(txt$out, "Memory Utilized")
+               mem = str_subset(txt$out, "Memory Utilized"),
+               state = str_subset(txt$out, "State: ")
                ) %>%
   mutate(time = str_extract(time, "[0-9][0-9]:[0-9][0-9]:[0-9][0-9]"),
          mem = str_extract(mem, "[0-9][0-9].[0-9][0-9]") %>% as.numeric())
@@ -3266,24 +3277,83 @@ for(lc_class in 1:4) {
 
 # Tomorrow
 ```{r}
+aoh_31_dfc %>% print(n = 100)
+aoh_31_dfc %>% 
+  filter(core_index == 1)
 
+aoh_31_dfc %>% filter(site == "mato_grosso") %>%
+  .$adj_IUCN_aoh_ha %>%
+  summary()
+
+aoh_31_dfc %>%
+  select(site, binomial, year, adj_IUCN_aoh_ha, core_index) %>%
+  unique() %>%
+  group_by(core_index) %>%
+  summarise(runs = n()) #%>% .$runs %>% sum()
+
+species_list %>% 
+  group_by(core_index, site) %>%
+  summarise(runs = n())# %>% .$runs %>% sum()
+
+
+aoh_31_dfc %>%
+  filter(year == 1987) %>%
+  select(site,  binomial) %>% 
+  unique() %>%
+  nrow()
+
+aoh_31_dfc %>% 
+  select(site,  binomial) %>% 
+  unique()
+
+species_list %>% select(site,  binomial) %>% 
+  unique()
+
+calc_cores
+species_list %>% 
+  filter(site == "orenburg") %>% 
+  select(core_index) %>% unique()
+
+
+# aoh_jung:
+species_list %>% 
+  group_by(core_index, site) %>%
+  summarise(runs = n()) %>% #.$runs %>% sum() 
+  ungroup() %>%
+  mutate(time = c(20, 20, 15, 15, 
+                  7.5, 
+                  13, 13, 
+                  10,
+                  8, 8,
+                  13,
+                  21, 21, 5,
+                  20, 20,
+                  15, 15
+                  ),
+         cost = time*runs / 60) %>%
+  .$cost %>% sum() / 60
 ```
 
 # Results
 
-```{r load-cluster-results}
-run_time <- "_2021_12_05"
-aoh_lc_31_files <- list.files(paste0(p_derived, "aoh"), full.names = T) %>% 
-  grep(paste0("aoh_tmp", run_time), ., value = T)
+```{r load-cluster-results-full-lc}
+run_time <- "_2021_12_12" # "_2021_12_05"
 
-aoh_31_df <- lapply(aoh_lc_31_files, read_csv) %>% bind_rows()
-aoh_df <- aoh_31_df
+aoh_lc_df <- lapply(
+  list.files(paste0(p_derived, "aoh"), full.names = T) %>% 
+    grep(paste0("aoh_tmp_2021_12_1[23]"), ., value = T),
+  read_csv) %>% 
+  bind_rows() %>% 
+  left_join(select(habitat_details, binomial, redlistCategory), by = "binomial") %>%
+  left_join(select(species_list, -synonym), by = c("site", "binomial"))
+
+
 
 # -------------- join IUCN status, common names ------------- #
 habitat_details
 
-aoh_df <- aoh_df %>% 
-  left_join(select(habitat_details, binomial, redlistCategory), by = "binomial")
+# aoh_lc_df <- aoh_lc_df %>% 
+#   left_join(select(habitat_details, binomial, redlistCategory), by = "binomial")
 
 
 missing_sp_31 <- lapply(1:11, function(i){
@@ -3314,19 +3384,36 @@ species_list %>%
             sp = length(unique(binomial)))
 ```
 
+```{r load-abn-lc-results}
+aoh_abn <- lapply(1:18, function(i) {
+  read_csv(paste0(p_derived, "aoh/aoh_abn_lc_tmp", "_2021_12_13", "_c", i, ".csv"))
+  }
+  ) %>% 
+  bind_rows() %>% 
+  left_join(select(habitat_details, binomial, redlistCategory), by = "binomial") %>%
+  left_join(select(species_list, -synonym), by = c("site", "binomial"))
+
+
+
+aoh_combo <- bind_rows(aoh_abn %>% mutate(type = "abn"), 
+                   aoh_lc_df %>% mutate(type = "lc"))
+```
+
 
 ```{r prelim-plots}
 sp_to_plot <- "Agamia agami"
+sp_to_plot <- "Certhia familiaris"
 
-aoh_df %>%
+# aoh_lc_df %>%
+aoh_abn %>%
   filter(binomial == sp_to_plot) %>%
-  ggplot(mapping = aes(x = year, y = adj_IUCN_aoh_ha)) +
+  ggplot(mapping = aes(x = year, y = adj_IUCN_aoh_ha, col = site)) +
   geom_line() + 
   labs(x = "Year", y = "AOH (ha)", caption = sp_to_plot)
 
 
 # -------------- extract just species and yearly aoh ------------- #
-aoh_df
+aoh_df <- aoh_lc_df
 
 aoh_df %>% 
   select(site, binomial, redlistCategory, year, adj_IUCN_aoh_ha) %>% 
@@ -3343,23 +3430,23 @@ aoh_df %>%
   geom_smooth(method = "lm", se = 0.95) + 
   labs(x = "Year", y = "AOH (ha)", title = "All species")
 
+aoh_combo %>% filter(type == "lc")
 
-dft <- aoh_df %>% 
-  select(site, binomial, redlistCategory, year, adj_IUCN_aoh_ha) %>% 
+dft <- #aoh_df %>% 
+  aoh_combo %>% filter(type == "lc") %>%
+  select(site, binomial, redlistCategory, year, adj_IUCN_aoh_ha, vert_class) %>% 
   unique() %>% 
   mutate(year = year - 1986)
   
 
-dft
-
 # prelim model
-tmp_lm <- lm(adj_IUCN_aoh_ha ~ year, data = filter(dft, binomial == sp_to_plot))
+tmp_lm <- lm(adj_IUCN_aoh_ha ~ year, data = filter(dft, binomial == sp_to_plot, site == "belarus"))
 tidy(tmp_lm)
 glance(tmp_lm)
 augment(tmp_lm)
 
 
-ggplot(data = filter(dft, binomial == sp_to_plot), 
+ggplot(data = filter(dft, binomial == sp_to_plot, site == "belarus"), 
        mapping = aes(x = year, y = adj_IUCN_aoh_ha)) +
   geom_point() + 
   geom_smooth(method = "lm", se = 0.95) + 
@@ -3372,11 +3459,11 @@ geom_line(data = augment(tmp_lm), mapping = aes(x = year, y = .fitted), col = "g
 
 
 # ---------- calculate trend for all species ---------- #
-filter(dft, binomial == sp_to_plot)
-tmp_all <- lm(adj_IUCN_aoh_ha ~ year*binomial - 0, 
-              data = filter(dft, binomial %in% species_list$binomial[1:5],
-                            site == "belarus"))
-aoh_lm_df <- tidy(tmp_all)
+# filter(dft, binomial == sp_to_plot)
+# tmp_all <- lm(adj_IUCN_aoh_ha ~ year*binomial - 0, 
+#               data = filter(dft, binomial %in% species_list$binomial[1:5],
+#                             site == "belarus"))
+# aoh_lm_df <- tidy(tmp_all)
 
 run_indices <- dft %>%
   left_join(select(species_list, site, binomial, vert_class), by = c("binomial", "site")) %>%
@@ -3404,7 +3491,7 @@ aoh_trends <- lapply(1:length(unique(dft$run_index)), function(i) {
 }) %>% bind_rows()
 
 # ------------------
-# determine the relative trend
+# determine the relative trend (percent change in AOH start to end)
 # ------------------
 i <- 10
 # plot trend for a given species:
@@ -3418,7 +3505,7 @@ dft %>%
   labs(x = "Year", y = "AOH (ha)", title = unique(filter(dft, run_index == i)$binomial))
   
 
-
+# calculate percent changes
 aoh_change_df <- aoh_trends %>% #filter(run_index == i) %>%
   select(run_index, term, estimate) %>%
   mutate(term = ifelse(term == "(Intercept)", "intercept", "slope")) %>%
@@ -3428,26 +3515,36 @@ aoh_change_df <- aoh_trends %>% #filter(run_index == i) %>%
          rel_change = ((aoh_end/aoh_start) - 1))
 
 hist(aoh_change_df$rel_change)
+
 aoh_change_df %>%
   arrange(rel_change) %>%
-  filter(rel_change < 5 & rel_change > -1) %>%
+  # filter(rel_change < 5 & rel_change > -1) %>%
   .$rel_change %>%
   hist(breaks = 100)
 
-
-# ---------- plot histogram ----------- #
-aoh_change_df %>% 
+# --------------------------------------------------------- #
+# ---------- plot histogram of percent changes ----------- #
+# --------------------------------------------------------- #
+gg_aoh_percent_change_hist <-
+  aoh_change_df %>% 
   left_join(dft %>% select(run_index, binomial, redlistCategory, vert_class) %>%
               unique(), 
             by = "run_index") %>%
   filter(!is.na(vert_class),
-         rel_change < 2 & rel_change > -1) %>%
-  ggplot(mapping = aes(x = rel_change)) + 
-  geom_histogram(bins = 20
+         # vert_class != "amp",
+         rel_change < 2 & rel_change > -2) %>%
+  ggplot(mapping = aes(x = rel_change * 100, fill = vert_class)) + 
+  geom_histogram(bins = 30
                  ) +
   geom_vline(xintercept = 0, linetype = 2, col = "gray70") +
   theme_classic() +
+  labs(x = "Percent change in AOH, 1987 to 2017 (%)", y = "Number of species") +
+  theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
   facet_wrap(vars(redlistCategory), scales = "free")
+
+ggsave(gg_aoh_percent_change_hist,
+       filename = paste0(p_output, "plots/aoh/", "aoh_percent_change_hist.pdf"),
+       width = 8, height = 5, units = "in")
 
 
 dft %>% filter(run_index == i) %>%
@@ -3455,11 +3552,21 @@ dft %>% filter(run_index == i) %>%
   augment() %>%
   filter(year %in% c(1, 31))
 
+# --------------------------------------------------------- #
 
-trend_df0 %>% print(n = 35)
-trend_df %>% print(n = 30)
 
 # create df of just the increase/decrease trend
+aoh_trends %>% 
+  left_join(dft %>% 
+              select(site, run_index, binomial, redlistCategory, vert_class) %>%
+              unique(), 
+            by = "run_index") %>%
+  filter(term == "year",
+         #p.value < 0.05,
+         is.na(vert_class)
+         # estimate != 0
+         )
+
 
 trend_df <- aoh_trends %>% 
   left_join(dft %>% 
@@ -3468,20 +3575,35 @@ trend_df <- aoh_trends %>%
             by = "run_index") %>%
   filter(term == "year",
          p.value < 0.05,
-         !is.na(vert_class)
          # estimate != 0
          ) %>%
   mutate(trend = ifelse(estimate > 0, "gain", "loss")) %>%
   group_by(redlistCategory, trend, vert_class) %>%
   summarise(trend_count = n())
 
+trend_df %>% arrange(redlistCategory, vert_class) %>% print(n = 31)
+
+trend_by_site <- aoh_trends %>% 
+  left_join(dft %>% 
+              select(site, run_index, binomial, redlistCategory, vert_class) %>%
+              unique(), 
+            by = "run_index") %>%
+  filter(term == "year",
+         p.value < 0.05,
+         # estimate != 0
+         ) %>%
+  mutate(trend = ifelse(estimate > 0, "gain", "loss")) %>%
+  group_by(site, trend, vert_class) %>%
+  summarise(trend_count = n())
+
+
+# --------------------------------------------------------- #
 # ----------------------------------- #
 # plot the trend per species
 # ----------------------------------- #
-trend_df %>%
-  mutate(y = ifelse(trend == "gain", trend_count, -trend_count))
-
-trend_df %>%
+# --------------------------------------------------------- #
+gg_aoh_trend_by_cat <-
+  trend_df %>%
   mutate(y = ifelse(trend == "gain", trend_count, -trend_count)) %>%
   # filter(vert_class) %>%
   
@@ -3493,19 +3615,56 @@ trend_df %>%
                      col = vert_class,
                      alpha = as_factor(trend)
                      )) +
-  geom_col(
-    position = position_dodge2(width = 0.9, preserve = "single")
-    # position = position_dodge()
-    ) + 
-  labs(y = "Number of Species") +
+  geom_col(position = position_dodge2(width = 0.8, preserve = "single")) + 
+  labs(x = "Red List Category", y = "Number of Species",
+       fill = "Vert. Group") +
+  guides(col = "none") +
   theme_classic() + 
-  scale_alpha_manual(name = "Trend",
+  scale_alpha_manual(name = "Trend\n(p < 0.05)",
                      labels = c("gain" = "Gain",
                                 "loss" = "Loss"),
                      values = c("gain" = 1,
                                 "loss" = 0.2)
                      ) + 
   facet_wrap(vars(redlistCategory), scales = "free")
+
+gg_aoh_trend_by_cat
+
+ggsave(gg_aoh_trend_by_cat,
+       filename = paste0(p_output, "plots/aoh/", "aoh_trend_by_iucn_cat.pdf"),
+       width = 6, height = 5, units = "in")
+
+# trend by site:
+gg_aoh_trend_by_site <-
+  trend_by_site %>%
+  ggplot( 
+       mapping = aes(x = site, 
+                     y = trend_count,
+                     # group = as_factor(trend), 
+                     fill = vert_class,
+                     col = vert_class,
+                     alpha = as_factor(trend)
+                     )) +
+  geom_col(position = position_dodge2(width = 0.8, preserve = "single")) + 
+  labs(x = NULL, y = "Number of Species",
+       fill = "Vert. Group") +
+  guides(col = "none") +
+  theme_classic() + 
+  scale_alpha_manual(name = "Trend\n(p < 0.05)",
+                     labels = c("gain" = "Gain",
+                                "loss" = "Loss"),
+                     values = c("gain" = 1,
+                                "loss" = 0.2)
+                     ) + 
+  facet_wrap(vars(site), scales = "free")
+
+ggsave(gg_aoh_trend_by_site,
+       filename = paste0(p_output, "plots/aoh/", "aoh_trend_by_site.pdf"),
+       width = 8, height = 5, units = "in")
+
+
+
+# extras
 
 # species with zero estimates
 zero_index <- aoh_trends %>% 
@@ -3518,7 +3677,7 @@ dft %>% filter(is.na(vert_class))
 
 # na species:
 na_vert <- aoh_df %>% 
-  left_join(select(species_list, binomial, vert_class), by = "binomial") %>% 
+  # left_join(select(species_list, binomial, vert_class), by = "binomial") %>% 
   filter(is.na(vert_class)) %>%
   select(site, binomial) %>% unique()
 
@@ -3548,5 +3707,293 @@ dft %>%
   plot(., c(1,2))
 
 #
+```
+
+```{r prelim-abn-plots}
+sp_to_plot <- "Agamia agami"
+sp_to_plot <- "Certhia familiaris"
+
+aoh_combo %>%
+  filter(#type == "abn", 
+         binomial == sp_to_plot) %>%
+  ggplot(mapping = aes(x = year, y = adj_IUCN_aoh_ha, col = site)) +
+  geom_line() + 
+  labs(x = "Year", y = "AOH (ha)", caption = sp_to_plot) +
+  facet_wrap(vars(type), scales = "free")
+
+
+# -------------- extract just species and yearly aoh ------------- #
+
+aoh_combo %>%
+  filter(type == "abn") %>% 
+  select(site, binomial, redlistCategory, year, adj_IUCN_aoh_ha) %>% 
+  unique() %>% 
+  # head(n = 10000) %>%
+  filter(binomial == sp_to_plot) %>%
+  mutate(binomial = as_factor(binomial)) %>%
+  ggplot(mapping = aes(x = year, 
+                       y = adj_IUCN_aoh_ha, 
+                       group = site,
+                       col = site
+                       )) +
+  geom_line() + 
+  geom_smooth(method = "lm", se = 0.95) + 
+  labs(x = "Year", y = "AOH (ha)", title = sp_to_plot)
+
+aoh_combo %>% filter(type == "lc")
+
+
+# ---------- calculate trend for all species ---------- #
+
+run_indices <- aoh_combo %>% filter(type == "abn") %>%
+  select(site, binomial, redlistCategory, year, adj_IUCN_aoh_ha, vert_class) %>% 
+  unique() %>% 
+  mutate(year = year - 1991) %>%
+  arrange(site, vert_class, binomial) %>%
+  select(site, vert_class, binomial) %>% unique() %>% 
+  mutate(run_index = 1:n())
+
+dft_abn <- aoh_combo %>% filter(type == "abn") %>%
+  select(site, binomial, redlistCategory, year, adj_IUCN_aoh_ha, vert_class) %>% 
+  unique() %>% 
+  mutate(year = year - 1991) %>%
+  left_join(run_indices, by = c("binomial", "site", "vert_class"))
+
+dft_abn$run_index %>% unique() %>% sort() %>% tail
+dft_abn %>% select(site, binomial) %>% unique() %>% nrow
+
+
+# -------------------
+# run simple regression on each species' and extract AOH trend over time.
+# -------------------
+aoh_abn_trends <- lapply(1:length(unique(dft_abn$run_index)), function(i) {
+  dft_abn %>% 
+    filter(run_index == i) %>%
+    lm(adj_IUCN_aoh_ha ~ year, 
+       data = .) %>%
+    tidy() %>% 
+    mutate(run_index = i)
+}) %>% bind_rows()
+
+# ------------------
+# determine the relative trend (percent change in AOH start to end)
+# ------------------
+
+dft_abn %>% 
+  filter(run_index == i) %>%
+  ggplot(mapping = aes(x = year, y = adj_IUCN_aoh_ha)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = 0.95) + 
+  labs(x = "Year", y = "AOH (ha)", title = unique(filter(dft_abn, run_index == i)$binomial))
+  
+
+# calculate percent changes
+aoh_abn_change_df <- aoh_abn_trends %>% #filter(run_index == i) %>%
+  select(run_index, term, estimate) %>%
+  mutate(term = ifelse(term == "(Intercept)", "intercept", "slope")) %>%
+  pivot_wider(run_index, names_from = term, values_from = estimate) %>%
+  mutate(aoh_start = slope*1 + intercept,
+         aoh_end = slope*31 + intercept,
+         rel_change = ((aoh_end/aoh_start) - 1))
+
+hist(aoh_abn_change_df$rel_change)
+
+aoh_abn_change_df %>%
+  arrange(rel_change) %>%
+  # filter(rel_change < 5 & rel_change > -1) %>%
+  .$rel_change %>%
+  hist(breaks = 100)
+
+# --------------------------------------------------------- #
+# ---------- plot histogram of percent changes ----------- #
+# --------------------------------------------------------- #
+gg_aoh_abn_percent_change_hist <-
+  aoh_abn_change_df %>% 
+  left_join(dft_abn %>% select(run_index, binomial, redlistCategory, vert_class) %>%
+              unique(), 
+            by = "run_index") %>%
+  filter(!is.na(vert_class),
+         # vert_class != "amp",
+         rel_change < 2 & rel_change > -2) %>%
+  ggplot(mapping = aes(x = rel_change * 100, fill = vert_class)) + 
+  geom_histogram(bins = 30
+                 ) +
+  geom_vline(xintercept = 0, linetype = 2, col = "gray70") +
+  theme_classic() +
+  labs(x = "Percent change in AOH, 1987 to 2017 (%)", y = "Number of species") +
+  theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
+  facet_wrap(vars(redlistCategory), scales = "free")
+
+ggsave(gg_aoh_abn_percent_change_hist,
+       filename = paste0(p_output, "plots/aoh/", "aoh_abn_percent_change_hist.pdf"),
+       width = 8, height = 5, units = "in")
+
+
+dft_abn %>% filter(run_index == i) %>%
+  lm(adj_IUCN_aoh_ha ~ year, data = .) %>%
+  augment() %>%
+  filter(year %in% c(1, 31))
+
+# --------------------------------------------------------- #
+
+
+# create df of just the increase/decrease trend
+aoh_abn_trends %>% 
+  left_join(dft_abn %>% 
+              select(site, run_index, binomial, redlistCategory, vert_class) %>%
+              unique(), 
+            by = "run_index") %>%
+  filter(term == "year",
+         #p.value < 0.05,
+         is.na(vert_class)
+         # estimate != 0
+         )
+
+
+trend_df_abn <- aoh_abn_trends %>% 
+  left_join(dft_abn %>% 
+              select(site, run_index, binomial, redlistCategory, vert_class) %>%
+              unique(), 
+            by = "run_index") %>%
+  filter(term == "year",
+         p.value < 0.05,
+         # estimate != 0
+         ) %>%
+  mutate(trend = ifelse(estimate > 0, "gain", "loss")) %>%
+  group_by(redlistCategory, trend, vert_class) %>%
+  summarise(trend_count = n())
+
+trend_df_abn %>% arrange(redlistCategory, vert_class) %>% print(n = 31)
+
+trend_by_site_abn <- aoh_abn_trends %>% 
+  left_join(dft_abn %>% 
+              select(site, run_index, binomial, redlistCategory, vert_class) %>%
+              unique(), 
+            by = "run_index") %>%
+  filter(term == "year",
+         p.value < 0.05,
+         # estimate != 0
+         ) %>%
+  mutate(trend = ifelse(estimate > 0, "gain", "loss")) %>%
+  group_by(site, trend, vert_class) %>%
+  summarise(trend_count = n())
+
+
+# --------------------------------------------------------- #
+# ----------------------------------- #
+# plot the trend per species
+# ----------------------------------- #
+# --------------------------------------------------------- #
+# gg_aoh_abn_trend_by_cat <-
+  trend_df_abn %>%
+  mutate(y = ifelse(trend == "gain", trend_count, -trend_count)) %>%
+  # filter(vert_class) %>%
+  
+  ggplot(
+       mapping = aes(x = redlistCategory, 
+                     y = trend_count,
+                     # group = as_factor(trend), 
+                     fill = vert_class,
+                     col = vert_class,
+                     alpha = as_factor(trend)
+                     )) +
+  geom_col(position = position_dodge2(width = 0.8, preserve = "single")) + 
+  labs(x = "Red List Category", y = "Number of Species",
+       fill = "Vert. Group") +
+  guides(col = "none") +
+  theme_classic() + 
+  scale_alpha_manual(name = "Trend\n(p < 0.05)",
+                     labels = c("gain" = "Gain",
+                                "loss" = "Loss"),
+                     values = c("gain" = 1,
+                                "loss" = 0.2)
+                     ) + 
+  facet_wrap(vars(redlistCategory), scales = "free")
+
+gg_aoh_abn_trend_by_cat
+
+ggsave(gg_aoh_abn_trend_by_cat,
+       filename = paste0(p_output, "plots/aoh/", "aoh_abn_trend_by_iucn_cat.pdf"),
+       width = 6, height = 5, units = "in")
+
+# trend by site:
+# gg_aoh_abn_trend_by_site <-
+  trend_by_site_abn %>%
+  ggplot( 
+       mapping = aes(x = site, 
+                     y = trend_count,
+                     # group = as_factor(trend), 
+                     fill = vert_class,
+                     col = vert_class,
+                     alpha = as_factor(trend)
+                     )) +
+  geom_col(position = position_dodge2(width = 0.8, preserve = "single")) + 
+  labs(x = NULL, y = "Number of Species",
+       fill = "Vert. Group") +
+  guides(col = "none") +
+  theme_classic() + 
+  scale_alpha_manual(name = "Trend\n(p < 0.05)",
+                     labels = c("gain" = "Gain",
+                                "loss" = "Loss"),
+                     values = c("gain" = 1,
+                                "loss" = 0.2)
+                     ) + 
+  facet_wrap(vars(site), scales = "free")
+
+ggsave(gg_aoh_abn_trend_by_site,
+       filename = paste0(p_output, "plots/aoh/", "aoh_abn_trend_by_site.pdf"),
+       width = 8, height = 5, units = "in")
+
+```
+
+
+```{r extracting-trend-abn}
+sp_name <- "Certhia familiaris"
+
+
+aoh_combo %>%
+  filter(site == site_df$site[9], vert_class == "bird") %>%
+  select(binomial) %>% unique() %>% print(n = 50)
+
+aoh_combo %>%
+  filter(site == site_df$site[9], binomial == sp_name,
+         year > 1991) %>%
+  select(site:year, adj_IUCN_aoh_ha, redlistCategory, vert_class, type) %>%
+  pivot_wider(id_cols = c("site", "binomial", "redlistCategory", "vert_class", "type", "year"), 
+              names_from = type, values_from = adj_IUCN_aoh_ha) %>%
+  mutate(diff = lc - abn) %>%
+  pivot_longer(cols = c("abn", "lc", "diff"),
+               names_to = "type", values_to = "aoh") %>%
+  # print(n = 80)
+  
+  ggplot(mapping = aes(x = year, y = aoh, col = type)) + 
+  geom_line()
+
+
+
+
+  
+
+aoh_combo %>%
+  filter(site == site_df$site[1], 
+         binomial == sp_name,
+         # vert_class == "bird",
+         year > 1991) %>%
+  select(site:year, adj_IUCN_aoh_ha, redlistCategory, vert_class, type) %>%
+  pivot_wider(id_cols = c("site", "binomial", "redlistCategory", "vert_class", "type", "year"), 
+              names_from = type, values_from = adj_IUCN_aoh_ha) %>%
+  mutate(diff = lc - abn) %>%
+  pivot_longer(cols = c("abn", "lc", "diff"),
+               names_to = "type", values_to = "aoh") %>%
+  # print(n = 80)
+  
+  ggplot(mapping = aes(x = year, y = aoh, col = type)) + 
+  geom_line()
+
+
+
+# What proportion of the change in habitat resulted from abandonment?
+
+
 ```
 
