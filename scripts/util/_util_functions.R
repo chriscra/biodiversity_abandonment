@@ -192,6 +192,189 @@ cc_AOH_data.table <-
   }
 
 
+cc_AOH_dt_max_age <- 
+  function(index,
+           site_index,
+           year_index, # the real year(s)
+           calc_lc = TRUE,
+           include_time = FALSE,
+           hab_dt = hab_dt,
+           sp_ranges = species_ranges, 
+           sp_list = species_list
+  ) {
+    # ------------------- details ------------------- #
+    # This function calculates the Area of Habitat for one species (index)
+    # at one site (site_index), and in one or more years (year_index).
+    # It requires the following elements to be pre-loaded
+    # a. "habitat_prefs"
+    # b. "jung_hab_type_area_df"
+    # c. "iucn_crosswalk"
+    # d. "elevation_prefs"
+    # e. "site_df"
+    
+    # It takes as parameters:
+    # i. "hab_dt", the habitat map  (e.g., Yin et al. 2020, lc maps or otherwise), 
+    #     loaded as a data.table. This must include a list of elevation maps 
+    #     (e.g., p_derived/elevation/shaanxi_srtm_crop.tif"), and a list of 
+    #     area maps (site_area_ha, e.g., p_derived/site_area_ha/shaanxi_area_ha.tif),
+    #     which are selected by site_index, then converted to data.table and added to hab_dt.
+    # ii. "sp_ranges," a sf file of species range maps, 
+    #     which is "species_ranges" by default, filtered to just 
+    #     mammals, birds, and amphibians, following standard presence/origin filtering,
+    #     and cropped to my 11 sites.
+    # iii."sp_list," a simple data.frame containing all unique runs to be calculated
+    #     during the function call. The index is used to isolate a specific species/site
+    #     combination for AOH to be calculated.
+    
+    # for testing
+    # index <- 3
+    # site_index <- 3
+    # year_index <- 2011:2017
+    # calc_lc <- TRUE
+    # include_time <- TRUE
+    # range_maps <- vert_sites
+    # ----------------------------------------------- #
+    
+    # --------- #
+    tic.clearlog()
+    tic(
+      paste0("data.table AOH, site ", site_df$site[site_index],
+             ", run index ", index,
+             ", for years ", min(year_index), "-", max(year_index))
+    )
+    
+    print(sp_list[index, ])
+    sp_name <- sp_list$binomial[index]
+    
+    cat("Species name:", sp_name, fill = TRUE)
+    
+    # ---- extract species range polygons at the site ---- #
+    # select a subset of species range polygons based on binomial, and 
+    # update all features to multipolygon, for fasterize()
+    range_sf <- st_cast(sp_ranges[sp_ranges$binomial == sp_name, ]) %>%
+      filter(site == site_df$site[site_index])
+    
+    # ---- turn the species range polygons (sf) into a raster ---- #
+    range_t <- 
+      fasterize(range_sf,
+                raster::raster(resolution = terra::res(elevation_map[[site_index]]),
+                               ext = raster::extent(terra::ext(elevation_map[[site_index]])[1:4]))
+      ) %>% 
+      rast() #%>% # convert to SpatRaster 
+    # subst(1, 0,
+    #       filename = paste0(tmp_location, "range_t_tmp.tif"),
+    #       overwrite = T) # update cell values from 1 to 0.
+    
+    # plot(range_t)
+    
+    range_dt <- spatraster_to_dt(spt = range_t)
+    
+    # a quick test to make sure the x and y columns match, to circumvent the need
+    # to round x and y to get the data.table::merge() to work correctly.
+    stopifnot(
+      all.equal(hab_dt$x, range_dt$x),
+      all.equal(hab_dt$y, range_dt$y)
+    )
+    
+    # add range to the data.table as a column
+    hab_dt[, range := range_dt$layer]
+    
+    # ------------------------------------------------------------------------- #
+    ### Habitat Filter ###
+    # ------------------------------------------------------------------------- #
+    z1 <- habitat_prefs %>% 
+      filter(binomial == sp_name,
+             suitability == "Suitable") # extract the habitat classifications for the species in question
+    
+    # extract the lc codes from my crosswalk that correspond to the IUCN habitat codes
+    habitat_prefs_rcl <- 
+      iucn_crosswalk %>% 
+      filter(code %in% unique(z1$code)) %>%
+      select(codes = ifelse(calc_lc, "lc", "map_code")) %>% # select lc class codes, or IUCN habitat map codes, depending on the "calc_lc" switch
+      unique() %>% .$codes
+    
+    # data.frame to use to adjust area estimates based on the proportion of each
+    # land cover type that is made up by suitable habitat types
+    adj_df <- jung_hab_type_area_df %>%
+      filter(site == site_df$site[site_index],
+             # habitat_type %in% unique(z1$map_code)[!is.na(unique(z1$map_code))]
+             code %in% unique(z1$code)
+      ) %>%
+      group_by(lc) %>%
+      summarise(adjustment = sum(prop_lc))
+    
+    # ------------------------------------------------------------------------- #
+    ### Elevation Filter ###
+    # ------------------------------------------------------------------------- #
+    elevation_prefs_rcl <- elevation_prefs %>% filter(binomial == sp_name)
+    
+    # ------------------------------------------------------------------------- #
+    ### Calculate AOH, broken down by habitat type ###
+    # ------------------------------------------------------------------------- #
+    
+    # subset data.table to only pixels within both species range and elevation range, first:
+    hab_filtered_range_el <- hab_dt[max_age >= 5 &
+                                      !is.na(range) &
+                                      elevation <= elevation_prefs_rcl$elevation_upper &
+                                      elevation >= elevation_prefs_rcl$elevation_lower]
+    
+    # calculate AOH in each year
+    df_tmp <- lapply(year_index, function(i){
+      tmp <-
+        hab_filtered_range_el[get(paste0("y", i)) %in% habitat_prefs_rcl, 
+                              sum(area_ha), 
+                              by = c(paste0("y", i))
+        ][,"year" := i]
+      names(tmp) <- c("lc", "area_ha", "year")
+      tmp
+    }) %>% bind_rows()
+    
+    # # all data.table
+    # df_tmp <- df_tmp[, ':='(site = site_df$site[site_index],
+    #               binomial = sp_name)]
+    # df_tmp <- df_tmp[, .(site, binomial, lc, year, area_ha)]
+    # df_tmp <- df_tmp[adj_df, on = "lc"]
+    # df_tmp[, adj_area_ha := area_ha * adjustment]
+    # df_tmp[, ':='(IUCN_aoh_ha = sum(area_ha),
+    #               adj_IUCN_aoh_ha = sum(adj_area_ha)), 
+    #        by = c("site", "binomial", "year")]
+    
+    # add in site, species name
+    df_tmp <- df_tmp %>% 
+      mutate(site = site_df$site[site_index],
+             binomial = sp_name) %>%
+      select(site, binomial, year, everything())
+    
+    # adjust area by the proportion of land cover that is suitable
+    df_tmp <- df_tmp %>%
+      left_join(adj_df, by = "lc") %>% 
+      mutate(adj_area_ha = area_ha * adjustment)
+    
+    # calculate the AOH summed across habitat types, join to original df
+    dt_tmp <- df_tmp %>%
+      left_join(df_tmp %>% 
+                  group_by(site, binomial, year) %>% 
+                  summarise(IUCN_aoh_ha = sum(area_ha),
+                            adj_IUCN_aoh_ha = sum(adj_area_ha, na.rm = TRUE))
+      )
+    
+    toc(log = T)
+    
+    if (include_time) {
+      dt_tmp <- dt_tmp %>%
+        mutate(time = 
+                 tic.log(format = F) %>% bind_rows() %>%
+                 mutate(time = toc - tic) %>% .$time)
+    }
+    
+    cat("calculated AOH for", sp_name, fill = TRUE)
+    cat("Adjusted AOH in", year_index[length(year_index)],
+        "=", dt_tmp$adj_IUCN_aoh_ha[nrow(dt_tmp)], "ha", fill = TRUE)
+    
+    # return summary table
+    dt_tmp
+  }
+
 
 
 
