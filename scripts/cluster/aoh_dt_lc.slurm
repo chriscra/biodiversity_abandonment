@@ -57,7 +57,7 @@ Rscript ./aoh_dt_lc.R $SLURM_ARRAY_TASK_ID
 # sbatch --array [1,8,10] --mem-per-cpu=150G aoh_dt_lc.slurm
 # sbatch --array [2,4,5,7,11] --mem-per-cpu=125G aoh_dt_lc.slurm
 # sbatch --array [3,6,9] --mem-per-cpu=80G aoh_dt_lc.slurm
-
+# sbatch --array [11] --mem-per-cpu=80G aoh_dt_lc.slurm
 
 # download from della with:
 # scp clc6@della:/scratch/network/clc6/abandonment_trajectories/data_derived/input_rasters/*result*2021_03_13* /Users/christophercrawford/Google\ Drive/_Projects/abandonment_trajectories/data_derived/_2021_03_13
@@ -69,4 +69,4 @@ Rscript ./aoh_dt_lc.R $SLURM_ARRAY_TASK_ID
 # scp -r clc6@della:/home/clc6/biodiversity_abn/scripts/slurm_out/ /Users/christophercrawford/work/projects/biodiversity_abn/scripts/cluster
 
 # download results
-# scp clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/aoh_tmp_2021_12_05_c* /Users/christophercrawford/work/projects/biodiversity_abn/derived/aoh/
+# scp clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/aoh_tmp_2021_12_13_c* /Users/christophercrawford/work/projects/biodiversity_abn/derived/aoh/

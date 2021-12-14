@@ -112,20 +112,20 @@ names(abn_mask) <- site_df$site
 # --- land cover class of abandoned land --- #
 # ----------------------- #
 abn_lc <- lapply(1:11, function(i) {
-  rast(paste0(p_derived, "abn_lc_rasters/",
-              site_df$site[i], "_abn_lc.tif"))
+  rast(paste0(p_derived, "abn_lcc/",
+              site_df$site[i], "_abn_lcc.tif"))
 })
 names(abn_lc) <- site_df$site
 
 # ----------------------- #
 # --- land cover class of abandoned land in 2017 only --- #
 # ----------------------- #
-abn_lc_2017 <- lapply(1:11, function(i) {
-  rast(paste0(p_derived, "abn_lc_rasters/", 
-              site_df$site[i], "_abn_lc_2017.tif"))
-}
-)
-names(abn_lc_2017) <- site_df$site
+# abn_lc_2017 <- lapply(1:11, function(i) {
+#   rast(paste0(p_derived, "abn_lc_rasters/", 
+#               site_df$site[i], "_abn_lc_2017.tif"))
+# }
+# )
+# names(abn_lc_2017) <- site_df$site
 
 
 # ----------------------- #
