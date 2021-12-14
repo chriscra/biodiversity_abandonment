@@ -109,7 +109,7 @@ hab_dt[, ':='(area_ha = el_area_dt$area_ha,
 
 
 # run AOH function (because it's abandonment, it's just 1992:2017)
-aoh_tmp <- lapply(1:nrow(species_list_tmp), function(i) {
+aoh_abn_lc_tmp <- lapply(1:nrow(species_list_tmp), function(i) {
   cc_AOH_data.table(index = i, 
                     site_index = site_index,
                     year_index = 1992:2017, 
@@ -122,11 +122,11 @@ aoh_tmp <- lapply(1:nrow(species_list_tmp), function(i) {
 }) %>% bind_rows()
 
 # write to file
-write_csv(aoh_tmp,
-          file = paste0(p_derived, "aoh_tmp", time_stamp, "_c", core, ".csv")
+write_csv(aoh_abn_lc_tmp,
+          file = paste0(p_derived, "aoh_abn_lc_tmp", time_stamp, "_c", core, ".csv")
           )
 
-cat(paste0("Wrote aoh_tmp file for core ", core, " (",site_df$site[site_index], ") to:", 
-           p_derived, "aoh_tmp", time_stamp, "_c", core, ".csv"), fill = TRUE)
+cat(paste0("Wrote aoh_abn_lc_tmp file for core ", core, " (",site_df$site[site_index], ") to:", 
+           p_derived, "aoh_abn_lc_tmp", time_stamp, "_c", core, ".csv"), fill = TRUE)
 # aoh_dt_11_test[, mean(time)/31, by = "site"]
 

@@ -44,6 +44,7 @@ Rscript ./aoh_dt_abn_lc.R $SLURM_ARRAY_TASK_ID
 # scp /Users/christophercrawford/work/projects/biodiversity_abn/derived/iucn*.csv clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/
 # scp /Users/christophercrawford/work/projects/biodiversity_abn/derived/jung_hab_type_area_df.csv clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/
 # scp /Users/christophercrawford/work/projects/biodiversity_abn/derived/elevation/*_srtm_crop.tif clc6@della:/scratch/gpfs/clc6/data/elevation/
+
 # scp -r /Users/christophercrawford/work/projects/biodiversity_abn/derived/site_area_ha/ clc6@della:/scratch/gpfs/clc6/data/
 
 # $ seff <JobID>
@@ -69,4 +70,6 @@ Rscript ./aoh_dt_abn_lc.R $SLURM_ARRAY_TASK_ID
 # scp -r clc6@della:/home/clc6/biodiversity_abn/scripts/slurm_out/ /Users/christophercrawford/work/projects/biodiversity_abn/scripts/cluster
 
 # download results
-# scp clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/aoh_tmp_2021_12_05_c* /Users/christophercrawford/work/projects/biodiversity_abn/derived/aoh/
+# scp clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/aoh_abn_lc_tmp_2021_12_13_c* /Users/christophercrawford/work/projects/biodiversity_abn/derived/aoh/
+
+
