@@ -68,7 +68,8 @@ cc_AOH_data.table <-
     # ---- extract species range polygons at the site ---- #
     # select a subset of species range polygons based on binomial, and 
     # update all features to multipolygon, for fasterize()
-    range_sf <- st_cast(sp_ranges[sp_ranges$binomial == sp_name, ]) 
+    range_sf <- st_cast(sp_ranges[sp_ranges$binomial == sp_name, ]) %>%
+      filter(site == site_df$site[site_index])
     
     # ---- turn the species range polygons (sf) into a raster ---- #
     range_t <- 
@@ -113,7 +114,9 @@ cc_AOH_data.table <-
     # land cover type that is made up by suitable habitat types
     adj_df <- jung_hab_type_area_df %>%
       filter(site == site_df$site[site_index],
-             code %in% unique(z1$code)) %>%
+             # habitat_type %in% unique(z1$map_code)[!is.na(unique(z1$map_code))]
+             code %in% unique(z1$code)
+             ) %>%
       group_by(lc) %>%
       summarise(adjustment = sum(prop_lc))
     
@@ -376,42 +379,51 @@ cc_AOH_data.table_general <-
   }
 
 
-
-
 cc_AOH_terra <- function(index,
                        site_index,
                        year_index, # the real year(s)
                        calc_lc = TRUE,
                        calc_AOO = FALSE,
-                       include_time = FALSE,
-                       tmp_location = paste0(p_derived, "aoh/tmp/")) {
-  # requires lc to be loaded and named correctly before running:
+                       include_time = TRUE,
+                       tmp_location = paste0(p_derived, "aoh/tmp/"),
+                       sp_ranges = species_ranges, 
+                       sp_list = species_list
+                       ) {
+  # requires lc, elevation_map, site_jung_l2_30, etc. to be loaded and named correctly before running:
   
   # ------------------------------------------------------------------------- #
   ### starts here ###
   # ------------------------------------------------------------------------- #
   tic.clearlog()
-  tic(paste0("run ", index, ":", site_df$site[site_index], ", ", year_index))
+  tic(
+    paste0("{terra} AOH, site ", site_df$site[site_index],
+           ", run index ", index,
+           ", for years ", min(year_index), "-", max(year_index))
+  )
   
-  sp_ranges <- vert_sites %>%
-    filter(vert_class != "gard",
-           site == site_df$site[site_index]) # filter to just the site in question
+  print(sp_list[index, ])
   
-  sp_list <- sp_ranges %>% st_drop_geometry() %>%
-    select(site, vert_class, binomial) %>% unique() %>%
-    arrange(site, vert_class, binomial)
-  
+  # # No longer necessary, given that the function has sp_ranges and sp_list as parameters.
+  # sp_ranges <- vert_sites %>%
+  #   filter(vert_class != "gard",
+  #          site == site_df$site[site_index]) # filter to just the site in question
+  # 
+  # sp_list <- sp_ranges %>% st_drop_geometry() %>%
+  #   select(site, vert_class, binomial) %>% unique() %>%
+  #   arrange(site, vert_class, binomial)
+ 
   sp_name <- sp_list$binomial[index]
+  
+  cat("Species name:", sp_name, fill = TRUE)
 
+  # load in the habitat maps as rasters
   habitat_map <- if (calc_lc) {
     lc[[site_index]][[paste0("y", year_index)]]
     } else {
-    rast(paste0(p_derived, "site_jung/", site_df$site[site_index], "_jung_l2_30.tif"))
-  }
+    site_jung_l2_30[[site_index]]
+    }
   
-  elevation_map <- rast(
-    paste0(p_derived, "elevation/", 
-           site_df$site[site_index], "_srtm_crop.tif"))
+  elevation_map <- elevation_map[[site_index]]
   
   # ---- extract species range polygons at the site ---- #
   # select a subset of species range polygons based on binomial, and 
@@ -425,9 +437,10 @@ cc_AOH_terra <- function(index,
                              ext = raster::extent(terra::ext(habitat_map)[1:4]))
     ) %>% 
     rast() %>% # convert to SpatRaster 
-    subst(1, 0,
-          filename = paste0(tmp_location, "range_t_tmp.tif"),
-          overwrite = TRUE) # update cell values from 1 to 0.
+    subst(1, 0 #,
+          # filename = paste0(tmp_location, "range_t_tmp.tif"),
+          # overwrite = TRUE
+          ) # update cell values from 1 to 0.
   
   # plot(range_t)
   # ------------------------------------------------------------------------- #
@@ -449,9 +462,10 @@ cc_AOH_terra <- function(index,
                    is = ifelse(calc_lc, "lc", "map_code")
       ) %>% unique() %>% 
         mutate(becomes = 0),
-      othersNA = TRUE,
-      filename = paste0(tmp_location, "habitat_rcl_tmp.tif"),
-      overwrite = TRUE)
+      othersNA = TRUE#,
+      # filename = paste0(tmp_location, "habitat_rcl_tmp.tif"),
+      # overwrite = TRUE
+      )
   
   # ------------------------------------------------------------------------- #
   ### Elevation Filter ###
@@ -465,9 +479,10 @@ cc_AOH_terra <- function(index,
                    to = elevation_prefs_rcl$elevation_upper,
                    becomes = 0),
       othersNA = TRUE,
-      include.lowest = TRUE, right = TRUE,
-      filename = paste0(tmp_location, "elevation_rcl_tmp.tif"),
-      overwrite = TRUE)
+      include.lowest = TRUE, right = TRUE#,
+      # filename = paste0(tmp_location, "elevation_rcl_tmp.tif"),
+      # overwrite = TRUE
+      )
   
   # mask the range polygon by the habitat mask and the elevation mask
   # tic()
@@ -510,7 +525,7 @@ cc_AOH_terra <- function(index,
   aoh_tmp <- 
     tibble(site = site_df$site[site_index],
            binomial = sp_name,
-           year = if(calc_lc) {year_index} else {"jung"},
+           year = if(calc_lc) {year_index} else {"jung_2015"},
            IUCN_aoh_ha = range_aoh_ha)
   
   if (calc_AOO) {
@@ -529,7 +544,8 @@ cc_AOH_terra <- function(index,
   # the result of a small amount of 0s added to the Yin et al. 2020 land cover maps. 
   
   cat("calculated AOH for", sp_name, fill = TRUE)
-  cat("AOH in", year_index[length(year_index)],
+  cat("AOH in", 
+      if(calc_lc) {year_index[length(year_index)]} else {"2015 (Jung AOH)"},
       "=", range_aoh_ha[length(range_aoh_ha)], "ha", fill = TRUE)
   aoh_tmp
 }
