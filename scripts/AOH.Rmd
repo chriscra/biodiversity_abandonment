@@ -2523,6 +2523,7 @@ jung_hab_type_area_df %>% filter(site == site_df$site[9]) %>% arrange(habitat_ty
 ```{r expl-seff}
 txt <- read_csv("scripts/ref/seff_out_aoh_abn_lc.csv")
 txt <- read_csv("scripts/ref/seff_out_aoh_abn_lc.csv")
+txt <- read_csv("scripts/ref/seff_out_max.csv")
 txt
 
 seff <- tibble(core_index = 1:18,
@@ -2549,7 +2550,14 @@ calc_cores
 ```{r prep-habitat-details}
 habitat_prefs %>%
   filter(suitability == "Suitable") %>%
-  select(binomial) %>% unique()
+  select(name, code, IUCNLevel, Coarse_Name) %>% unique() %>% 
+  filter(!is.na(IUCNLevel)) %>% arrange(code) %>% print(n=100)
+
+habitat_prefs %>%
+  filter(suitability == "Suitable") %>%
+  select(name, code, IUCNLevel, Coarse_Name) %>% unique() %>% 
+  filter(!is.na(IUCNLevel)) %>% arrange(code) %>% #print(n=100)
+  select(Coarse_Name) %>% unique
 
 species_list$binomial %>% unique %>% length
 
@@ -2746,8 +2754,59 @@ habitat_age_req %>%
   
 ```
 
+```{r species_run_index}
+species_list %>%
+  left_join(select(habitat_prefs, ))
+
+habitat_prefs %>% 
+  select(binomial, 
+         assessmentId,
+         internalTaxonId
+         ) %>% 
+  unique()
+
+```
+
+```{r jungs_method_for_specialists}
+# three groups
+# 
+# Forest-specialist”, if forest habitat is of major importance to a species, 
+# “Forest-associated” if a species is just known to occur in forest or 
+# “Other Habitats” if a species does not occur in forests at all.
+
+
+
+```
+
 
 ```{r majorimportance}
+# see prep-habitat-details chunk 
+majorImportance_extract %>%
+  mutate(nchar = nchar(major_codes)) %>%
+  arrange(desc(nchar)) %>% 
+  print(n = 50)
+
+
+
+habitat_prefs %>%
+  filter(suitability == "Suitable",
+         # majorImportance == "Yes"
+         ) %>%
+  .$binomial %>% 
+  unique %>%
+  length
+
+# only 1417 out of 2226 species with suitable habitat 
+species_ranges$binomial %>% unique %>% length
+  
+specialists_test <- habitat_age_req
+
+specialists_test %>%
+  mutate(forest_maj = str_detect(major_habitats, regex("forest", ignore_case = TRUE)),
+         forest_occ = str_detect(suitable_habitats, regex("forest|plantations", ignore_case = TRUE)),
+         
+  ) %>%
+  select(vert_class, binomial, common_names, forest_mi, forest_occ)
 
 
 habitat_age_req %>%
@@ -3463,10 +3522,20 @@ aoh_abn <- lapply(1:18, function(i) {
   left_join(select(habitat_details, binomial, redlistCategory), by = "binomial") %>%
   left_join(select(species_list, -synonym), by = c("site", "binomial"))
 
+aoh_max_abn <- lapply(1:18, function(i) {
+  read_csv(paste0(p_derived, "aoh/aoh_max_abn_lc_tmp", "_2021_12_13", "_c", i, ".csv"))
+  }
+  ) %>% 
+  bind_rows() %>% 
+  left_join(select(habitat_details, binomial, redlistCategory), by = "binomial") %>%
+  left_join(select(species_list, -synonym), by = c("site", "binomial"))
 
 
 aoh_combo <- bind_rows(aoh_abn %>% mutate(type = "abn"), 
-                   aoh_lc_df %>% mutate(type = "lc"))
+                       aoh_max_abn %>% mutate(type = "max_abn"),
+                       aoh_lc_df %>% mutate(type = "lc"))
+
+aoh_combo
 ```
 
 
@@ -3536,13 +3605,13 @@ geom_line(data = augment(tmp_lm), mapping = aes(x = year, y = .fitted), col = "g
 # aoh_lm_df <- tidy(tmp_all)
 
 run_indices <- dft %>%
-  left_join(select(species_list, site, binomial, vert_class), by = c("binomial", "site")) %>%
+  # left_join(select(species_list, site, binomial, vert_class), by = c("binomial", "site")) %>%
   arrange(site, vert_class, binomial) %>%
   select(site, vert_class, binomial) %>% unique() %>% 
   mutate(run_index = 1:n())
 
 dft <- dft %>%
-  left_join(run_indices, by = c("binomial", "site"))
+  left_join(run_indices, by = c("binomial", "site", "vert_class"))
 
 dft$run_index %>% unique() %>% sort() %>% tail
 dft %>% select(site, binomial) %>% unique() %>% nrow
@@ -3702,7 +3771,7 @@ gg_aoh_trend_by_cat
 
 ggsave(gg_aoh_trend_by_cat,
        filename = paste0(p_output, "plots/aoh/", "aoh_trend_by_iucn_cat.pdf"),
-       width = 6, height = 5, units = "in")
+       width = 7, height = 5, units = "in")
 
 # trend by site:
 gg_aoh_trend_by_site <-
@@ -3727,6 +3796,8 @@ gg_aoh_trend_by_site <-
                                 "loss" = 0.2)
                      ) + 
   facet_wrap(vars(site), scales = "free")
+
+gg_aoh_trend_by_site
 
 ggsave(gg_aoh_trend_by_site,
        filename = paste0(p_output, "plots/aoh/", "aoh_trend_by_site.pdf"),
@@ -3815,7 +3886,9 @@ aoh_combo %>% filter(type == "lc")
 
 # ---------- calculate trend for all species ---------- #
 
-run_indices <- aoh_combo %>% filter(type == "abn") %>%
+run_indices_abn <- 
+  aoh_combo %>% 
+  filter(type == "abn") %>%
   select(site, binomial, redlistCategory, year, adj_IUCN_aoh_ha, vert_class) %>% 
   unique() %>% 
   mutate(year = year - 1991) %>%
@@ -3827,7 +3900,7 @@ dft_abn <- aoh_combo %>% filter(type == "abn") %>%
   select(site, binomial, redlistCategory, year, adj_IUCN_aoh_ha, vert_class) %>% 
   unique() %>% 
   mutate(year = year - 1991) %>%
-  left_join(run_indices, by = c("binomial", "site", "vert_class"))
+  left_join(run_indices_abn, by = c("binomial", "site", "vert_class"))
 
 dft_abn$run_index %>% unique() %>% sort() %>% tail
 dft_abn %>% select(site, binomial) %>% unique() %>% nrow
@@ -3858,7 +3931,8 @@ dft_abn %>%
   
 
 # calculate percent changes
-aoh_abn_change_df <- aoh_abn_trends %>% #filter(run_index == i) %>%
+aoh_abn_change_df <- 
+  aoh_abn_trends %>% #filter(run_index == i) %>%
   select(run_index, term, estimate) %>%
   mutate(term = ifelse(term == "(Intercept)", "intercept", "slope")) %>%
   pivot_wider(run_index, names_from = term, values_from = estimate) %>%
@@ -3893,6 +3967,8 @@ gg_aoh_abn_percent_change_hist <-
   labs(x = "Percent change in AOH, 1987 to 2017 (%)", y = "Number of species") +
   theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
   facet_wrap(vars(redlistCategory), scales = "free")
+
+gg_aoh_abn_percent_change_hist
 
 ggsave(gg_aoh_abn_percent_change_hist,
        filename = paste0(p_output, "plots/aoh/", "aoh_abn_percent_change_hist.pdf"),
@@ -3954,7 +4030,7 @@ trend_by_site_abn <- aoh_abn_trends %>%
 # plot the trend per species
 # ----------------------------------- #
 # --------------------------------------------------------- #
-# gg_aoh_abn_trend_by_cat <-
+gg_aoh_abn_trend_by_cat <-
   trend_df_abn %>%
   mutate(y = ifelse(trend == "gain", trend_count, -trend_count)) %>%
   # filter(vert_class) %>%
@@ -3984,10 +4060,10 @@ gg_aoh_abn_trend_by_cat
 
 ggsave(gg_aoh_abn_trend_by_cat,
        filename = paste0(p_output, "plots/aoh/", "aoh_abn_trend_by_iucn_cat.pdf"),
-       width = 6, height = 5, units = "in")
+       width = 7, height = 5, units = "in")
 
 # trend by site:
-# gg_aoh_abn_trend_by_site <-
+gg_aoh_abn_trend_by_site <-
   trend_by_site_abn %>%
   ggplot( 
        mapping = aes(x = site, 
@@ -4016,30 +4092,337 @@ ggsave(gg_aoh_abn_trend_by_site,
 
 ```
 
+```{r prelim-max-abn-plots}
+sp_to_plot <- "Agamia agami"
+sp_to_plot <- "Certhia familiaris"
+
+unique(aoh_combo$type)
+
+aoh_combo %>%
+  filter(#type == "abn", 
+         binomial == sp_to_plot) %>%
+  ggplot(mapping = aes(x = year, y = adj_IUCN_aoh_ha, col = site)) +
+  geom_line() + 
+  labs(x = "Year", y = "AOH (ha)", caption = sp_to_plot) +
+  facet_wrap(vars(type), scales = "free")
+
+
+# -------------- extract just species and yearly aoh ------------- #
+
+aoh_combo %>%
+  filter(type == "max_abn") %>% 
+  select(site, binomial, redlistCategory, year, adj_IUCN_aoh_ha) %>% 
+  unique() %>% 
+  # head(n = 10000) %>%
+  filter(binomial == sp_to_plot) %>%
+  mutate(binomial = as_factor(binomial)) %>%
+  ggplot(mapping = aes(x = year, 
+                       y = adj_IUCN_aoh_ha, 
+                       group = site,
+                       col = site
+                       )) +
+  geom_line() + 
+  geom_smooth(method = "lm", se = 0.95) + 
+  labs(x = "Year", y = "AOH (ha)", title = sp_to_plot)
+
+aoh_combo %>% filter(type == "lc")
+
+
+# ---------- calculate trend for all species ---------- #
+
+run_indices_max_abn <- 
+  aoh_combo %>% 
+  filter(type == "max_abn") %>%
+  select(site, binomial, redlistCategory, year, adj_IUCN_aoh_ha, vert_class) %>% 
+  unique() %>% 
+  mutate(year = year - 1986) %>%
+  arrange(site, vert_class, binomial) %>%
+  select(site, vert_class, binomial) %>% unique() %>% 
+  mutate(run_index = 1:n())
+
+dft_max_abn <- aoh_combo %>% filter(type == "max_abn") %>%
+  select(site, binomial, redlistCategory, year, adj_IUCN_aoh_ha, vert_class) %>% 
+  unique() %>% 
+  mutate(year = year - 1986) %>%
+  left_join(run_indices_max_abn, by = c("binomial", "site", "vert_class"))
+
+dft_max_abn$run_index %>% unique() %>% sort() %>% tail
+dft_max_abn %>% select(site, binomial) %>% unique() %>% nrow
+
+
+# -------------------
+# run simple regression on each species' and extract AOH trend over time.
+# -------------------
+aoh_max_abn_trends <- lapply(1:length(unique(dft_max_abn$run_index)), function(i) {
+  dft_max_abn %>% 
+    filter(run_index == i) %>%
+    lm(adj_IUCN_aoh_ha ~ year, 
+       data = .) %>%
+    tidy() %>% 
+    mutate(run_index = i)
+}) %>% bind_rows()
+
+# ------------------
+# determine the relative trend (percent change in AOH start to end)
+# ------------------
+
+dft_max_abn %>% 
+  filter(run_index == i) %>%
+  ggplot(mapping = aes(x = year, y = adj_IUCN_aoh_ha)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = 0.95) + 
+  labs(x = "Year", y = "AOH (ha)", title = unique(filter(dft_max_abn, run_index == i)$binomial))
+  
+
+# calculate percent changes
+aoh_max_abn_change_df <- 
+  aoh_max_abn_trends %>% #filter(run_index == i) %>%
+  select(run_index, term, estimate) %>%
+  mutate(term = ifelse(term == "(Intercept)", "intercept", "slope")) %>%
+  pivot_wider(run_index, names_from = term, values_from = estimate) %>%
+  mutate(aoh_start = slope*1 + intercept,
+         aoh_end = slope*31 + intercept,
+         rel_change = ((aoh_end/aoh_start) - 1))
+
+hist(aoh_max_abn_change_df$rel_change)
+
+aoh_max_abn_change_df %>%
+  arrange(rel_change) %>%
+  # filter(rel_change < 5 & rel_change > -1) %>%
+  .$rel_change %>%
+  hist(breaks = 100)
+
+# --------------------------------------------------------- #
+# ---------- plot histogram of percent changes ----------- #
+# --------------------------------------------------------- #
+gg_aoh_max_abn_percent_change_hist <-
+  aoh_max_abn_change_df %>% 
+  left_join(dft_max_abn %>% select(run_index, binomial, redlistCategory, vert_class) %>%
+              unique(), 
+            by = "run_index") %>%
+  filter(!is.na(vert_class),
+         # vert_class != "amp",
+         rel_change < 2 & rel_change > -2) %>%
+  ggplot(mapping = aes(x = rel_change * 100, fill = vert_class)) + 
+  geom_histogram(bins = 30
+                 ) +
+  geom_vline(xintercept = 0, linetype = 2, col = "gray70") +
+  theme_classic() +
+  labs(x = "Percent change in AOH, 1987 to 2017 (%)", y = "Number of species") +
+  theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
+  facet_wrap(vars(redlistCategory), scales = "free")
+
+gg_aoh_max_abn_percent_change_hist
+
+ggsave(gg_aoh_max_abn_percent_change_hist,
+       filename = paste0(p_output, "plots/aoh/", "aoh_max_abn_percent_change_hist.pdf"),
+       width = 8, height = 5, units = "in")
+
+
+dft_max_abn %>% filter(run_index == i) %>%
+  lm(adj_IUCN_aoh_ha ~ year, data = .) %>%
+  augment() %>%
+  filter(year %in% c(1, 31))
+
+# --------------------------------------------------------- #
+
+
+# create df of just the increase/decrease trend
+aoh_max_abn_trends %>% 
+  left_join(dft_max_abn %>% 
+              select(site, run_index, binomial, redlistCategory, vert_class) %>%
+              unique(), 
+            by = "run_index") %>%
+  filter(term == "year",
+         #p.value < 0.05,
+         is.na(vert_class)
+         # estimate != 0
+         )
+
+
+trend_df_max_abn <- aoh_max_abn_trends %>% 
+  left_join(dft_max_abn %>% 
+              select(site, run_index, binomial, redlistCategory, vert_class) %>%
+              unique(), 
+            by = "run_index") %>%
+  filter(term == "year",
+         p.value < 0.05,
+         # estimate != 0
+         ) %>%
+  mutate(trend = ifelse(estimate > 0, "gain", "loss")) %>%
+  group_by(redlistCategory, trend, vert_class) %>%
+  summarise(trend_count = n())
+
+trend_df_max_abn %>% arrange(redlistCategory, vert_class) %>% print(n = 31)
+
+trend_by_site_max_abn <- aoh_max_abn_trends %>% 
+  left_join(dft_max_abn %>% 
+              select(site, run_index, binomial, redlistCategory, vert_class) %>%
+              unique(), 
+            by = "run_index") %>%
+  filter(term == "year",
+         p.value < 0.05,
+         # estimate != 0
+         ) %>%
+  mutate(trend = ifelse(estimate > 0, "gain", "loss")) %>%
+  group_by(site, trend, vert_class) %>%
+  summarise(trend_count = n())
+
+
+# --------------------------------------------------------- #
+# ----------------------------------- #
+# plot the trend per species
+# ----------------------------------- #
+# --------------------------------------------------------- #
+gg_aoh_max_abn_trend_by_cat <-
+  trend_df_max_abn %>%
+  mutate(y = ifelse(trend == "gain", trend_count, -trend_count)) %>%
+  # filter(vert_class) %>%
+  
+  ggplot(
+       mapping = aes(x = redlistCategory, 
+                     y = trend_count,
+                     # group = as_factor(trend), 
+                     fill = vert_class,
+                     col = vert_class,
+                     alpha = as_factor(trend)
+                     )) +
+  geom_col(position = position_dodge2(width = 0.8, preserve = "single")) + 
+  labs(x = "Red List Category", y = "Number of Species",
+       fill = "Vert. Group") +
+  guides(col = "none") +
+  theme_classic() + 
+  scale_alpha_manual(name = "Trend\n(p < 0.05)",
+                     labels = c("gain" = "Gain",
+                                "loss" = "Loss"),
+                     values = c("gain" = 1,
+                                "loss" = 0.2)
+                     ) + 
+  facet_wrap(vars(redlistCategory), scales = "free")
+
+gg_aoh_max_abn_trend_by_cat
+
+ggsave(gg_aoh_max_abn_trend_by_cat,
+       filename = paste0(p_output, "plots/aoh/", "aoh_max_abn_trend_by_iucn_cat.pdf"),
+       width = 7, height = 5, units = "in")
+
+# trend by site:
+gg_aoh_max_abn_trend_by_site <-
+  trend_by_site_max_abn %>%
+  ggplot( 
+       mapping = aes(x = site, 
+                     y = trend_count,
+                     # group = as_factor(trend), 
+                     fill = vert_class,
+                     col = vert_class,
+                     alpha = as_factor(trend)
+                     )) +
+  geom_col(position = position_dodge2(width = 0.8, preserve = "single")) + 
+  labs(x = NULL, y = "Number of Species",
+       fill = "Vert. Group") +
+  guides(col = "none") +
+  theme_classic() + 
+  scale_alpha_manual(name = "Trend\n(p < 0.05)",
+                     labels = c("gain" = "Gain",
+                                "loss" = "Loss"),
+                     values = c("gain" = 1,
+                                "loss" = 0.2)
+                     ) + 
+  facet_wrap(vars(site), scales = "free")
+
+ggsave(gg_aoh_max_abn_trend_by_site,
+       filename = paste0(p_output, "plots/aoh/", "aoh_max_abn_trend_by_site.pdf"),
+       width = 8, height = 5, units = "in")
+
+```
 
 ```{r extracting-trend-abn}
-sp_name <- "Certhia familiaris"
 
 
 aoh_combo %>%
   filter(site == site_df$site[9], vert_class == "bird") %>%
   select(binomial) %>% unique() %>% print(n = 50)
 
-aoh_combo %>%
-  filter(site == site_df$site[9], binomial == sp_name,
-         year > 1991) %>%
-  select(site:year, adj_IUCN_aoh_ha, redlistCategory, vert_class, type) %>%
+sp_name <- "Certhia familiaris"
+
+gg_aoh_example1 <- 
+  aoh_combo %>%
+  filter(site == site_df$site[9], binomial == sp_name) %>%
+  select(site:year, adj_IUCN_aoh_ha, redlistCategory, vert_class, type) %>% unique() %>%
   pivot_wider(id_cols = c("site", "binomial", "redlistCategory", "vert_class", "type", "year"), 
               names_from = type, values_from = adj_IUCN_aoh_ha) %>%
-  mutate(diff = lc - abn) %>%
-  pivot_longer(cols = c("abn", "lc", "diff"),
+  mutate(diff = lc - abn, diff_max = lc - max_abn) %>%
+  pivot_longer(cols = c("abn", "max_abn", "lc", "diff", "diff_max"),
                names_to = "type", values_to = "aoh") %>%
   # print(n = 80)
+  filter(type %in% c("max_abn", "lc", "diff_max")) %>%
   
   ggplot(mapping = aes(x = year, y = aoh, col = type)) + 
-  geom_line()
+  geom_line(size = 1.5) + 
+  labs(x = "Year", y = "AOH (ha)", 
+       title = paste(sp_name, "(Eurasian treecreeper)"),
+       subtitle = site_df$site[9]) +
+  scale_color_manual(name = "Type",
+                     labels = c("diff_max" = "Difference",
+                                "lc" = "All land cover",
+                                "max_abn" = "Only abandonment"),
+                     values = gg_color_hue(3))
+  
+
+# save plot
+ggsave(gg_aoh_example1,
+       filename = paste0(p_output, "plots/aoh/", "aoh_example_species1.pdf"),
+       width = 8, height = 6, units = "in")
 
 
+# -------------------------------------------------- #
+# declining trend
+
+aoh_max_abn_change_df %>%
+  left_join(run_indices_max_abn, by = "run_index") %>%
+  filter(site == "shaanxi", rel_change < 0)
+
+sp_name2 <- "Anser fabalis"
+gg_aoh_example2
+
+aoh_combo %>%
+  filter(site == site_df$site[9], binomial == sp_name) %>%
+  select(site:year, adj_IUCN_aoh_ha, redlistCategory, vert_class, type) %>%
+  pivot_wider(id_cols = c("site", "binomial", "redlistCategory", "vert_class", "type", "year"), 
+              names_from = type, values_from = adj_IUCN_aoh_ha)
+
+gg_aoh_example2 <-
+  aoh_combo %>%
+  filter(site == site_df$site[9], binomial == sp_name2) %>%
+  select(site:year, adj_IUCN_aoh_ha, redlistCategory, vert_class, type) %>% unique() %>%
+  pivot_wider(id_cols = c("site", "binomial", "redlistCategory", "vert_class", "type", "year"), 
+              names_from = type, values_from = adj_IUCN_aoh_ha) %>%
+  mutate(diff = lc - abn, diff_max = lc - max_abn) %>%
+  pivot_longer(cols = c("abn", "max_abn", "lc", "diff", "diff_max"),
+               names_to = "type", values_to = "aoh") %>%
+  # print(n = 80)
+  filter(type %in% c("max_abn", "lc", "diff_max")) %>%
+  
+  ggplot(mapping = aes(x = year, y = aoh, col = type)) + 
+  geom_line(size = 1.5) + 
+  labs(x = "Year", y = "AOH (ha)", 
+       title = paste(sp_name2, "(Taiga bean goose)"),
+       subtitle = site_df$site[9]) +
+  scale_color_manual(name = "Type",
+                     labels = c("diff_max" = "Difference",
+                                "lc" = "All land cover",
+                                "max_abn" = "Only abandonment"),
+                     values = gg_color_hue(3))
+
+habitat_details %>% filter(binomial == sp_name) %>% .$habitat
+habitat_prefs %>% filter(binomial == sp_name) %>% select(code, name)
+habitat_prefs %>% filter(binomial == sp_name2) %>% select(code, name)
+  
+
+# save plot
+ggsave(gg_aoh_example2,
+       filename = paste0(p_output, "plots/aoh/", "aoh_example_species2.pdf"),
+       width = 8, height = 6, units = "in")
 
 
   
