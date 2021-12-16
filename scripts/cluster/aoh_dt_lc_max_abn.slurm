@@ -69,4 +69,6 @@ Rscript ./aoh_dt_lc_max_abn.R $SLURM_ARRAY_TASK_ID
 # scp -r clc6@della:/home/clc6/biodiversity_abn/scripts/slurm_out/ /Users/christophercrawford/work/projects/biodiversity_abn/scripts/cluster
 
 # download results
-# scp clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/aoh_tmp_2021_12_05_c* /Users/christophercrawford/work/projects/biodiversity_abn/derived/aoh/
+# scp clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/aoh_max_abn_lc_tmp_2021_12_13_c* /Users/christophercrawford/work/projects/biodiversity_abn/derived/aoh/
+
+
