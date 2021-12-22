@@ -10,6 +10,7 @@ p_derived <- paste0(p_proj, "derived/")
 p_scripts <- paste0(p_proj, "scripts/")
 p_output <- paste0(p_proj, "output/")
 p_plots <- paste0(p_proj, "output/plots/")
+p_tmp <- paste0(p_proj, "derived/tmp/")
 
 p_dat <- "/Volumes/GoogleDrive/My Drive/data/"
 p_ee <- "/Volumes/GoogleDrive-107266184156135828486/My Drive/ee/"

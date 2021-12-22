@@ -194,6 +194,7 @@ names(site_jung_l2_30) <- site_df$site
 # distribution of habitat types at each site, for adjusting area of habitat estimates
 jung_hab_type_area_df <- read_csv(file = paste0(p_derived, "jung_hab_type_area_df.csv"))
 
+
 # 34 habitats that occur at my sites:
 site_habitats <- jung_hab_type_area_df %>%
   select(lc, habitat_type, code, Coarse_Name, IUCNLevel) %>% 

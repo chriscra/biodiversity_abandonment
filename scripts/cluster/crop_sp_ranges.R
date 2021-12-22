@@ -77,12 +77,15 @@ st_crs(range_sf) <- st_crs(range_sf)
 
 
 # ------- filter to those species I'm interested in ------------- #
+# see: https://nc.iucnredlist.org/redlist/resources/files/1539614211-Mapping_attribute_codes_v1.16_2018.pdf
 # 1a. filter to presence, defaults to code 1 (extant species only). Other unused codes are:
 # ------ 2. Probably Extant (discontinued, ambiguous), 3. Possibly Extant,
 # ------ 4. Possibly Extinct, 5. Extinct, 6. Presence Uncertain.
 # 1b. filter to origin, defaults to codes 1 & 2 (native and reintroduced species respectively).
 # ------ Other unused codes are: 3. Introduced, 4. Vagrant, 5. Origin Uncertain, 6. Assisted Colonisation.
-# 1c. filter by marine, defaults to "FALSE" (all species but marine ones)
+# 1c. for non-bird species, filter by marine, defaults to "FALSE" (all species but marine ones)
+
+# perhaps leave this filtering step to later on in the process, so I can test multiple scenarios 
 # 1d. filter species with range seasonality. Defaults to c(1,2,3).
 # ------ Codes are: "Resident" (1), "Breeding" (2), "Non-breeding Season" (3),
 # ------ Passage (4), and Seasonal Occurrence Uncertain (5).
