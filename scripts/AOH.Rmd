@@ -18,7 +18,7 @@ source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/util/_
 ```
 
 
-# AOH
+# Range maps
 
 
 ```{r load-raw-species-data}
@@ -341,23 +341,6 @@ tcom1 %>% group_by(c("site", "vert_class")) %>% summarise()
 
 
 
-```{r habitat-prefs}
-habitat_prefs <- read_csv(file = "/Volumes/GoogleDrive-107266184156135828486/My Drive/ee/habitat_prefs.csv")
-
-habitat_prefs
-names(habitat_prefs)
-
-habitat_prefs$specialism %>% unique()
-
-habitat_prefs$habitat_code %>% unique() %>% sort()
-habitat_prefs$habitat_importance
-habitat_prefs$habitat_suitability %>% unique() %>% sort()
-habitat_prefs$className %>% unique() %>% sort()
-
-habitat_prefs$scientificName %>% unique() %>% sort()
-
-```
-
 
 ```{r fasterize-site_ranges}
 # fasterize
@@ -572,6 +555,91 @@ template_raster <- extend(small_mask, extent(as.Spatial(sf_file)), value = 0)
 
 
 
+```
+
+## Seasonality of ranges
+
+```{r seasonality}
+# 1a. filter to presence, defaults to code 1 (extant species only). Other unused codes are:
+# ------ 2. Probably Extant (discontinued, ambiguous), 3. Possibly Extant,
+# ------ 4. Possibly Extinct, 5. Extinct, 6. Presence Uncertain.
+# 1b. filter to origin, defaults to codes 1 & 2 (native and reintroduced species respectively).
+# ------ Other unused codes are: 3. Introduced, 4. Vagrant, 5. Origin Uncertain, 6. Assisted Colonisation.
+# 1c. filter by marine, defaults to "FALSE" (all species but marine ones)
+# 1d. filter species with range seasonality. Defaults to c(1,2,3).
+# ------ Codes are: "Resident" (1), "Breeding" (2), "Non-breeding Season" (3),
+# ------ Passage (4), and Seasonal Occurrence Uncertain (5).
+# 1e. filter out Extinct or Extinct in the Wild species ("EX", "EW")
+species_ranges %>%
+  st_drop_geometry() %>% as_tibble() %>%
+  select(site:seasonal, -id_no)
+
+species_ranges %>% 
+  st_drop_geometry() %>% as_tibble() %>%
+  # nrow()
+  # .$binomial %>% unique() %>% length() # 2230
+
+  filter(presence == 1) %>%   # only records with Code 1 (Extant)
+  filter(origin %in% c(1, 2)) %>%     # only native species (Code 1) and reintroduced (Code 2)
+  filter(seasonal %in% c(1, 2, 3 #,4
+                         )) %>%   # selecting "Resident" (1), "Breeding" (2), and "Non-breeding Season" (3) ranges. Other categories include: Passage (4) and Seasonal Occurrence Uncertain (5).
+
+  filter(!category %in% c("EW", "EX")) %>% # remove Extinct or Extinct in the Wild species ("EW", "EX")
+  # .$binomial %>% unique() %>% length()
+  nrow()
+
+
+
+species_ranges %>% 
+  st_drop_geometry() %>% as_tibble() %>%
+  filter(vert_class == "bird") %>%
+    select(site:seasonal, -id_no, marine) %>%
+  select(binomial, seasonal) %>% unique() # %>% group_by(seasonal) %>%
+  summarise(species = unique(binomial))# %>% n())
+
+species_ranges %>% 
+  st_drop_geometry() %>% as_tibble() %>%
+  # filter(vert_class == "bird") %>%
+    select(site:seasonal, -id_no, marine) %>%
+  select(binomial, seasonal
+         ) %>% unique()
+
+species_list$binomial %>% unique() %>% length()
+species_ranges$binomial %>% unique() %>% length()
+
+# try fasterizing range maps to allow for seasonality to be included here:
+# sp_ranges <- 
+sp_w_mult <- 
+  species_ranges %>%
+  filter(site == site_df$site[9]) %>%
+    select(site:seasonal, -id_no, CommonName) %>%
+    st_drop_geometry() %>%
+    group_by(binomial) %>% summarise(n = n()) %>% arrange(desc(n)) %>% .[1:4,1] %>% .$binomial
+
+species_ranges %>%
+  filter(site == site_df$site[9],
+         binomial %in% sp_w_mult[2]) %>%
+    select(site:seasonal, -id_no, CommonName) %>%
+  st_cast() %>%
+  select(seasonal) %>%
+    plot()
+
+range_t <-
+  species_ranges %>%
+  filter(site == site_df$site[9],
+         binomial %in% sp_w_mult[2]) %>%
+    select(site:seasonal, -id_no, CommonName) %>%
+  st_cast() %>%
+  # select(seasonal) %>%
+    # plot()
+      fasterize(.,
+                raster::raster(resolution = terra::res(elevation_map[[9]]),
+                               ext = raster::extent(terra::ext(elevation_map[[9]])[1:4])),
+                field = "seasonal"
+      ) %>% terra::rast(.)
+
+# cool!
+plot(range_t)
 ```
 
 
@@ -1307,9 +1375,9 @@ ext(x2)
 ext(lc$wisconsin$y2017)
 
 # writeRaster(x2,
-            # filename = paste0(p_derived, "aoh/tmp/random_tmp.tif"), 
+            # filename = paste0(p_tmp, "random_tmp.tif"), 
             # overwrite=TRUE)
-# x2 <- rast(paste0(p_derived, "aoh/tmp/random_tmp.tif"))
+# x2 <- rast(paste0(p_tmp, "random_tmp.tif"))
 
 
 # fasterize is faster than terra::rasterize(), but the step of writing the raster to file, then reloading as SpatRaster takes much longer.
@@ -1421,7 +1489,7 @@ y3 <-
   classify(y2,
            rcl = select(suitable_habitat_rcl, is = map_code) %>% mutate(becomes = 0),
            othersNA = TRUE,
-           filename = paste0(p_derived, "aoh/tmp/aoh_tmp.tif"),
+           filename = paste0(p_tmp, "aoh_tmp.tif"),
            overwrite = TRUE)
 toc()  # 1.894  seconds
 
@@ -1449,7 +1517,7 @@ y3 <-
   classify(y2,
            rcl = select(suitable_habitat_rcl, is = map_code) %>% mutate(becomes = 0),
            othersNA = TRUE,
-           filename = paste0(p_derived, "aoh/tmp/aoh_tmp.tif"),
+           filename = paste0(p_tmp, "aoh_tmp.tif"),
            overwrite = TRUE)
 toc()
 
@@ -1578,7 +1646,7 @@ write.csv(aoh_df,"~/Dropbox/PostDoc4_Princeton/Species Traits/FutureAOH.csv")
                    ) %>% unique() %>% 
                mutate(becomes = 0),
              othersNA = TRUE,
-             # filename = paste0(p_derived, "aoh/tmp/aoh_tmp.tif"),
+             # filename = paste0(p_tmp, "aoh_tmp.tif"),
              overwrite = TRUE)
   toc() # 5 seconds for 1, 8.178 s for 3, 11 s for 8, 28 seconds s for all 31
   
@@ -3017,6 +3085,7 @@ abn_mask <- lapply(1:11, function(i){
 
 names(abn_mask) <- site_df$site
 
+freq(abn_mask[[site_index]][[31]])
 
 plot(abn_mask$shaanxi[[31]])
 plot(lc[[site_index]][[28:31]])
@@ -4449,4 +4518,22 @@ aoh_combo %>%
 
 
 ```
+
+# Following up from presentation
+
+1. How is 100 and 104 allocated?
+2. Species ranges - breeding, passage, etc.
+```{r}
+
+habitat_prefs %>%
+  left_join(unique(select(species_list, binomial, vert_class)), by = "binomial") %>%
+  filter(vert_class == "bird") %>%
+  select(season, suitability) %>% unique() %>% arrange(suitability)
+
+species_ranges %>%
+  filter(vert_class == "bird", binomial == sp_name2)
+
+```
+
+
 
