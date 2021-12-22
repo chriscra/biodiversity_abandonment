@@ -13,7 +13,6 @@ source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_star
 # packageVersion("terra")
 # library(terra)
 
-
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/util/_util_files.R")
 ```
 
@@ -1315,7 +1314,8 @@ names(site_jung_l2_30_rcl) <- c("shrubs to forest, savanna to grass",
                                 "shrubs to grass, savanna to forest")
 
 gg_crosswalk_jac <- 
-  ggplot(data = crosswalk_jac, mapping = aes(x = as_factor(lc), y = jaccard, fill = as_factor(ver))) +
+  ggplot(data = crosswalk_jac, 
+         mapping = aes(x = as_factor(lc), y = jaccard, fill = as_factor(ver))) +
     geom_col(size = 1, position = position_dodge2()) + 
     theme_classic() +
   labs(fill = "Crosswalk", x = "Land Cover Class") +
@@ -1437,6 +1437,651 @@ plot(pnv_lc, ext = ext(lc[[i]]$y2017 + 1), maxcell = 1e8)
 ```{r backwards-crosswalk}
 
 ```
+
+## Direct assignment of lc to iucn habitat
+```{r direct-assignment}
+site_index <- 9
+
+site_jung_l2_30_freq %>%
+  filter(site == site_df$site[site_index])
+
+jung_hab_type_area_df
+
+iucn_crosswalk %>% arrange(map_code) %>% print(n = 50)
+
+jung_hab_type_area_df %>%
+  filter(site == site_df$site[site_index])
+
+site_jung_l2_30[[site_index]]
+lcc[[site_index]]
+
+
+# reclassify, via direct
+
+dir_back <- 
+      classify(
+        site_jung_l2_30[[site_index]],
+        rcl = iucn_crosswalk %>% select("is" = map_code, "becomes" = lc)#,
+        # filename = paste0(p_derived, "site_jung/", site_df$site[site], "_jung_l2_rcl_", lc_type,".tif"),
+        # overwrite=TRUE
+        )
+
+
+names(site_jung_l2_30_rcl) <- site_df$site
+
+
+# plot
+pdf(file = paste0(p_output, "plots/reclassifying/jung_to_lc_shaanxi.pdf"), width = 10, height = 4.5)
+par(mfrow = c(1, 2))
+plot(dir_back, main = "IUCN habitats reclassified to coarse LC",
+     col = lc_plot_cols$color, levels = lc_plot_cols$name)
+plot(lc[[site_index]][["y2015"]], main = "Land cover, Shaanxi, 2015",
+     col = lc_plot_cols$color, levels = lc_plot_cols$name)
+dev.off()
+
+
+```
+
+```{r direct-resample}
+# ------------------------------ 1. Reclassify ----------------------------------- #
+# first, reclassify the land cover maps to just single categories
+# then, do the same for the IUCN map, leaving the map codes intact.
+site_index <- 9
+lc_class <- 2
+
+tic()
+rcl_lc <- classify(
+        lcc[[site_index]][["y2015"]],
+        rcl = tibble(is = lc_class, becomes = lc_class), # simple rcl, e.g., where 2 stays 2, everything else is converted to NA
+        othersNA = TRUE,
+        filename = paste0(p_tmp, site_df$site[site_index], "_lcc_rcl_", lc_class,".tif"),
+        overwrite=TRUE
+        )
+toc()
+plot(rcl_lc)
+
+tic()
+rcl_lc_alt <- classify(
+        lcc[[site_index]][["y2015"]],
+        rcl = tibble(is = 0:4, becomes = NA) %>% filter(is != 2),
+        # rcl = tibble(is = lc_class, becomes = lc_class),
+        # othersNA = TRUE,
+        filename = paste0(p_tmp, site_df$site[site_index], "_lcc_rcl_", lc_class,"_alt.tif"),
+        overwrite=TRUE
+        )
+toc()
+plot(rcl_lc_alt)
+
+
+tic()
+rcl_lc_alt2 <- subst(lcc[[site_index]][["y2015"]], c(0, 1, 3, 4), NA,
+                     filename = paste0(p_tmp, site_df$site[site_index], "_lcc_rcl_",
+                                       lc_class,"_alt2.tif"),
+                     overwrite=TRUE)
+toc()
+plot(rcl_lc_alt2)
+
+plot(rcl_lc_alt2)
+rcl_iucn
+
+#  IUCN
+
+tic()
+rcl_iucn <- classify(
+        site_jung_l2_30[[site_index]],
+        rcl = iucn_crosswalk %>% filter(lc != 2) %>% select(is = map_code) %>% mutate(becomes = NA),
+        # othersNA = TRUE,
+        filename = paste0(p_tmp, site_df$site[site_index], "_iucn_rcl_", lc_class,".tif"),
+        overwrite=TRUE
+        )
+toc()
+plot(rcl_iucn)
+
+freq(rcl_iucn)
+
+
+tic()
+rcl_iucn_alt <- classify(
+        site_jung_l2_30[[site_index]],
+        rcl = iucn_crosswalk %>% filter(lc == 2) %>% select(is = map_code, becomes = map_code),
+        othersNA = TRUE,
+        filename = paste0(p_tmp, site_df$site[site_index], "_iucn_rcl_", lc_class,"_alt.tif"),
+        overwrite=TRUE
+        )
+toc()
+plot(rcl_iucn_alt)
+```
+
+```{r dir-reclassify-100m}
+site_jung_l2
+
+# reclassify lc and iucn
+tic()
+rcl_iucn_100 <- classify(
+        site_jung_l2[[site_index]],
+        rcl = iucn_crosswalk %>% filter(lc != 2) %>% select(is = map_code) %>% mutate(becomes = NA),
+        # othersNA = TRUE,
+        filename = paste0(p_tmp, site_df$site[site_index], "_iucn_100_rcl_", lc_class,".tif"),
+        overwrite=TRUE
+        )
+toc()
+plot(rcl_iucn_100)
+
+plot(site_jung_l2[[site_index]])
+plot(rcl_lc)
+
+# ------------------------------------------------------------------- #
+# try the resampling now:
+compareGeom(rcl_iucn_100, rcl_lc)
+ext(rcl_lc)
+ext(rcl_iucn_100)
+
+res(rcl_lc) * 110000
+res(rcl_iucn_100) * 110000
+
+plot(rcl_iucn_100)
+
+# this still doesn't work.
+resam100 <- terra::resample(rcl_iucn_100, rcl_lc, method = "near")
+
+plot(rcl_iucn_100)
+plot(resam100)
+plot(rcl_lc)
+
+ncell(rcl_iucn_100)
+
+```
+
+
+```{r focal-resample}
+# ------------------------------ 2. Resample ----------------------------------- #
+# what I'm trying to do: 
+# convert all forest pixels (lc == 2) in lc map (rcl_lc) and match them to the type of forest habitat type that is closest to it in the IUCN habitat map (rcl_iucn) 
+
+plot(rcl_lc)
+plot(rcl_iucn)
+freq(rcl_iucn)
+
+# resample doesn't work, unfortunately. I think this requires different spatial resolutions, extents, etc. 
+
+resam1 <- terra::resample(rcl_iucn, rcl_lc, method = "near")
+resam2 <- terra::resample(rcl_lc, rcl_iucn, method = "near")
+
+plot(rcl_lc)
+plot(rcl_iucn)
+plot(resam1)
+plot(resam2)
+
+dist1 <- terra::distance(rcl_iucn, rcl_lc)
+
+# filling NAs
+library(raster)
+
+r <- rast(nrow=10, ncol=10, crs='+proj=utm +zone=1 +datum=WGS84', 
+          # xmn=0, xmx=1, ymn=0, ymx=1
+          xmin=0, xmax=1, ymin=0, ymax=1
+          )
+values(r) <- 1:ncell(r)
+r[c(1:2, nrow(r)), ] <- NA
+r[, 1] <- NA
+r[3:5, 3:5] <- NA
+r[7:9, 7:9] <- NA
+# for bigger tests
+r[20:150, 25:35] <- NA
+r[30:550, 55:85] <- NA
+plot(r)
+
+w <- matrix(1, 5, 5)  #c(0,1,0,1,0,1,0,1,0), nrow=3)
+# x <- raster::focal(r, w, modal, na.rm=TRUE, NAonly=TRUE, pad=TRUE)
+x <- terra::focal(r, w = 3, fun = function(i) {modal(i, ties = "first", na.rm = TRUE)},
+                  # fun = "modal", ties = "first",
+                  # na.rm = TRUE, 
+                  na.only = TRUE, expand = TRUE)
+x <- terra::focal(x, w = 3, fun = function(i) {modal(i, ties = "first", na.rm = TRUE)},
+                  na.only = TRUE, expand = TRUE)
+
+x1 <- terra::focal(r, w = 3, 
+                   # fun = function(i) {modal(i, na.rm = TRUE)},
+                  fun = "modal",
+                  na.rm = TRUE,
+                  na.only = TRUE, expand = TRUE)
+plot(r)
+plot(x)
+plot(x1)
+
+while(
+  is.na(as.vector(unlist(global(x, fun = "mean"))))
+  # minmax(is.na(x))[2,] == 1
+      ) {
+    x <- terra::focal(x, w = 3, fun = "modal", 
+                  na.rm = TRUE, na.only = TRUE, expand = TRUE)
+}
+
+modal()
+
+plot(x)
+
+x <- terra::focal(r, w = 3, fun = "modal", 
+                  na.rm=TRUE, na.only=TRUE, expand=TRUE)
+for (i in 1:20) {
+  x <- terra::focal(x, w = 3, fun = "modal", 
+                  na.rm=TRUE, na.only=TRUE, expand=TRUE)
+}
+
+plot(r)
+plot(x)
+
+plot(is.na(r))
+minmax(is.na(rcl_iucn))[2,] == 1
+freq(rcl_iucn)
+length(is.na(r))
+summary(r)
+tic()
+is.na(as.vector(unlist(global(rcl_iucn, fun = "mean"))))
+toc()
+
+NAflag(rcl_iucn)
+
+tic()
+minmax(is.na(rcl_iucn))[2,] == 1
+toc()
+
+
+plot(x)
+
+
+# xx <- raster::focal(x, w, modal, na.rm=TRUE, NAonly=TRUE, pad=TRUE)
+
+plot(xx)
+text(r, cex=.8)
+text(raster::mask(xx, r, inverse=TRUE), col="red", cex=.8)
+w <- matrix(c(0,1,0,1,0,1,0,1,0), nrow=3)
+
+plot(rcl_iucn)
+tic()
+rcl_iucn_focal <- terra::focal(rcl_iucn, w = 3, fun = "modal", 
+                       na.rm=TRUE, na.only=TRUE, expand=TRUE,
+                       filename = paste0(p_tmp, site_df$site[site_index], "_iucn_rcl_",
+                                         lc_class,"_focal.tif"),
+                       overwrite=TRUE)
+toc()
+
+tic()
+for (i in 1:100) {
+rcl_iucn_focal <- terra::focal(
+  rcl_iucn_focal, w = 3, fun = "modal", 
+  na.rm=TRUE, na.only=TRUE, expand=TRUE,
+  filename = paste0(p_tmp, site_df$site[site_index], "_iucn_rcl_",
+                    lc_class,"_focal.tif"),
+  overwrite=TRUE
+)
+}
+toc()
+
+plot(rcl_iucn)
+plot(rcl_iucn_focal)
+
+freq(rcl_iucn)
+freq(resam3)
+plot(rcl_lc)
+
+
+# try with a user-defined function:
+plot(rcl_iucn)
+tic()
+x <- terra::focal(rcl_iucn, w = 3, fun = function(i) {modal(i, ties = "first", na.rm = TRUE)},
+                  na.only = TRUE, expand = TRUE)
+toc()
+plot(x)
+
+tic()
+x <- terra::focal(x, w = 3, fun = function(i) {modal(i, ties = "first", na.rm = TRUE)},
+                  na.only = TRUE, expand = TRUE)
+toc()
+
+
+
+
+# mask the resampled raster, to get the updated values:
+rcl_lc_mask <- subst(rcl_lc, 2, 0)
+
+iucn_lc_focal <- resam3 + rcl_lc_mask
+
+plot(rcl_iucn)
+plot(iucn_lc_focal)
+plot(rcl_lc_mask)
+
+freq(is.na(resam3))
+freq(is.na(rcl_lc_mask))
+freq(is.na(iucn_lc_focal))
+plot(is.na(iucn_lc_focal))
+plot(is.na(rcl_lc_mask))
+
+
+x <- terra::focal(r, w = 3, fun = "modal", 
+                  na.rm=TRUE, na.only=TRUE, expand=TRUE)
+for (i in 1:20) {
+  x <- terra::focal(x, w = 3, fun = "modal", 
+                  na.rm=TRUE, na.only=TRUE, expand=TRUE)
+}
+
+```
+
+```{r dist-direction-resample}
+set.seed(2)
+# set projected CRS
+r <- raster(ncol=10, nrow=10, 
+          xmn=0, xmx=10, ymn=0,ymx=10,
+          # xmin=0, xmax=10, ymin=0,ymax=10, 
+          crs='+proj=utm +zone=1') 
+r[] <- 1:10
+r[sample(1:ncell(r), size = 25)] <- NA
+plot(r)
+
+# create sample points
+xy <- data.frame(x=runif(10,1,10), y=runif(10,1,10))
+
+# use normal extract function to show that NAs are extracted for some points
+extracted <- raster::extract(x = r, y = xy)
+# extracted <- terra::extract(x = r, y = xy)
+
+plot(extracted)
+
+# Calculate the distance and direction from all NA pixels to the nearest non-NA pixel:
+
+dist <- raster::distance(r)
+# dist <- terra::distance(r)
+
+plot(dist)
+names(dist) <- "dist"
+
+# you can also set a maximum distance: dist[dist > maxdist] <- NA
+direct <- direction(r, from=FALSE, degrees = FALSE)
+plot(direct)
+names(direct) <- "direct"
+
+
+# Retrieve coordinates of NA pixels
+
+# NA raster
+rna <- is.na(r) # returns NA raster
+plot(rna)
+names(rna) <- "is.na"
+
+tdt <- as.data.table.raster(
+  brick(r, dist, direct, rna)
+  )
+
+head(tdt)
+
+
+
+# store coordinates in new raster: https://stackoverflow.com/a/35592230/3752258 
+na.x <- init(rna, 'x')
+na.y <- init(rna, 'y')
+
+plot(na.x)
+plot(na.y)
+values(na.x)
+
+# calculate coordinates of the nearest Non-NA pixel
+# assume that we have a orthogonal, projected CRS, so we can use (Pythagorean) calculations
+co.x <- na.x + dist * sin(direct)
+co.y <- na.y + dist * cos(direct)
+
+plot(co.x)
+plot(co.y)
+values(co.x)
+
+tdt[, ':='(co.x = x + dist * sin(direct),
+           co.y = y + dist * cos(direct))]
+
+tdt[, ]
+
+# matrix with point coordinates of nearest non-NA pixel
+co <- cbind(co.x[], co.y[])
+co
+
+# Extract values of nearest non-NA cell with coordinates 'co'
+
+# extract values of nearest non-NA cell with coordinates co
+NAVals <- raster::extract(r, co, method='simple') 
+plot(NAVals)
+
+r.NAVals <- rna # initiate new raster
+r.NAVals[] <- NAVals # store values in raster
+plot(r.NAVals)
+plot(r)
+
+# Fill the original raster with the new values
+# cover nearest non-NA value at NA locations of original raster
+plot(r)
+r.filled <- cover(x=r, y= r.NAVals)
+plot(r.filled)
+
+sampled <- raster::extract(x = r.filled, y = xy)
+
+# compare old and new values
+print(data.frame(xy, extracted, sampled))
+
+```
+
+```{r try-for-s}
+# this really crashed - too computationally intensive for raster.
+# Unfortunately, there is no "direction()" function for {terra}
+
+# Calculate the distance and direction from all NA pixels to the nearest non-NA pixel:
+r
+rcl_iucn
+plot(rcl_iucn)
+tic()
+dist <- raster::distance(rcl_iucn)
+toc()
+# dist_t <- terra::distance(r)
+
+plot(dist)
+names(dist) <- "dist"
+
+# you can also set a maximum distance: dist[dist > maxdist] <- NA
+direct <- direction(r, from=FALSE, degrees = FALSE)
+plot(direct)
+names(direct) <- "direct"
+
+
+# Retrieve coordinates of NA pixels
+
+# NA raster
+rna <- is.na(r) # returns NA raster
+plot(rna)
+names(rna) <- "is.na"
+
+
+
+
+# store coordinates in new raster: https://stackoverflow.com/a/35592230/3752258 
+na.x <- init(rna, 'x')
+na.y <- init(rna, 'y')
+
+plot(na.x)
+plot(na.y)
+values(na.x)
+
+# calculate coordinates of the nearest Non-NA pixel
+# assume that we have a orthogonal, projected CRS, so we can use (Pythagorean) calculations
+co.x <- na.x + dist * sin(direct)
+co.y <- na.y + dist * cos(direct)
+
+plot(co.x)
+plot(co.y)
+
+# matrix with point coordinates of nearest non-NA pixel
+co <- cbind(co.x[], co.y[])
+co
+
+# extract values of nearest non-NA cell with coordinates co
+NAVals <- raster::extract(r, co, method='simple') 
+plot(NAVals)
+
+r.NAVals <- rna # initiate new raster
+r.NAVals[] <- NAVals # store values in raster
+plot(r.NAVals)
+plot(r)
+
+# Fill the original raster with the new values
+# cover nearest non-NA value at NA locations of original raster
+plot(r)
+r.filled <- cover(x=r, y= r.NAVals)
+plot(r.filled)
+
+
+
+
+
+
+
+# ---------------------------------- trying for a cropped corner of the iucn map ------ #
+
+crop_ext <- draw()
+
+rcl_iucn_100_crop <- crop(rcl_iucn_100, crop_ext)
+plot(rcl_iucn_100_crop)
+
+# distance:
+tic()
+dist1 <- terra::distance(rcl_iucn_100_crop)
+toc() # about 6 minutes. For just 2 million cells. The biggest rasters have more than 50 times as many cells. So it might take something like 5 hours per raster. Yikes!
+names(dist1) <- "dist"
+
+rcl_iucn_100_crop_r <- raster(rcl_iucn_100_crop)
+plot(rcl_iucn_100_crop_r)
+
+tic()
+direct1 <- direction(rcl_iucn_100_crop_r, from=FALSE, degrees = FALSE)
+toc() # 2626 seconds. 44 minutes about. 
+names(direct1) <- "direct"
+
+plot(dist1)
+plot(direct1)
+
+direct1_t <- rast(direct1)
+plot(direct1_t)
+
+
+# Retrieve coordinates of NA pixels
+# NA raster
+rna <- is.na(rcl_iucn_100_crop) # returns NA raster
+plot(rna)
+names(rna) <- "is.na"
+
+# store coordinates in new raster: https://stackoverflow.com/a/35592230/3752258 
+na.x <- init(rna, 'x')
+na.y <- init(rna, 'y')
+
+plot(na.x)
+plot(na.y)
+
+# calculate coordinates of the nearest Non-NA pixel
+# assume that we have a orthogonal, projected CRS, so we can use (Pythagorean) calculations
+co.x <- na.x + dist1 * sin(direct1_t)
+co.y <- na.y + dist1 * cos(direct1_t)
+
+plot(co.x)
+plot(co.y)
+co
+
+# matrix with point coordinates of nearest non-NA pixel
+co <- cbind(co.x[], co.y[])
+co
+head(co)
+names(co) <- c("x", "y")
+
+# extract values of nearest non-NA cell with coordinates co
+NAVals <- raster::extract(rcl_iucn_100_crop_r, co, method='simple') 
+plot(NAVals)
+head(NAVals)
+NAVals %>% 
+  filter(!is.na(iucn_habitatclassification_composite_lvl2_ver004))
+
+!is.na(NAVals) %>% sum()
+
+r.NAVals <- rna # initiate new raster
+plot(rna)
+plot(r.NAVals)
+values(r.NAVals) <- NAVals[,1] # store values in raster
+plot(r.NAVals)
+plot(r)
+
+# Fill the original raster with the new values
+# cover nearest non-NA value at NA locations of original raster
+plot(r)
+r.filled <- cover(x=r, y= r.NAVals)
+plot(r.filled)
+
+```
+
+
+
+```{r calculate-overlap}
+crosswalk_jac <- lapply(1:11, 
+                        function(site) {
+  tmp_t <- terra::rast(
+    list(
+      lc[[site]]$y2015, # land cover in 2015
+      site_jung_l2_30_rcl[[site]] # IUCN habitat types, reclassified
+    )
+    )
+
+  # convert to data.table
+  tmp_dt <- spatraster_to_dt(tmp_t, xy_switch = FALSE)
+  
+  # calculate Jaccard similarity
+  jac_df <- lapply(c("lc", "lc2", "lc3", "lc4"), function(rcl_version){
+    tibble(site = site_df$site[site],
+           lc = 1:4,
+           ver = rcl_version) %>%
+      mutate(jaccard = sapply(lc, #1:4, 
+                              function(lc_code) {
+        int <- tmp_dt[y2015 == lc_code & get(rcl_version) == lc_code, .N] # intersection
+        a <- tmp_dt[y2015 == lc_code, .N] 
+        b <- tmp_dt[get(rcl_version) == lc_code, .N]
+        int / (a + b - int) # int / union
+        }))
+    
+    }
+    ) %>% bind_rows()
+
+  jac_df
+  }) %>% 
+  bind_rows()
+```
+
+```{r calculate-overlap-1km}
+# 
+1000^2
+1000/30 # 33.33
+
+plot(lcc$shaanxi$y2017)
+agg_t <- terra::aggregate(lcc$shaanxi$y2017, fact = 37.7, fun = "median")
+
+res(agg_t)[1] * 110 * 1000 # 110 km per degree, and 1000 m per km 
+plot(agg_t)
+
+978 ^ 2
+1000 ^ 2
+
+og_size <- terra::cellSize(lcc$shaanxi$y2017, unit = "m")
+agg_size <- terra::cellSize(agg_t, unit = "m")
+
+agg_size
+plot(agg_size)
+plot(og_size)
+
+sqrt(768320/705)
+sqrt(1000000/700)
+
+
+```
+
 
 ## Plot Yin et al. 2020 land cover:
 ```{r plot-lc}
