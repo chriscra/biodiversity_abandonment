@@ -1,0 +1,254 @@
+---
+title: "Implications of cropland abandonment and recultivation for biodiversity"
+author:
+  - Christopher L. Crawford$^1$^[Corresponding Author, ccrawford@princeton.edu, Robertson Hall, Princeton University, Princeton, NJ]
+  - He Yin$^2$
+  - Volker C. Radeloff$^3$
+  - Yiwen Zeng$^{1}$
+  - Alex Wiebe$^{4}$
+  - David S. Wilcove$^{1,4}$
+date: 
+  $^1$Princeton School of Public and International Affairs, Princeton University, Princeton, NJ\newline
+  $^2$Department of Geography, Kent State University, Kent, OH\newline
+  $^3$SILVIS Lab, Department of Forest & Wildlife Ecology, University of Wisconsin - Madison, Madison, WI\newline
+  $^4$Department of Ecology & Evolutionary Biology, Princeton University, Princeton, NJ\newline
+  \newline
+  \today
+output:
+  bookdown::word_document2:
+    reference_docx: /Users/christophercrawford/work/projects/writing/scripts/word_style_ref.docx
+    number_sections: false
+  bookdown::pdf_document2:
+    toc: false
+    keep_tex: true
+    includes:
+      in_header: "preamble.tex"
+editor_options:
+  chunk_output_type: console
+bibliography: [/Users/christophercrawford/work/library/library.bib, packages.bib]
+link-citations: yes
+csl: science-advances.csl
+urlcolor: blue
+linkcolor: black
+citecolor: black
+---
+
+```{r load-packages-functions, eval = TRUE, echo = FALSE, include = FALSE}
+source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
+```
+
+```{r preview-chapter, eval=FALSE, include = FALSE}
+rmarkdown::render("scripts/Crawford_abandonment_MS+SI.Rmd",
+                  output_file = 
+                    paste0(p_proj, "writing/previews/", "biodiv_abn_draft",
+                           format(Sys.Date(), ("_%Y_%m_%d")), ".docx"))
+
+# Save final PDF with SI for submission:
+rmarkdown::render("scripts/Crawford_biodiv_abn_MS+SI.Rmd",
+                  output_file = paste0(p_proj, "writing/", "Crawford_biodiv_abn_MS+SI.pdf"),
+                  output_format = "bookdown::pdf_document2")
+
+# # Save html for troubleshooting:
+# rmarkdown::render("scripts/abn_trajectories_ms.Rmd",
+#                   output_file = paste0(p_proj, "writing/previews/", "abn_duration_draft_w_SI.html"),
+#                   output_format = "bookdown::html_document2")
+
+# bookdown::preview_chapter(
+#   input = "abn_trajectories_ms.Rmd",
+#   output_format = "bookdown::word_document2",
+#   output_file = paste0("abn_duration_draft", format(Sys.Date(), ("_%Y_%m_%d")), ".docx"),
+#   output_dir = paste0(p_proj, "writing/previews"),
+#   output_options = 
+#     list(reference_docx = "/Users/christophercrawford/work/projects/writing/scripts/word_style_ref.docx"),
+#   preview = TRUE)
+```
+
+```{r set-chunk-opts, include = FALSE}
+# set default chunk options
+knitr::opts_chunk$set(
+  out.width = "1\\textwidth",  # if compiling a pdf, include this option
+  # comment = NA,
+  # fig.width=6, fig.height=6, 
+  echo = FALSE # the code itself will NOT be printed with results
+  )
+
+options(knitr.table.format = function() {
+  if (knitr::is_latex_output())
+    "latex" else "simple"
+})
+```
+
+```{r produce-package-bib, include = FALSE, echo = FALSE}
+# needed_packages
+# github_packages
+knitr::write_bib(x = c(needed_packages, github_packages), file = 'packages.bib')
+# knitr::write_bib(x = c("car"), file = 'extra.bib')
+
+# citation(package = needed_packages[1])
+
+# knitr::write_bib(x = c(needed_packages[c(14)]), file = 'packages_top.bib')
+# knitr::write_bib(x = c(needed_packages[3]), file = 'terra.bib')
+
+# 
+# needed_packages[1]
+# packageDescription(needed_packages[1])
+# 
+# tinytex::tlmgr_install(
+#   # pkgs = "ragged2e"
+#   # pkgs = "standalone"
+#   pkgs = "preview"
+# )
+```
+
+```{r load-files, include = FALSE}
+
+# set run:
+run_label <- "_2021_03_13"
+
+# Additional paths --------------------------------------------------- #
+p_plots <- "/Users/christophercrawford/work/projects/abandonment_trajectories/output/plots/"
+p_derived2 <- paste0(p_dat_derived, run_label, "/derived_data/")
+
+# load general spatial data on site locations --------------------------------------------------- #
+site_df <- read.csv(file = paste0(p_dat_derived, "site_df.csv"))
+site_df_w_size <- read.csv(file = paste0(p_dat_derived, "site_df_w_size.csv"))
+site_sf <- st_read(paste0(p_dat_derived, "site_sf.shp"))
+
+
+# load all length data (distilled)
+length_distill_df <- read_csv(file = paste0(p_derived2, 
+                                            "length_distill_df", run_label, ".csv"))
+
+# load mean length data
+mean_length_df <- read_csv(file = paste0(p_derived2, "mean_length_df", run_label, ".csv"))
+
+
+# load summary statistic derived from lengths
+summary_stats_all_sites <- read_csv(file = paste0(p_derived2, "summary_stats_all_sites", run_label, ".csv"))
+summary_stats_all_sites_pooled <- read_csv(file = paste0(p_derived2, "summary_stats_all_sites_pooled", run_label, ".csv"))
+
+# load area summary stats:
+area_summary_df <- read_csv(file = paste0(p_derived2, "area_summary_df", run_label, ".csv"))
+area_recult_threshold <- read_csv(file = paste0(p_derived2, "area_recult_threshold", run_label, ".csv"))
+
+
+# load stats on proportion of abandoned cropland by land cover
+abn_lc_area_2017 <- read_csv(file = paste0(p_derived2, "abn_lc_area_2017", run_label, ".csv"))
+abn_prop_lc_2017 <- read_csv(file = paste0(p_derived2, "abn_prop_lc_2017", run_label, ".csv"))
+
+
+# load combined persistence, area, and turnover datasets:
+# also known as dat_l in "4_decay_models.Rmd"
+
+persistence_dat <- 
+  # dat_l <- 
+  read_csv(file = paste0(p_derived2, "persistence_dat", run_label, ".csv")) %>%
+  mutate(site = as.factor(site),
+         bins = as.factor(bins),
+         year_abn_bins = as.factor(year_abn_bins),
+         cohort = as.factor(cohort))
+
+area_dat <- read_csv(file = paste0(p_derived2, "area_dat", run_label, ".csv"))
+turnover_dat <- read_csv(file = paste0(p_derived2, "turnover_dat", run_label, ".csv"))
+
+
+
+# load decay rate data
+load(file = paste0(p_derived2, "/decay_mod_coef_dfs.rds"), 
+     verbose = TRUE)
+
+# load extrapolation data
+extrapolate_df_l3 <- read_csv(file = paste0(p_derived2, "/extrapolate_df_l3", run_label, ".csv"))
+extrapolate_df_l3_a2 <- read_csv(file = paste0(p_derived2, "/extrapolate_df_l3_a2", run_label, ".csv"))
+
+
+# load data for shaanxi maps --------------------------------------------------- #
+
+# load data for decay models --------------------------------------------------- #
+fitted_df_l3 <- read_csv(file = paste0(p_derived2, "/decay_mod_fitted_df_l3", run_label, ".csv"))
+
+load(file = paste0(p_derived2, "/decay_mod_coef_dfs.rds"), verbose = TRUE)
+# contains:
+# coef_df_l3, coef_df_wide_l3, mean_coef_df_l3, mean_coef_df_wide_l3, mean_coef_proj_l3, time_to_l3
+
+
+# load extrapolation data
+extrapolate_df_l3 <- read_csv(file = paste0(p_derived2, "/extrapolate_df_l3", run_label, ".csv"))
+
+future_df_l3 <- read_csv(file = paste0(p_derived2, "/future_df_l3", run_label, ".csv"))
+
+```
+
+Preparing manuscript for *Conservation Letters*:  
+- 3000 word limit
+- No more than 6 figures and tables
+- 40 References
+
+# Abstract {.unnumbered}
+
+## Keywords {.unnumbered}
+
+# Introduction {.unnumbered}
+
+# Methods {.unnumbered}
+
+## Abandonment maps
+
+## Species range maps and filtering steps
+
+## Filtering species by habitat age requirements
+
+Species were given a binary classification indicating whether it required mature habitat (in our case, any habitat requiring at least 30 years of secondary succession to become suitable for that species), which we used to further classify our results.
+Classifications were manually determined based on species accounts from the handbook of the birds of the world, and handbook of the mammals of the world.
+Neotropical bird species were independently verified by expert observer Alex Wiebe.
+
+
+## 
+
+# Results {.unnumbered}
+
+# Discussion {.unnumbered}
+
+# Acknowledgements {.unnumbered}
+
+## Conflict of Interest {.unnumbered}
+
+The authors declare no conflicts of interest.
+
+## Ethics and Funding {.unnumbered}
+
+## Data Availability Statement {.unnumbered}
+
+All datasets generated and analyzed for this article are archived at Zenodo (URL TBD). 
+The annual land cover maps that underlie our analysis are also archived at Zenodo (URL TBD, doi:), along with derived maps of abandonment age and derived datasets summarizing area, persistence, and turnover of abandonment.
+Code to replicate these analyses is available on GitHub at <https://github.com/chriscra/biodiversity_abandonment>, and is archived at Zenodo (URL TBD).
+
+# References {.unnumbered}
+
+BirdLife International and Handbook of the Birds of the World (2021) Bird species distribution maps of the world. Version 2021.1. Available at http://datazone.birdlife.org/species/requestdis.
+
+Request blurb:
+This IUCN Assessment data will be used for a dissertation research project designed to investigate the impact of agricultural abandonment on biodiversity. The final product will be academic journal articles, which will be shared with the IUCN science team upon completion. Please don't hesitate to get in touch if you have any questions (ccrawford@princeton.edu). Thank you! - Christopher Crawford, PhD Candidate, Princeton University.
+
+::: {#refs}
+:::
+
+\newpage
+
+\beginsupplement
+
+# Supplementary information {.unnumbered}
+
+\tableofcontents
+\listoftables
+\listoffigures
+
+\newpage
+
+# Extended Results {#results-si}
+
+# Extended Methods
+
+# Supplemental Figures
+
+# Supplemental Tables
