@@ -2589,6 +2589,14 @@ jung_hab_type_area_df %>% filter(site == site_df$site[9]) %>% arrange(habitat_ty
 ```
 
 ```{r expl-seff}
+cat(
+  paste("seff", paste0("39004952_", 1:27), collapse = "; "),
+  "> text2.txt"
+    )
+# Use the above to make seff calls to get the full times and memory usage for the full array run
+# then copy and paste this output into a 
+
+
 txt <- read_csv("scripts/ref/seff_out_aoh_abn_lc.csv")
 txt <- read_csv("scripts/ref/seff_out_aoh_abn_lc.csv")
 txt <- read_csv("scripts/ref/seff_out_max.csv")

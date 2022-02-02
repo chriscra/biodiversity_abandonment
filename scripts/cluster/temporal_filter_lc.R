@@ -19,7 +19,7 @@ p_tmp           <- "/scratch/gpfs/clc6/biodiversity_abn/derived/tmp/"
 
 
 # source functions:
-source("/home/clc6/biodiversity_abn/scripts/util/_util_functions.R")
+source("/home/clc6/abandonment_trajectories/scripts/util/_util_functions.R")
 
 # set terra autosave options:
 terraOptions(tempdir = p_tmp)

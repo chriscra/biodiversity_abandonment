@@ -1,4 +1,4 @@
-# Abandonment and Biodiversity: exploring the biodiversity implications of cropland abandonment
+# Abandonment and Biodiversity: exploring the biodiversity implications of recent cropland abandonment
 ## The potential effects of cropland abandonment on biodiversity and carbon sequestration
 
 This repository houses analysis scripts and documentation for:

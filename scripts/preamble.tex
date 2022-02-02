@@ -1,0 +1,22 @@
+\usepackage[left]{lineno}
+\linenumbers
+
+\newcommand{\beginsupplement}{
+	\setcounter{figure}{0} 
+	\setcounter{section}{0} 
+	\setcounter{table}{0} 
+	\setcounter{equation}{0} 
+
+	\renewcommand{\thefigure}{S\arabic{figure}} 
+	\renewcommand{\thesection}{S\arabic{section}} 
+	\renewcommand{\thetable}{S\arabic{table}} 
+	\renewcommand\theequation{S\arabic{equation}}
+	}
+
+\renewcommand{\topfraction}{.95}
+\renewcommand{\bottomfraction}{.9}
+\renewcommand{\textfraction}{.05}
+\renewcommand{\floatpagefraction}{.66}
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{3}
+\setcounter{totalnumber}{4}
