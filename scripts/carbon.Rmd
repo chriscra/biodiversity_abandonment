@@ -19,7 +19,47 @@ source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_star
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/util/_util_files.R")
 ```
 
+# Methods
 
+Question: How much carbon could be sequestered over the course of the time series, for a) forests and, if possible, b) grasslands?
+
+This analysis requires maps of annual rates of potential carbon sequestration in forests (aboveground biomass) and soils (for grasslands, savannas, shrublands), and three steps:  
+1. Differentiate between forested and grassland/savanna regions
+2. Apply forest sequestration rates from @Cook-Patton2020 to forested areas, and 
+3. Apply soil carbon sequestration rates from @Sanderman2020 and @Woolf2020.
+
+Step 1: separate forest from non-forest
+Differentiate between forested and grassland/savanna regions using three methods:
+
+Crop using the Ecoregions 2017 layer [@Dinerstein2017], excluding any grassland, savanna, or shrubland biome (following @Cook-Patton2020).
+
+Step 2: for carbon sequestration rates
+
+Within forested areas, estimate total carbon accumulated as a function of length of abandonment using data on annual carbon accumulation rates in aboveground biomass from @Cook-Patton2020.
+These pixel values correspond to the potential aboveground carbon accumulation rates for the first 30 years of natural forest regrowth (1km), in terms of Mg C / ha / year.
+
+@Cook-Patton2020 also includes 1) estimates of below-ground carbon sequestration rates (based on root-to-shoot ratio, and 2) estimates of soil organic carbon sequestration (SOC) in forest areas, based on a single global mean value of 0.42 Mg C / ha / year.
+
+In order to calculate the carbon accumulated in each pixel, I will add the sequestration rates together (aboveground + belowground + SOC) to get an overall sequestration rate (Mg C / ha / year), which I will then multiply by the age of each pixel (years), and the area of each pixel (ha).
+
+\begin{equation}
+C_{accumulated} = MgC /ha /year * years (abandoned) * ha (area) = Mg C / pixel (\#eq:carbon-calculation)
+\end{equation}
+
+To calculate the total carbon accumulation, I then sum across all of these pixel values.
+
+
+c.	This is akin to a maximum value, assuming perfect conditions, and represents the maximum amount of carbon that could be stored in forests. The full extent of the Cook-Patton layer is everywhere that could climatically support forests, not necessarily what is or was in forest (i.e. PNV).
+d.	Note: Cook-Patton explicitly do not calculate sequestration rates in “grassland and shrubland” biomes, but they do in “savanna” biomes. These are the ones that need to be clipped out. 
+
+3.	Within non-forested areas (i.e., grasslands, savannas, etc.), conservatively assume that all carbon being sequestered is being sequestered in soil organic carbon (SOC). 
+a.	Use estimates from SoilsRevealed – Sanderman et al. 2020: https://doi.org/10.7910/DVN/HA17D3 (https://soilsrevealed.org/)
+b.	Using the “rewilding” scenario, isolate pixels that initially fall as cropland according to their IPCC land cover layers (based on the 2015 Copernicus layer), and calculate the mean (min, max) change in SOC stock for just these pixels at each site as they transition to natural vegetation. Divide this mean change in SOC stock by the length of the time period in order to get a accumulation rate in terms of Mg C / ha / year.
+c.	There are two “rewilding” scenarios: 20 years and 80 years (steady state). Because soil carbon does not accumulate linearly, I will use an annual rate based on the 20 year scenario for the first 20 years, and the annual rate derived from the 80 year layer for ages >20 years. 
+
+
+Alternative method: crop based on PNV land cover map (Hengl, Martin, Visconti 2020) – what can return to forest is given forest rates (if they exist, otherwise the SOC rate), and everything else is given SOC rates.
+Note that I decided to simply use the Ecoregions 2017 layer, because this is what was used by @Cook-Patton2020 and many others.
 
 # Cook-Patton 2020
 
@@ -554,6 +594,7 @@ gg_total_c <-
 ggsave(gg_total_c,
        file = paste0(p_output, "plots/total_forest_c_accumulated2.pdf"), 
        width = 6, height = 5)
+
 site_carbon_df %>% filter(site == "shaanxi", total_c_Mg > 0)
 
 
