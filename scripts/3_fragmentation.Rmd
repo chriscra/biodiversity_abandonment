@@ -384,6 +384,10 @@ Three levels of landscape metrics:
 ```{r note!}
 # *check notes on David's thoughts on metrics, in Evernote, "David \\ 2020.10.24"
 
+# The SHI (Species Habitat Index) includes a measure of connectivity: "the average distance to edge of suitable area".
+# See https://mol.org/indicators/habitat/background
+
+
 ```
 
 

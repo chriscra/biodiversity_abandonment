@@ -13,6 +13,9 @@ source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_star
 # packageVersion("terra")
 # library(terra)
 
+```
+
+```{r load-files}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/util/_util_files.R")
 ```
 

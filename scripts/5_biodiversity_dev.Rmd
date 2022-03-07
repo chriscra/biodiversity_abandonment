@@ -23,7 +23,7 @@ source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/util/_
 ifelse(
   !dir.exists(paste0(p_derived, "site_area_ha")), 
   dir.create(paste0(p_derived, "site_area_ha")), 
-  FALSE)
+  "Directory already exists")
 
 
 site_area_ha <- lapply(1:11, function(i) {
