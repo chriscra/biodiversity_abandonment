@@ -200,6 +200,7 @@ site_habitats <- jung_hab_type_area_df %>%
   select(lc, habitat_type, code, Coarse_Name, IUCNLevel) %>% 
   unique() %>% arrange(habitat_type) #%>% .$code
 
+
 # ----------------------- #
 # ---- forest carbon ---- #
 # ----------------------- #

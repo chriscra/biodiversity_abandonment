@@ -1,6 +1,6 @@
 # ---------------------------------------------------------------
 #
-# Master Util script: load all functions in other util scripts
+# Main Util script: load all functions in other util scripts
 # 
 # ---------------------------------------------------------------
 
@@ -22,5 +22,5 @@ p_dat_derived <- "/Users/christophercrawford/work/projects/abandonment_trajector
 
 
 # load other util scripts ----
-source(paste0(p_proj, "scripts/util/_util_misc.R"))
-source(paste0(p_proj, "scripts/util/_util_functions.R"))
+source(paste0(p_proj, "scripts/_util/_util_misc.R"))
+source(paste0(p_proj, "scripts/_util/_util_functions.R"))
