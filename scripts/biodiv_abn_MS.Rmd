@@ -186,6 +186,32 @@ Preparing manuscript for *Conservation Letters*:
 
 # Abstract {.unnumbered}
 
+Background/Question/Methods:
+
+Although agricultural expansion and deforestation continues to be a dominant trend in many regions, tens of millions of hectares of croplands and pastures have simultaneously been abandoned as a result of shifting demographics, sociopolitical upheaval, environmental changes, and globalization. 
+These abandoned agricultural lands increasingly represent opportunities for the restoration of ecosystems, with large potential environmental benefits in terms of carbon sequestration and increases in habitat availability for wildlife.
+However, the extent to which abandonment presents an opportunity, or a threat, to biodiversity remains a topic of hot debate, due to varying species habitat requirements, threat status, and other factors.
+Here, we combine a recent high-resolution annual land cover time series to estimate changes in area of habitat for bird and mammal species at 11 sites distributed across four continents.
+We use annual land cover maps to identify cropland abandonment, and specifically track the age of abandoned fields.
+We then calculate area of habitat (AOH) for bird and mammal species, by reconciling land cover classes to match IUCN habitat types, then excluding all land cover and elevations that are deemed unsuitable for a given species, according to the IUCN.
+
+We 
+We then explore how habitat area changed as a result of cropland abandonment by delving into differences between groups of species, looking at IUCN threat status, habitat preferences, habitat age requirements (early successional vs. mature habitat only)
+
+We find that a significant portion of abandoned croplands are recultivated by the end of our time series, substantially curtailing the potential gains in AOH for different species.
+We also find that 
+
+Our land cover maps indicate that 
+We show
+
+We also investigate how recent abandonment and subsequent regeneration has affected landscape fragmentation. 
+
+This time series shows that while 
+
+agricultural abandonment , increasing levels of abandonment have raised hopes for recovery in some places.
+
+Agricultural expansion continues to be the do
+
 ## Keywords {.unnumbered}
 
 # Introduction {.unnumbered}
