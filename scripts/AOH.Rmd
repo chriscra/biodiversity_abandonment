@@ -14,7 +14,7 @@ source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_star
 # library(terra)
 
 # load files:
-source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/util/_util_files.R")
+source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/_util/_util_files.R")
 ```
 
 
@@ -1550,7 +1550,7 @@ write.csv(aoh_df,"~/Dropbox/PostDoc4_Princeton/Species Traits/FutureAOH.csv")
 }
 ```
 
-```{r aoc-direct-testing}
+```{r aoh-direct-testing}
 
 # cc_AOH_terra <- function(index,
 #                        site_index,
@@ -3007,7 +3007,7 @@ t1[2, 3] %>% unlist %>% str_squish()
 # AOH of only Abandoned croplands
 
 ```{r species-list-just-2-4}
-species_list
+species_list %>% filter(grepl("bird|mam", vert_class)) %>% select(binomial) %>% unique() %>% nrow()
   
 habitat_prefs %>% 
   filter(suitability != "Suitable")
@@ -3080,15 +3080,16 @@ abn_mask <- lapply(1:11, function(i) {
                    becomes = 0),
       othersNA = TRUE,
       include.lowest = TRUE, right = TRUE,
-      filename = paste0("/Users/christophercrawford/work/projects/abandonment_trajectories/data_derived/age_rasters/abn_mask/",
-                        site_df$site[i], "_abn_5_30_mask.tif"),
+      filename = paste0(p_dat_derived, "age_rasters/", run_label, "/",
+                        site_df$site[i], "_abn_5_30_mask", run_label,".tif"),
       names = paste0("y", 1987:2017),
       overwrite = TRUE)
 })
 toc()
 
 abn_mask <- lapply(1:11, function(i){
-  rast(paste0("/Users/christophercrawford/work/projects/abandonment_trajectories/data_derived/age_rasters/abn_mask/", site_df$site[i], "_abn_5_30_mask.tif"))
+  rast(paste0(p_dat_derived, "age_rasters/", run_label, "/",
+              site_df$site[i], "_abn_5_30_mask", run_label,".tif"))
 })
 
 names(abn_mask) <- site_df$site
@@ -3826,6 +3827,7 @@ gg_aoh_trend_by_cat <-
   ggplot(data = ., 
        mapping = aes(x = redlistCategory, 
                      y = trend_count,
+                     # y = y,
                      # group = as_factor(trend), 
                      fill = vert_class,
                      col = vert_class,
@@ -3925,6 +3927,35 @@ dft %>%
   plot(., c(1,2))
 
 #
+```
+
+
+```{r basic-results-numbers}
+trend_df %>%
+  mutate(y = ifelse(trend == "gain", trend_count, -trend_count)) %>%
+  filter(vert_class != "amp") %>%
+  group_by(trend, redlistCategory) %>%
+  summarise(totals = sum(y)) %>%
+  arrange(redlistCategory) %>%
+  mutate(threatened = ifelse(redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable"), TRUE, FALSE)) %>%
+  ungroup() %>%
+  group_by(threatened, trend) %>%
+  summarise(totals = sum(totals))
+
+60/50
+
+
+trend_by_site %>%
+  filter(vert_class != "amp") %>%
+  group_by(vert_class, trend) %>%
+  summarise(totals = sum(trend_count))
+
+
+trend_by_site %>%
+  filter(vert_class != "amp") %>%
+  group_by(trend) %>%
+  summarise(totals = sum(trend_count))
+1321/ 854
 ```
 
 ```{r prelim-abn-plots}
