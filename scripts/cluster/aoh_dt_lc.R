@@ -21,7 +21,7 @@ p_tmp           <- "/scratch/gpfs/clc6/biodiversity_abn/derived/tmp/"
 
 
 # source functions:
-source("/home/clc6/biodiversity_abn/scripts/util/_util_functions.R")
+source("/home/clc6/biodiversity_abn/scripts/_util/_util_functions.R")
 
 # set terra autosave options:
 terraOptions(tempdir = p_tmp)
@@ -57,7 +57,11 @@ species_list_tmp <- read_csv(paste0(p_derived, "species_list.csv")) %>%
 
 
 # load IUCN crosswalk:
-iucn_crosswalk <- read_csv(paste0(p_derived, "iucn_lc_crosswalk.csv"))
+iucn_crosswalk <- read_csv(paste0(p_derived, "iucn_lc_crosswalk.csv")) %>%
+  mutate(code = as.character(code)) %>%
+  # fix 5.10 being converted to 5.1 issue:
+  mutate(code = ifelse(map_code == 510, "5.10", code))
+
 habitat_prefs <- read_csv(file = paste0(p_derived, "iucn_habitat_prefs_subset.csv"))
 elevation_prefs <- read_csv(file = paste0(p_derived, "iucn_elevation_prefs_subset.csv"))
 

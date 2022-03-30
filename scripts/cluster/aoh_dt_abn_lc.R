@@ -19,9 +19,10 @@ p_range         <- "/scratch/gpfs/clc6/data/bd/"
 p_input_rasters <- "/scratch/gpfs/clc6/abandonment_trajectories/data_derived/input_rasters/"
 p_tmp           <- "/scratch/gpfs/clc6/biodiversity_abn/derived/tmp/"
 
+run_label <- "_2022_02_07"
 
 # source functions:
-source("/home/clc6/biodiversity_abn/scripts/util/_util_functions.R")
+source("/home/clc6/biodiversity_abn/scripts/_util/_util_functions.R")
 
 # set terra autosave options:
 terraOptions(tempdir = p_tmp)
@@ -57,7 +58,11 @@ species_list_tmp <- read_csv(paste0(p_derived, "species_list.csv")) %>%
 
 
 # load IUCN crosswalk:
-iucn_crosswalk <- read_csv(paste0(p_derived, "iucn_lc_crosswalk.csv"))
+iucn_crosswalk <- read_csv(paste0(p_derived, "iucn_lc_crosswalk.csv")) %>%
+  mutate(code = as.character(code)) %>%
+  # fix 5.10 being converted to 5.1 issue:
+  mutate(code = ifelse(map_code == 510, "5.10", code))
+
 habitat_prefs <- read_csv(file = paste0(p_derived, "iucn_habitat_prefs_subset.csv"))
 elevation_prefs <- read_csv(file = paste0(p_derived, "iucn_elevation_prefs_subset.csv"))
 
@@ -86,7 +91,11 @@ site_index <- grep(unique(species_list_tmp$site), site_df$site)
 # ------------ #
 # load and prep data.table: habitat (land cover), elevation, area
 # in this case, the land cover file is of just the land cover in abandoned pixels.
-hab_dt <- fread(input = paste0(p_derived, "abn_lcc/", site_df$site[site_index], "_abn_lcc.csv"))
+hab_dt <- fread(input = paste0(p_derived, "abn_lcc/", site_df$site[site_index],
+                               "_abn_lcc", run_label, ".csv"))
+# hab_dt <- fread("/Users/christophercrawford/Downloads/chongqing_abn_lcc_2021_03_13.csv",
+#                 select = c(1,2, 31))
+# names(hab_dt)
 
 
 el_area_dt <- spatraster_to_dt(

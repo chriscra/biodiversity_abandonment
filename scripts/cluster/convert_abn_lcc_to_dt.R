@@ -19,7 +19,7 @@ p_tmp           <- "/scratch/gpfs/clc6/biodiversity_abn/derived/tmp/"
 
 
 # source functions:
-source("/home/clc6/biodiversity_abn/scripts/util/_util_functions.R")
+source("/home/clc6/biodiversity_abn/scripts/_util/_util_functions.R")
 
 
 # # array set up -------
@@ -35,7 +35,7 @@ site_df <- read.csv(file = paste0(p_dat, "site_df.csv"))
 # ----------------------- #
 abn_lcc <- lapply(1:11, function(i) {
   rast(paste0(p_derived, "abn_lcc/",
-              site_df$site[i], "_abn_lcc.tif"))
+              site_df$site[i], "_abn_lcc", run_label, ".tif"))
 })
 names(abn_lcc) <- site_df$site
 
@@ -48,9 +48,9 @@ for (i in 8:11) {
   fwrite(dt, 
          file = paste0(
            p_derived, "abn_lcc/",
-           site_df$site[site_index], "_abn_lcc.csv")
+           site_df$site[site_index], "_abn_lcc", run_label, ".csv")
          )
 
-  cat(paste0("Success! Converted abn_lcc to data.table for site: ", site_df$site[site_index]),
+  cat(paste0("Success! Converted abn_lcc to data.table for site: ", site_df$site[site_index], "(", run_label, ")"),
       fill = TRUE)
 }
