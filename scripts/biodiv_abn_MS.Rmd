@@ -3,9 +3,9 @@ title: "Implications of cropland abandonment and recultivation for biodiversity"
 author:
   - Christopher L. Crawford$^1$^[Corresponding Author, ccrawford@princeton.edu, Robertson Hall, Princeton University, Princeton, NJ]
   - He Yin$^2$
-  - Volker C. Radeloff$^3$
   - Yiwen Zeng$^{1}$
   - Alex Wiebe$^{4}$
+  - Volker C. Radeloff$^3$
   - David S. Wilcove$^{1,4}$
 date: 
   $^1$Princeton School of Public and International Affairs, Princeton University, Princeton, NJ\newline
@@ -27,7 +27,7 @@ editor_options:
   chunk_output_type: console
 bibliography: [/Users/christophercrawford/work/library/library.bib, packages.bib]
 link-citations: yes
-csl: science-advances.csl
+csl: conservation-letters.csl
 urlcolor: blue
 linkcolor: black
 citecolor: black
@@ -40,18 +40,14 @@ source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_star
 ```{r preview-chapter, eval=FALSE, include = FALSE}
 rmarkdown::render("scripts/Crawford_abandonment_MS+SI.Rmd",
                   output_file = 
-                    paste0(p_proj, "writing/previews/", "biodiv_abn_draft",
+                    paste0(p_proj, "writing/previews/", "Crawford_biodiv_abn_MS_draft",
                            format(Sys.Date(), ("_%Y_%m_%d")), ".docx"))
 
 # Save final PDF with SI for submission:
 rmarkdown::render("scripts/Crawford_biodiv_abn_MS+SI.Rmd",
-                  output_file = paste0(p_proj, "writing/", "Crawford_biodiv_abn_MS+SI.pdf"),
+                  output_file = paste0(p_proj, "writing/", "Crawford_biodiv_abn_MS+SI",
+                           format(Sys.Date(), ("_%Y_%m_%d")), ".pdf"),
                   output_format = "bookdown::pdf_document2")
-
-# # Save html for troubleshooting:
-# rmarkdown::render("scripts/abn_trajectories_ms.Rmd",
-#                   output_file = paste0(p_proj, "writing/previews/", "abn_duration_draft_w_SI.html"),
-#                   output_format = "bookdown::html_document2")
 
 # bookdown::preview_chapter(
 #   input = "abn_trajectories_ms.Rmd",
@@ -179,12 +175,25 @@ future_df_l3 <- read_csv(file = paste0(p_derived2, "/future_df_l3", run_label, "
 
 ```
 
-Preparing manuscript for *Conservation Letters*:  
+Preparing manuscript for (*Conservation Letters*)[https://conbio.onlinelibrary.wiley.com/hub/journal/1755263x/homepage/forauthors.html]:  
 - 3000 word limit
 - No more than 6 figures and tables
 - 40 References
 
-# Abstract {.unnumbered}
+Structured as follows:
+(1) Introduction. The Introduction should summarize briefly the background and aims, and end with a brief statement of what has been achieved by the work.
+(2) Methods. This section should contain sufficient detail so that all procedures can be clearly understood by the reader. Further technical details can be given in Supporting Information, which should be detailed enough that all procedures can be repeated (in conjunction with cited references).
+(3) Results. The Results section should present the evidence that supports the conclusions to be drawn in the Discussion. The Results section should conform to a high standard of rigour. Extended lines of inference, arguments or speculations should not be placed in the Results.
+(4) Discussion. The Discussion section should be separate from the Results section. It allows authors to propose their interpretation of the results, and to suggest what they mean in a wider context. It should end with a clear statement of the main conclusions of the research, and a clear explanation of their importance for conservation policy or practice.
+(5) Acknowledgements and Data. Acknowledgements of financial or institutional support should be brief (100 words maximum). In this section, authors are also expected to disclose any potential conflicts of interest, financial or otherwise, that a reasonable person could construe as possibly influencing the objectivity of the report. The absence of any statement is presumed to mean that there is nothing to disclose. Authors must provide a data accessibility statement, including a link to the repository they have used to archive their data (see policy on Data Sharing and Accessibility). They should also (where relevant) provide a statement of the ethics review process that was adhered to in gathering the data.
+(6) References
+
+
+# Outline
+
+Pieces
+
+# Abstract (150 word limit) {.unnumbered}
 
 Background/Question/Methods:
 
@@ -222,6 +231,11 @@ Agricultural expansion continues to be the do
 
 ## Species range maps and filtering steps
 
+### Crosswalking land cover classess with IUCN habitat types
+
+We also tested alternative ways to assign different IUCN habitat types to our coarser categories of forest and grassland.
+Link to figure showing crosswalk Jaccard similarities. 
+
 ## Filtering species by habitat age requirements
 
 Species were given a binary classification indicating whether it required mature habitat (in our case, any habitat requiring at least 30 years of secondary succession to become suitable for that species), which we used to further classify our results.
@@ -256,6 +270,8 @@ BirdLife International and Handbook of the Birds of the World (2021) Bird specie
 Request blurb:
 This IUCN Assessment data will be used for a dissertation research project designed to investigate the impact of agricultural abandonment on biodiversity. The final product will be academic journal articles, which will be shared with the IUCN science team upon completion. Please don't hesitate to get in touch if you have any questions (ccrawford@princeton.edu). Thank you! - Christopher Crawford, PhD Candidate, Princeton University.
 
+Range maps downloaded on January 4th, 2022 (amp, mam, reptiles, from IUCN, and birds from BirdLife International)
+
 ::: {#refs}
 :::
 
@@ -278,3 +294,4 @@ This IUCN Assessment data will be used for a dissertation research project desig
 # Supplemental Figures
 
 # Supplemental Tables
+
