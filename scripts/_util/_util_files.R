@@ -1,18 +1,18 @@
 # --------------------------------------------------------------- #
 #
-# Loading required files
+# Loading required files ("biodiversity_abandonment")
 # 
 # --------------------------------------------------------------- #
 
 site_df <- read.csv(file = paste0(p_derived, "site_df.csv"))
-run_label <- "_2022_01_31" #"_2021_03_13"
+run_label # check "_util_main.R"
 
 
 # ------------------------------------------------------------ # 
 # -------------------------- Site Extent --------------------- 
 # ------------------------------------------------------------ # 
 
-site_sf <- st_read(paste0(p_derived, "site_sf.shp"))
+site_sf <- st_read(paste0(p_derived, "sf/site_sf.shp"))
 st_crs(site_sf) <-  "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
 site_sf <- site_sf %>% st_make_valid()
 
@@ -20,11 +20,22 @@ site_sf <- site_sf %>% st_make_valid()
 # plot(site_sf %>% filter(site == "shaanxi") %>% st_geometry())
 
 
+# biomes
+site_ecoregions2017 <- st_read(paste0(p_derived, "sf/site_ecoregions2017.shp"))
+site_biomes2017 <- st_read(paste0(p_derived, "sf/site_biomes2017.shp"))
+
+ecoregions2017_simple <- st_read(paste0(p_derived, "sf/ecoregions2017_simple.shp"))
+biomes2017_simple <- st_read(paste0(p_derived, "sf/biomes2017_simple.shp"))
+
+
 
 # ------------------------------------------------------------ # 
-# ------------------- Load Basic Rasters ---------------------  
+# ------------------- Load Abandonment Rasters ---------------------  
 # ------------------------------------------------------------ # 
 
+# ------------------------------------------------------------ # 
+# -------------------- Raster data --------------------
+# ------------------------------------------------------------ # 
 
 # Land use class codes:
 #       1. Non-vegetated area (e.g. water, urban, barren land)
@@ -32,90 +43,141 @@ site_sf <- site_sf %>% st_make_valid()
 #       3. Cropland 
 #       4. Herbaceous land (e.g. grassland)
 
+# small test rasters:
+# bs <- brick(paste0(p_dat, "Abandonment/belarus_small.tif"))
+# bt <- brick(paste0(p_dat_derived, "belarus_subset.tif"))
+# names(bs) <- paste0("y", 1987:2017)
+# names(bt) <- paste0("y", 1987:2017)
+
 # ------------------------------- load land cover maps --------------------------------------- #
 # prepared input rasters (derived by Chris)
-site_input_raster_files <- list.files(paste0(p_dat_derived, "input_rasters"), full.names = TRUE) %>%
-  grep(".tif", ., value = TRUE) #%>% grep("age", ., value = TRUE, invert = TRUE)
 
-lc <- lapply(site_input_raster_files, function(i) {terra::rast(i)})
-names(lc) <- site_df$site
-
-# rename raster layers:
-for (i in 1:11) {
-  if (names(lc[i]) == "nebraska") {
-    names(lc[[i]]) <- paste0("y", 1986:2018)
-  } else {
-    if (names(lc[i]) == "wisconsin") {
-      names(lc[[i]]) <- paste0("y", 1987:2018)
-    } else {
-      # everything else, just 1987:2017
-      names(lc[[i]]) <- paste0("y", 1987:2017)
-    }}}
-
+# lc <- lapply(1:11, function(i) {
+#   terra::rast(paste0(p_dat_derived, "input_rasters/", site_df$site[i], ".tif"))
+#   })
+# names(lc) <- site_df$site
 
 # ------------------------------- load cleaned land cover maps --------------------------------------- #
-# prepared input rasters, passed through temporal filter on December 10th, 2021
+# prepared input rasters, passed through temporal filter
 lcc <- lapply(1:11, function(i) {
-  terra::rast(paste0(p_dat_derived, "lc_r_clean/", site_df$site[i], "_clean.tif"))
+  terra::rast(paste0(p_dat_derived, "input_rasters/", site_df$site[i], "_clean.tif"))
 })
 names(lcc) <- site_df$site
-
-# rename raster layers:
-for (i in 1:11) {
-  if (names(lcc[i]) == "nebraska") {
-    names(lcc[[i]]) <- paste0("y", 1986:2018)
-  } else {
-    if (names(lcc[i]) == "wisconsin") {
-      names(lcc[[i]]) <- paste0("y", 1987:2018)
-    } else {
-      # everything else, just 1987:2017
-      names(lcc[[i]]) <- paste0("y", 1987:2017)
-    }}}
 
 
 # ----------------------------- load abandonment age rasters ---------------------------- #
 
 # abandonment age maps (produced by Chris)
-age_files <- list.files(paste0(p_dat_derived, "age_rasters/", run_label), 
-                        full.names = TRUE) %>%
-  grep(".tif", ., value = TRUE) #%>% grep("age", ., value = TRUE, invert = FALSE)
+age_t <- lapply(1:11, function(i) {
+  terra::rast(
+    # raster::brick(
+    paste0(p_dat_derived, "age_rasters/", run_label, "/",
+           site_df$site[i], "_age", run_label, ".tif")
+  )
+})
 
-
-# age_r <- lapply(seq_along(age_files), function(i) {raster::brick(age_files[i])})
-# names(age_r) <- site_df$site
-# for (i in seq_along(age_r)) {names(age_r[[i]]) <- paste0("y", 1987:2017)} # remember: these are just 1987:2017
-
-
-age_t <- lapply(seq_along(age_files), function(i) {terra::rast(age_files[i])})
 names(age_t) <- site_df$site
 for (i in seq_along(age_t)) {names(age_t[[i]]) <- paste0("y", 1987:2017)} # remember: these are just 1987:2017
 
 
 
+# ------------------ bins ------------------ #
 # age bins
-age_t_bins <- lapply(1:11, function(i) {rast(paste0(p_dat_derived, "age_rasters/2017_bins/", site_df$site[i], "_y2017_bins.tif"))})
+
+age_t_bins <- lapply(1:11, function(i) {
+  terra::rast(
+    paste0(p_dat_derived, "age_rasters/", run_label, "/2017_bins/",
+           site_df$site[i], "_y2017_bins", run_label, ".tif")
+  )
+})
+
 names(age_t_bins) <- site_df$site
+
+
+# ----------------------- #
+# --- max_age of abandonment --- #
+# ----------------------- #
+
+max_age_t <- lapply(list.files(paste0(p_dat_derived, "max_age/", run_label), full.names = TRUE) %>% 
+                      grep(".tif", ., value = TRUE), 
+                    function(i) {terra::rast(i)})
+names(max_age_t) <- site_df$site
+for (i in seq_along(max_age_t)) {names(max_age_t[[i]]) <- "max_age"} # remember: these are just 1987:2017
+
+
+# max age bins
+max_age_t_bins <- lapply(list.files(paste0(p_dat_derived, "max_age/", run_label, "/bins"), full.names = TRUE), 
+                         function(i) {rast(i)})
+names(max_age_t_bins) <- site_df$site
+
+
+# potential abandonment age maps, assuming no recultivation
+potential_age_t <- lapply(1:11, function(i) {
+  terra::rast(
+    # raster::brick(
+    paste0(p_dat_derived, "age_rasters/", run_label, "/",
+           site_df$site[i], "_potential_age", run_label, ".tif")
+  )
+})
+
+names(potential_age_t) <- site_df$site
+for (i in seq_along(potential_age_t)) {names(potential_age_t[[i]]) <- paste0("y", 1987:2017)} # remember: these are just 1987:2017
+
+
+# ----------------------------------------------------------- #
+# 3. Load the maximum extent of all cropland ever cultivated during time series
+# ----------------------------------------------------------- #
+lcc_total_crop_mask <- lapply(
+  1:11, 
+  function(i) {
+    rast(paste0(p_dat_derived, "total_crop_mask/", 
+                site_df$site[i], "_total_crop_mask_clean",
+                run_label,
+                ".tif"))
+  })
+
+names(lcc_total_crop_mask) <- site_df$site
 
 
 # ----------------------- #
 # --- abandonment mask (>5 years) --- #
 # ----------------------- #
 
-abn_mask <- lapply(1:11, function(i){
-  rast(paste0("/Users/christophercrawford/work/projects/abandonment_trajectories/data_derived/age_rasters/abn_mask/", 
-              site_df$site[i], "_abn_5_30_mask.tif"))
-})
+# This needs to be recreated.
+# see "/Users/christophercrawford/work/projects/biodiversity_abn/scripts/AOH.Rmd"
 
+abn_mask <- lapply(1:11, function(i){
+  rast(paste0(p_dat_derived, "age_rasters/", run_label, "/",
+              site_df$site[i], "_abn_5_30_mask", run_label,".tif"))
+})
 names(abn_mask) <- site_df$site
+
+max_age_mask <- lapply(1:11, function(i){
+  rast(paste0(p_dat_derived, "max_age/", run_label, "/",
+              site_df$site[i], "_max_age_5_30_mask", run_label,".tif"))
+})
+names(max_age_mask) <- site_df$site
+
+
 
 # ----------------------- #
 # --- land cover class of abandoned land --- #
 # ----------------------- #
-abn_lc <- lapply(1:11, function(i) {
+
+# Needs to be recreated, with a run_label
+abn_lcc <- lapply(1:11, function(i) {
   rast(paste0(p_derived, "abn_lcc/",
-              site_df$site[i], "_abn_lcc.tif"))
+              site_df$site[i], "_abn_lcc", run_label, ".tif"))
 })
-names(abn_lc) <- site_df$site
+names(abn_lcc) <- site_df$site
+
+
+max_abn_lcc <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "abn_lcc/",
+              site_df$site[i], "_max_abn_lcc", run_label, ".tif"))
+})
+names(max_abn_lcc) <- site_df$site
+
 
 # ----------------------- #
 # --- land cover class of abandoned land in 2017 only --- #
@@ -126,26 +188,6 @@ names(abn_lc) <- site_df$site
 # }
 # )
 # names(abn_lc_2017) <- site_df$site
-
-
-# ----------------------- #
-# --- max_age of abandonment --- #
-# ----------------------- #
-
-max_age_files <- list.files(paste0(p_dat_derived, "max_age/", run_label), 
-                            full.names = TRUE) %>%
-  grep(".tif", ., value = TRUE)
-
-# max_age_r <- lapply(seq_along(max_age_files), function(i) {
-#   brick(max_age_files[i])
-#   })
-# names(max_age_r) <- site_df$site
-
-max_age_t <- lapply(seq_along(max_age_files), function(i) {
-  rast(max_age_files[i])
-})
-names(max_age_t) <- site_df$site
-for (i in seq_along(max_age_t)) {names(max_age_t[[i]]) <- "max_age"} # remember: these are just 1987:2017
 
 
 # ------------------------------------------------------------ # 
@@ -192,13 +234,18 @@ names(site_jung_l2_30) <- site_df$site
 
 
 # distribution of habitat types at each site, for adjusting area of habitat estimates
-jung_hab_type_area_df <- read_csv(file = paste0(p_derived, "jung_hab_type_area_df.csv"))
+jung_hab_type_area_df <- read_csv(file = paste0(p_derived, "jung_hab_type_area_df.csv")) %>%
+  mutate(code = as.character(code)) %>%
+  # fix 5.10 being converted to 5.1 issue:
+  mutate(code = ifelse(habitat_type == 510, "5.10", code)) 
 
 
 # 34 habitats that occur at my sites:
 site_habitats <- jung_hab_type_area_df %>%
   select(lc, habitat_type, code, Coarse_Name, IUCNLevel) %>% 
   unique() %>% arrange(habitat_type) #%>% .$code
+
+
 
 
 # ----------------------- #
@@ -246,7 +293,11 @@ load(file = paste0(p_derived, "species_ranges/species_ranges.RData"), verbose = 
 # list of unique species-site combinations at my sites
 species_list <- read_csv(file = paste0(p_derived, "/species_list.csv"))
 
-iucn_crosswalk <- read_csv(paste0(p_derived, "iucn_lc_crosswalk.csv"))
+iucn_crosswalk <- read_csv(paste0(p_derived, "iucn_lc_crosswalk.csv")) %>%
+  mutate(code = as.character(code)) %>%
+  # fix 5.10 being converted to 5.1 issue:
+  mutate(code = ifelse(map_code == 510, "5.10", code))
+
 
 habitat_prefs <- read_csv(file = paste0(p_derived, "iucn_habitat_prefs_subset.csv"))
 elevation_prefs <- read_csv(file = paste0(p_derived, "iucn_elevation_prefs_subset.csv"))

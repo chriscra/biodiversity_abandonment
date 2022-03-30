@@ -4,6 +4,11 @@
 # 
 # ---------------------------------------------------------------
 
+run_label <- 
+  "_2022_02_07"
+# "_2022_01_31" 
+# "_2021_03_13"
+
 # pathnames
 p_proj <- "/Users/christophercrawford/work/projects/biodiversity_abn/"
 p_derived <- paste0(p_proj, "derived/")

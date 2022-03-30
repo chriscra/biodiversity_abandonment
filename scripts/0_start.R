@@ -14,6 +14,7 @@ needed_packages <- c(
   "data.table", "raster", "terra", "rgdal", "sp", "sf", "mapview", 
   "gdalUtils", "gdata", "GISTools", "rgeos", "lwgeom", "fasterize",
   "ncdf4", # for opening NetCDF spatial files
+  "arrow", # for reading and writing parquet files
   
   "tidyverse", "lobstr", #"pryr", 
   "reshape2", "rlang",
@@ -33,6 +34,9 @@ needed_packages <- c(
   
   # visualization:
   "rasterVis", "RColorBrewer", "viridis", "scales", "colorspace",
+  "MetBrewer", 
+  "dotwhisker",
+  "ggnewscale", # for adding multiple color or fill scales
   "patchwork", "cowplot", # for combining multiple plots
   "ggridges",
   "ggpubr", # for extracting legends
