@@ -13,8 +13,9 @@ cc_AOH_data.table <-
   function(index,
            site_index,
            year_index, # the real year(s)
-           calc_lc = TRUE,
-           include_time = FALSE,
+           calc_lc = TRUE, # switch between area in "lc" (Yin et al.) vs. "map_code" (IUCN)
+           include_time = FALSE, 
+           major_importance_only = FALSE, # calc. area of only habitats coded as "majorImportance"
            hab_dt = hab_dt,
            sp_ranges = species_ranges, 
            sp_list = species_list
@@ -31,9 +32,9 @@ cc_AOH_data.table <-
     
     # It takes as parameters:
     # i. "hab_dt", the habitat map  (e.g., Yin et al. 2020, lc maps or otherwise), 
-    #     loaded as a data.table. This must include a list of elevation maps 
-    #     (e.g., p_derived/elevation/shaanxi_srtm_crop.tif"), and a list of 
-    #     area maps (site_area_ha, e.g., p_derived/site_area_ha/shaanxi_area_ha.tif),
+    #     loaded as a data.table. This must include a column with elevation 
+    #     (e.g., elevation_map, derived from  "p_derived/elevation/shaanxi_srtm_crop.tif"), and a column
+    #     of area (derived from site_area_ha, e.g., "p_derived/site_area_ha/shaanxi_area_ha.tif"),
     #     which are selected by site_index, then converted to data.table and added to hab_dt.
     # ii. "sp_ranges," a sf file of species range maps, 
     #     which is "species_ranges" by default, filtered to just 
@@ -45,13 +46,17 @@ cc_AOH_data.table <-
     
     # for testing
     # index <- 3
+    # index <- grep("Alauda arvensis", sp_list$binomial)
     # site_index <- 3
+    # core <- 5
     # year_index <- 2011:2017
+    # year_index <- 2015
     # calc_lc <- TRUE
     # include_time <- TRUE
-    # range_maps <- vert_sites
+    # sp_ranges <- species_ranges
+    # sp_list <- species_list %>% filter(core_index == core)
     # ----------------------------------------------- #
-    
+      
     # --------- #
     tic.clearlog()
     tic(
@@ -59,7 +64,7 @@ cc_AOH_data.table <-
              ", run index ", index,
              ", for years ", min(year_index), "-", max(year_index))
     )
-    
+
     print(sp_list[index, ])
     sp_name <- sp_list$binomial[index]
     
@@ -75,7 +80,8 @@ cc_AOH_data.table <-
     range_t <- 
       fasterize(range_sf,
                 raster::raster(resolution = terra::res(elevation_map[[site_index]]),
-                               ext = raster::extent(terra::ext(elevation_map[[site_index]])[1:4]))
+                               ext = raster::extent(terra::ext(elevation_map[[site_index]])[1:4])),
+                field = "seasonal" # so that cell values correspond to seasonality code
       ) %>% 
       rast() #%>% # convert to SpatRaster 
     # subst(1, 0,
@@ -99,23 +105,24 @@ cc_AOH_data.table <-
     # ------------------------------------------------------------------------- #
     ### Habitat Filter ###
     # ------------------------------------------------------------------------- #
-    z1 <- habitat_prefs %>% 
+    z1 <- habitat_prefs %>% # extract the habitat classifications for the species in question
       filter(binomial == sp_name,
-             suitability == "Suitable") # extract the habitat classifications for the species in question
+             suitability == "Suitable",
+             !is.na(map_code)) %>% 
+      { if (major_importance_only) filter(., majorImportance == "Yes") else .}
     
-    # extract the lc codes from my crosswalk that correspond to the IUCN habitat codes
-    habitat_prefs_rcl <- 
-      iucn_crosswalk %>% 
-      filter(code %in% unique(z1$code)) %>%
-      select(codes = ifelse(calc_lc, "lc", "map_code")) %>% # select lc class codes, or IUCN habitat map codes, depending on the "calc_lc" switch
-      unique() %>% .$codes
+
+    # extract the lc (or map_code) codes from habitat_prefs based on 
+    # iucn_crosswalk, which correspond to the IUCN habitat codes
+    habitat_prefs_rcl <- z1 %>%
+      select(codes = if(calc_lc) "lc" else "map_code") %>% # select lc class codes, or IUCN habitat map codes, depending on the "calc_lc" switch
+      arrange(codes) %>% unique() %>% .$codes
     
     # data.frame to use to adjust area estimates based on the proportion of each
     # land cover type that is made up by suitable habitat types
     adj_df <- jung_hab_type_area_df %>%
       filter(site == site_df$site[site_index],
-             # habitat_type %in% unique(z1$map_code)[!is.na(unique(z1$map_code))]
-             code %in% unique(z1$code)
+             habitat_type %in% unique(z1$map_code)
              ) %>%
       group_by(lc) %>%
       summarise(adjustment = sum(prop_lc))
@@ -135,13 +142,17 @@ cc_AOH_data.table <-
                                       elevation >= elevation_prefs_rcl$elevation_lower]
     
     # calculate AOH in each year
+    # i think this is going to list the area in each map_code / lc, which would allow for 
+    # filtering based on major importance at a later point.
     df_tmp <- lapply(year_index, function(i){
       tmp <-
         hab_filtered_range_el[get(paste0("y", i)) %in% habitat_prefs_rcl, 
                               sum(area_ha), 
-                              by = c(paste0("y", i))
+                              by = c(paste0("y", i), "range")
         ][,"year" := i]
-      names(tmp) <- c("lc", "area_ha", "year")
+      names(tmp) <- c(if(calc_lc) "lc" else "map_code", 
+                      "seasonality", # added the area in each seasonality type for each lc/map_code
+                      "area_ha", "year")
       tmp
     }) %>% bind_rows()
     
@@ -162,9 +173,11 @@ cc_AOH_data.table <-
       select(site, binomial, year, everything())
     
     # adjust area by the proportion of land cover that is suitable
-    df_tmp <- df_tmp %>%
-      left_join(adj_df, by = "lc") %>% 
-      mutate(adj_area_ha = area_ha * adjustment)
+    if (calc_lc) {
+      df_tmp <- df_tmp %>%
+        left_join(adj_df, by = "lc") %>% 
+        mutate(adj_area_ha = area_ha * adjustment)
+    }
     
     # calculate the AOH summed across habitat types, join to original df
     dt_tmp <- df_tmp %>%
