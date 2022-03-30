@@ -7,16 +7,16 @@ editor_options:
   chunk_output_type: console
 ---
 
+
+This is part of the **Biodiversity Impacts of Abandonment** project, developed by Christopher L. Crawford, starting fall of 2021. 
+See https://github.com/chriscra/biodiversity_abandonment.
+
 ```{r initialize}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
-# install.packages("terra")
-# packageVersion("terra")
-# library(terra)
-
 ```
 
 ```{r load-files}
-source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/util/_util_files.R")
+source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/_util/_util_files.R")
 ```
 
 
@@ -1092,7 +1092,6 @@ jung_l1_table_clr <- read_delim(
   )
 
 
-
 jung_l2_table_clr <- read_delim(
   file = paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/Habitatmapping-004/styles/level2.clr"), 
   delim = " ", 
@@ -1122,8 +1121,7 @@ jung_table %>%
 # ---------------------------------------------- #
 # Jung table crosswalk
 # ---------------------------------------------- #
-iucn_crosswalk <- read_csv(paste0(p_derived, "/iucn_lc_crosswalk.csv")) # %>%
-  # mutate("is" = map_code, "becomes" = lc)
+iucn_crosswalk # see _util_files.R
 
 iucn_crosswalk %>% arrange(lc, map_code) %>% print(n = 45)
 iucn_crosswalk %>% arrange(map_code) %>% print(n = 45)
@@ -1441,7 +1439,230 @@ plot(pnv_lc, ext = ext(lc[[i]]$y2017 + 1), maxcell = 1e8)
 
 ```
 
-## Direct assignment of lc to iucn habitat
+## Directly assign land cover to IUCN habitat types
+
+In a previous version of the AOH function, we calculated the area in each land cover class (i.e., of the four land cover classes in the original Yin et al. 2020 land cover maps).
+We created a crosswalk to translate our coarse land cover classes into the finer habitat types used by the IUCN, and mapped by Jung et al. 2020 for the year 2015. 
+This crosswalk is captured in `r iucn_crosswalk`.
+Because this crosswalk involves "one to many" relationships (i.e., one land cover class, such as 2 [woody vegetation], could be multiple IUCN habitat types).
+For example, `r iucn_crosswalk %>% filter(lc == 2)`.
+But, we don't know what any given pixel in lc class 2 (woody vegetation) is, of the various IUCN habitat types.
+
+We had previously used a proportional approach to downscale these coarse land cover classes (e.g., “woody vegetation [2]”) to the finer IUCN habitat classes (e.g., “Forest – Boreal ”), allocating pixels according to the proportion of the broad category each of the IUCN habitat types occupy at each of our sites.
+This proportional approach is similar to what other researchers have used (e.g., [Folberth et al. 2020](https://www.nature.com/articles/s41893-020-0505-x)).
+So, if a site has 20% temperate forest and 10% subtropical/tropical moist montane forest, for a total of 30% in some type of forest, we would allocate 2/3 of pixels in forest to temperate forest and 1/3 to moist montane forest. 
+This was conducted for each year individually - so the area of each land cover class was calculated for each year, and these were then adjusted by the proportion of that land cover class occupied by each IUCN habitat type ("map_code") at each site.
+This proportion was calculated for each species iteratively, because the number of habitat types that were suitable for a given species changed over time.
+
+Our new method is designed to directly assign habitat types to each pixel based on the land cover type.
+Essentially, we assign each pixel in a land cover (e.g., "woody vegetation [2]") to the nearest analogous habitat type in the 2015 @Jung2020a habitat map.
+
+We essentially follow four steps:  
+
+1. Reclassify the habitat map to extract only those habitat types that fall within the above land cover class (e.g., 2, woody vegetation).
+
+2. Fill all NA values in this reclassified habitat map with the modal value of the surrounding 9 cell values, using `terra::focal(fun = "modal")`.
+
+3. Resample these focal habitat reclassifications to finer resolution 
+
+4. Mask each resampled focal habitat map to locations of that given land cover class, in each year.
+
+5. Construct a composite habitat map for each year by knitting together these four resampled habitat maps
+(Either by converting NAs to zeros and adding, or some other method.)
+
+6. Mask this composite to the area abandoned in each year, for each site.
+
+7. Use this as the final habitat map for calculating area of habitat.
+
+```{r make-composite-habitat-map}
+
+site_index <- 3
+lc_class <- 2
+
+lc_classes <- 1:4 
+lc_classes <- c(2, 4)
+
+
+plot(abn_lcc[[site_index]][["y2015"]])
+plot(lcc[[site_index]][["y2015"]])
+
+
+
+# -------------------------------------------- # 
+# 1. Reclassify the habitat map to extract only those habitat types that fall within the above land cover class (e.g., 2, woody vegetation).
+
+# for multiple land cover classes at once:
+iucn_tmp <- rep(site_jung_l2[[site_index]], length(lc_classes))# %>% crop(., lcc[[site_index]])
+names(iucn_tmp) <- c("lc2", "lc4")
+
+iucn_sub <- lapply(seq_along(lc_classes), function(i) {
+  lc_class <- lc_classes[i]
+  
+  classify(
+    iucn_tmp[[i]], # crop first, since focal takes care of NA border cells
+    rcl = iucn_crosswalk %>% 
+      filter(lc != lc_class) %>% select(is = map_code) %>% mutate(becomes = NA),
+    # othersNA = TRUE,
+    filename = paste0(p_tmp, site_df$site[site_index], "_iucn_sub_", lc_class, ".tif"),
+    overwrite=TRUE
+    )
+  }) %>% rast()
+
+
+# just a single land cover class:
+
+plot(iucn_sub)
+
+
+# -------------------------------------------- # 
+# 2. Fill all NA values in this reclassified habitat map with the modal value of the surrounding 9 cell values, using `terra::focal(fun = "modal")`.
+
+# loop through each land cover layer until there are no more NA values.
+tic()
+iucn_focal <- lapply(seq_along(lc_classes), function(i) {
+  x <- terra::focal(iucn_sub[[i]], w = 3, 
+                    fun = "modal", na.rm = TRUE, na.policy = "only", expand = TRUE
+                    )
+  
+  while(is.na(global(x, fun = "min"))) {
+    x <- terra::focal(x, w = 3, fun = "modal", 
+                      na.rm = TRUE, na.policy = "only", expand = TRUE)
+  }
+  x
+  }) %>% rast()
+toc()
+
+plot(iucn_focal)
+
+# save this composite layer:
+writeRaster(iucn_focal,
+            filename = paste0(p_derived, "iucn_habitat_lcc_composite/", 
+                              site_df$site[site_index], "_iucn_focal.tif"),
+            names = "iucn_focal_composite",
+            overwrite = TRUE)
+
+# -------------------------------------------- # 
+# 3. Resample each resampled habitat map to finer resolution.
+
+i <- 1
+plot(lcc_sub[[i]])
+plot(iucn_focal[[i]])
+
+iucn_focal_resampled <- 
+  lapply(seq_along(lc_classes), function(i) {
+  terra::resample(
+    x = iucn_focal[[i]], y = lcc_sub[[i]], method = "near",
+    # filename = paste0(p_derived, "site_jung/", names(lc[i]), "_jung_l2_30.tif"),
+    # names = paste0(names(lc[i]), "_jung_l2_30"),
+    # overwrite = TRUE
+    )
+  }) %>% rast()
+
+plot(iucn_focal_resampled)
+
+
+# -------------------------------------------- # 
+# 4. Mask directly, based on cell values, rather than with a intermediate step mask.
+# this results in a list with a 31-layer spatraster for each land cover class, showing just the habitat map codes for the pixels in that land cover in that year:  
+tic()
+iucn_focal_msk <- lapply(seq_along(lc_classes), function(i) {
+  terra::mask(
+  # these need to have the same number of layers:
+    iucn_focal_resampled[[i]], lcc[[site_index]],
+    maskvalues = lc_classes[i], inverse = TRUE,
+    names = names(lcc[[site_index]]),
+    filename = paste0(p_derived, "iucn_habitat_lcc_composite/", site_df$site[site_index],
+                     "_iucn_focal_msk_lc", lc_classes[i], ".tif"),
+    overwrite = TRUE
+  )}
+) #%>% rast()
+names(iucn_focal_msk) <- paste0("lc", lc_classes)
+toc()
+
+plot(iucn_focal_msk[[1]][[28:31]])
+plot(iucn_focal_msk[[2]][[28:31]])
+
+lcc[[site_index]][[28:31]]
+
+
+# [unused] Alternatively: reclassify land cover map to extract just one land cover class (e.g., 2, woody vegetation).
+# This will be used to mask the resampled IUCN habitat map.
+# 
+# lcc_tmp <- rep(lcc[[site_index]][[29]], length(lc_classes))
+# names(lcc_tmp) <- paste0("lc", lc_classes) #c("lc2", "lc4")
+# lcc_tmp
+# 
+# tic()
+# lcc_sub <- lapply(seq_along(lc_classes), function(i) {
+#   lc_class <- lc_classes[i]
+#   
+#   lc_sub_tmp <- classify(
+#     # lcc[[site_index]][[25:29]],
+#     lcc_tmp[[i]],
+#     # simple rcl, e.g., where 2 stays 2, everything else is converted to NA
+#     rcl = tibble(is = lc_class, becomes = lc_class),
+#     othersNA = TRUE,
+#     # filename = paste0(p_tmp, site_df$site[site_index], "_iucn_sub_", lc_class, ".tif"),
+#     # overwrite=TRUE
+#     )
+#   }) %>% rast()
+# toc()
+# names(lcc_sub) <- paste0("lc", lc_classes)
+# 
+# plot(lcc_sub)
+# names(lcc_sub)
+# 
+# # save:
+# writeRaster(
+#   lcc_sub,
+#   filename = paste0(p_tmp, site_df$site[site_index], "_lcc_sub.tif"),
+#         overwrite=TRUE)
+
+
+# -------------------------------------------- # 
+# 5. Construct a composite habitat map for each year by knitting together these four resampled habitat maps
+# (Either by converting NAs to zeros and adding, or some other method.)
+iucn_focal_msk %>% length()
+tic()
+iucn_focal_composite <- cover(iucn_focal_msk[[1]], iucn_focal_msk[[2]])
+if (length(iucn_focal_msk) > 2) {
+  iucn_focal_composite <- cover(iucn_focal_composite, iucn_focal_msk[[3]])
+}
+
+if (length(iucn_focal_msk) > 3) {
+  iucn_focal_composite <- cover(iucn_focal_composite, iucn_focal_msk[[4]])
+}
+toc()
+
+plot(iucn_focal_composite[[28:31]])
+
+
+# save this composite layer:
+writeRaster(iucn_focal_composite,
+            filename = paste0(p_derived, "iucn_habitat_lcc_composite/", 
+                              site_df$site[site_index], "_iucn_focal_composite.tif"),
+            names = names(iucn_focal_composite),
+            overwrite = TRUE)
+
+
+# -------------------------------------------- # 
+# 7. Mask this composite to the area abandoned in each year, for each site.
+ 
+
+# -------------------------------------------- # 
+# 8. Save - Use this as the final habitat map for calculating area of habitat.
+
+
+
+```
+
+
+### Resample based on modal value using `terra::focal()`
+
+
+
+### Assigning via nearest neighbor
+
 ```{r direct-assignment}
 site_index <- 9
 
@@ -1564,7 +1785,7 @@ rcl_iucn_100 <- classify(
         site_jung_l2[[site_index]],
         rcl = iucn_crosswalk %>% filter(lc != 2) %>% select(is = map_code) %>% mutate(becomes = NA),
         # othersNA = TRUE,
-        filename = paste0(p_tmp, site_df$site[site_index], "_iucn_100_rcl_", lc_class,".tif"),
+        filename = paste0(p_tmp, site_df$site[site_index], "_iucn_100_rcl_", lc_class, ".tif"),
         overwrite=TRUE
         )
 toc()
@@ -1605,52 +1826,68 @@ plot(rcl_lc)
 plot(rcl_iucn)
 freq(rcl_iucn)
 
-# resample doesn't work, unfortunately. I think this requires different spatial resolutions, extents, etc. 
+plot(rcl_iucn_100)
 
-resam1 <- terra::resample(rcl_iucn, rcl_lc, method = "near")
-resam2 <- terra::resample(rcl_lc, rcl_iucn, method = "near")
+# resample doesn't work, unfortunately. I think this requires different spatial resolutions, extents, etc.
+# these don't fill NA values. 
+
+resam1 <- terra::resample(rcl_iucn_100, rcl_lc, method = "near") # this takes the habitat map (rcl_iucn_100), and essentially crops it to the extent and cell size of rcl_lc.
+resam2 <- terra::resample(rcl_lc, rcl_iucn_100, method = "near") # this simply puts the values from rcl_lc (2s) into the same extent and cell size as rcl_iucn_100 (the habitat map)
 
 plot(rcl_lc)
-plot(rcl_iucn)
+plot(rcl_iucn_100)
 plot(resam1)
 plot(resam2)
 
 dist1 <- terra::distance(rcl_iucn, rcl_lc)
 
 # filling NAs
-library(raster)
-
-r <- rast(nrow=10, ncol=10, crs='+proj=utm +zone=1 +datum=WGS84', 
-          # xmn=0, xmx=1, ymn=0, ymx=1
-          xmin=0, xmax=1, ymin=0, ymax=1
-          )
-values(r) <- 1:ncell(r)
-r[c(1:2, nrow(r)), ] <- NA
-r[, 1] <- NA
-r[3:5, 3:5] <- NA
-r[7:9, 7:9] <- NA
-# for bigger tests
-r[20:150, 25:35] <- NA
-r[30:550, 55:85] <- NA
+r <- rast(ncol=30, nrow=30, 
+          # xmn=0, xmx=10, ymn=0,ymx=10,
+          xmin=0, xmax=30, 
+          ymin=0, ymax=30,
+          crs='+proj=longlat +datum=WGS84') 
+r[] <- 1:30
+r[sample(1:ncell(r), size = 800)] <- NA
 plot(r)
+text(r)
+ncell(r)
 
 w <- matrix(1, 5, 5)  #c(0,1,0,1,0,1,0,1,0), nrow=3)
 # x <- raster::focal(r, w, modal, na.rm=TRUE, NAonly=TRUE, pad=TRUE)
-x <- terra::focal(r, w = 3, fun = function(i) {modal(i, ties = "first", na.rm = TRUE)},
-                  # fun = "modal", ties = "first",
-                  # na.rm = TRUE, 
-                  na.only = TRUE, expand = TRUE)
-x <- terra::focal(x, w = 3, fun = function(i) {modal(i, ties = "first", na.rm = TRUE)},
-                  na.only = TRUE, expand = TRUE)
+x_1 <- terra::focal(r, w = 3, # fun = function(i) {terra::modal(i, ties = "first", na.rm = TRUE)},
+                  fun = "modal", ties = "first",
+                  na.rm = TRUE, na.policy = "only", expand = TRUE)
 
-x1 <- terra::focal(r, w = 3, 
-                   # fun = function(i) {modal(i, na.rm = TRUE)},
-                  fun = "modal",
-                  na.rm = TRUE,
-                  na.only = TRUE, expand = TRUE)
+x_rand <- terra::focal(r, w = 3, # fun = function(i) {terra::modal(i, ties = "first", na.rm = TRUE)},
+                  fun = "modal", ties = "random",
+                  na.rm = TRUE, na.policy = "only", expand = TRUE)
+
+plot(x_1)
+plot(x_rand)
+
+
+x <- terra::focal(r, w = 3, # fun = function(i) {terra::modal(i, ties = "first", na.rm = TRUE)},
+                  fun = "modal", 
+                  na.rm = TRUE, na.policy = "only", expand = TRUE)
+plot(x)
+
+x <- terra::focal(x, w = 3, # fun = function(i) {terra::modal(i, ties = "first", na.rm = TRUE)},
+                  fun = "modal", 
+                  na.rm = TRUE, na.policy = "only", expand = TRUE)
+
 plot(r)
 plot(x)
+plot(x2)
 plot(x1)
+
+
+# two versions of a for loop:
+while(is.na(global(x, fun = "min"))) {
+    x <- terra::focal(x, w = 3, fun = "modal", 
+                  na.rm = TRUE, na.policy = "only", expand = TRUE)
+}
+
 
 while(
   is.na(as.vector(unlist(global(x, fun = "mean"))))
@@ -1770,37 +2007,154 @@ for (i in 1:20) {
 
 ```
 
+```{r focal-resample-test-s}
+site_index <-1
+lc_class
+
+
+plot(abn_lcc[[site_index]][["y2015"]])
+plot(lcc[[site_index]][["y2015"]])
+
+#. 1.
+# first, reclassify land cover map to extract just one land cover class:
+tic()
+lcc_sub_2 <- classify(
+        lcc[[site_index]][["y2015"]],
+        rcl = tibble(is = lc_class, becomes = lc_class), # simple rcl, e.g., where 2 stays 2, everything else is converted to NA
+        othersNA = TRUE,
+        filename = paste0(p_tmp, site_df$site[site_index], "_lcc_sub_", lc_class,".tif"),
+        overwrite=TRUE
+        )
+toc()
+plot(lcc_sub_2)
+
+# this will be used to mask the resampled IUCN habitat map.
+
+
+# 2. 
+# then, reclassify the habitat map to extract only those habitat types that fall within the above land cover class:
+# reclassify lc and iucn
+tic()
+iucn_sub_2 <- classify(
+        site_jung_l2[[site_index]] %>% 
+          crop(., lcc[[site_index]]), # crop first, since focal takes care of NA border cells
+        rcl = iucn_crosswalk %>% filter(lc != 2) %>% select(is = map_code) %>% mutate(becomes = NA),
+        # othersNA = TRUE,
+        filename = paste0(p_tmp, site_df$site[site_index], "_iucn_sub_", lc_class, ".tif"),
+        overwrite=TRUE
+        )
+toc()
+plot(iucn_sub_2)
+
+
+# 3.
+# then, start the resampling process:
+tic()
+x <- terra::focal(iucn_sub_2, w = 3, 
+                  fun = "modal", na.rm = TRUE, na.policy = "only", expand = TRUE
+                  )
+toc()
+plot(x)
+
+# it's faster without saving to file each time. 
+tic()
+for (i in 1:100) {
+x <- terra::focal(x, w = 3,
+                  fun = "modal", na.rm = TRUE, na.policy = "only", expand = TRUE
+)
+}
+toc()
+plot(x)
+plot(is.na(x))
+
+# two versions of a for loop:
+tic()
+while(is.na(global(x, fun = "min"))) {
+    x <- terra::focal(x, w = 3, fun = "modal", 
+                  na.rm = TRUE, na.policy = "only", expand = TRUE)
+}
+toc()
+
+
+
+# save to file
+
+
+# mask to my land cover
+
+plot(rcl_iucn)
+tic()
+rcl_iucn_focal <- terra::focal(rcl_iucn, w = 3, fun = "modal", 
+                       na.rm=TRUE, na.only=TRUE, expand=TRUE,
+                       filename = paste0(p_tmp, site_df$site[site_index], "_iucn_rcl_",
+                                         lc_class,"_focal.tif"),
+                       overwrite=TRUE)
+toc()
+
+tic()
+for (i in 1:100) {
+rcl_iucn_focal <- terra::focal(
+  rcl_iucn_focal, w = 3, fun = "modal", 
+  na.rm=TRUE, na.only=TRUE, expand=TRUE,
+  filename = paste0(p_tmp, site_df$site[site_index], "_iucn_rcl_",
+                    lc_class,"_focal.tif"),
+  overwrite=TRUE
+)
+}
+toc()
+```
+
+```{r compare-ratios}
+
+
+```
+
+
 ```{r dist-direction-resample}
+# https://stackoverflow.com/questions/27562076/if-raster-value-na-search-and-extract-the-nearest-non-na-pixel/
+  
 set.seed(2)
 # set projected CRS
-r <- raster(ncol=10, nrow=10, 
-          xmn=0, xmx=10, ymn=0,ymx=10,
-          # xmin=0, xmax=10, ymin=0,ymax=10, 
-          crs='+proj=utm +zone=1') 
+r <- rast(ncol=10, nrow=10, 
+          # xmn=0, xmx=10, ymn=0,ymx=10,
+          xmin=0, xmax=10, ymin=0,ymax=10,
+          crs='+proj=longlat +datum=WGS84') 
 r[] <- 1:10
-r[sample(1:ncell(r), size = 25)] <- NA
+r[sample(1:ncell(r), size = 50)] <- NA
 plot(r)
+text(r)
 
 # create sample points
 xy <- data.frame(x=runif(10,1,10), y=runif(10,1,10))
 
 # use normal extract function to show that NAs are extracted for some points
-extracted <- raster::extract(x = r, y = xy)
-# extracted <- terra::extract(x = r, y = xy)
+# extracted <- raster::extract(x = r, y = xy)
+extracted <- terra::extract(x = r, y = xy)
 
 plot(extracted)
 
 # Calculate the distance and direction from all NA pixels to the nearest non-NA pixel:
 
-dist <- raster::distance(r)
-# dist <- terra::distance(r)
+# dist <- raster::distance(r)
+dist <- terra::distance(r) # distance in meters
 
 plot(dist)
+text(dist)
 names(dist) <- "dist"
 
 # you can also set a maximum distance: dist[dist > maxdist] <- NA
-direct <- direction(r, from=FALSE, degrees = FALSE)
-plot(direct)
+direct <- terra::direction(r, from=FALSE, degrees = TRUE)
+# this is the number of degrees, moving right, from true north. 
+# so, 90 is right, 180 is below, 270 (-90) is left, and 0 is above. 
+
+# radians are measured from the rightmost point. So 
+minmax(direct)
+
+plot(direct, type = "classes")
+text(direct)
+plot(r)
+text(r)
+
 names(direct) <- "direct"
 
 
@@ -1811,8 +2165,16 @@ rna <- is.na(r) # returns NA raster
 plot(rna)
 names(rna) <- "is.na"
 
-tdt <- as.data.table.raster(
+plot(c(r, dist, direct, rna), type = "classes")
+
+
+
+tdr <- as.data.table.raster(
   brick(r, dist, direct, rna)
+  )
+
+tdt <- spatraster_to_dt(
+  c(r, dist, direct, rna)
   )
 
 head(tdt)
@@ -1820,6 +2182,7 @@ head(tdt)
 
 
 # store coordinates in new raster: https://stackoverflow.com/a/35592230/3752258 
+plot(rna)
 na.x <- init(rna, 'x')
 na.y <- init(rna, 'y')
 
@@ -1831,6 +2194,9 @@ values(na.x)
 # assume that we have a orthogonal, projected CRS, so we can use (Pythagorean) calculations
 co.x <- na.x + dist * sin(direct)
 co.y <- na.y + dist * cos(direct)
+
+plot(sin(direct))
+plot(dist)
 
 plot(co.x)
 plot(co.y)
@@ -1848,7 +2214,9 @@ co
 # Extract values of nearest non-NA cell with coordinates 'co'
 
 # extract values of nearest non-NA cell with coordinates co
+NAVals <- terra::extract(r, co, method='simple') 
 NAVals <- raster::extract(r, co, method='simple') 
+plot(r)
 plot(NAVals)
 
 r.NAVals <- rna # initiate new raster
