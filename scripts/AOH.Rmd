@@ -18,8 +18,6 @@ source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_star
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/_util/_util_files.R")
 ```
 
-
-
 ```{r clean-up}
 os <- get_sizes(ls())
 
@@ -1473,7 +1471,8 @@ jung_hab_type_area_df %>% select(habitat_type, code, lc, Coarse_Name, IUCNLevel)
 ## lc of abandonment 
 
 ```{r age-abn-mask}
-# mask the lc map by the age map
+# ------------------------------------------------------------ #
+# create a mask of the abandonment age map, excluding ages < 5
 plot(age_t[[9]][[31]])
 
 tic()
@@ -1505,6 +1504,32 @@ freq(abn_mask[[site_index]][[31]])
 plot(abn_mask$shaanxi[[31]])
 plot(lc[[site_index]][[28:31]])
 
+
+# ------------------------------------------------------------ #
+# create a mask of the *potential* abandonment age map, excluding ages < 5
+tic()
+potential_abn_mask <- lapply(1:11, function(i) {
+  potential_abn_mask_tmp <- 
+    classify(
+      potential_age_t[[i]],
+      rcl = tibble(from = 5,
+                   to = 30,
+                   becomes = 0),
+      othersNA = TRUE,
+      include.lowest = TRUE, right = TRUE,
+      filename = paste0(p_dat_derived, "age_rasters/", run_label, "/",
+                        site_df$site[i], "_potential_abn_5_30_mask", run_label,".tif"),
+      names = paste0("y", 1987:2017),
+      overwrite = TRUE)
+})
+toc()
+
+potential_abn_mask <- lapply(1:11, function(i){
+  rast(paste0(p_dat_derived, "age_rasters/", run_label, "/",
+              site_df$site[i], "_potential_abn_5_30_mask", run_label,".tif"))
+})
+
+names(potential_abn_mask) <- site_df$site
 
 
 # ---------------------------------------------------------------- #
@@ -1540,7 +1565,7 @@ names(max_age_mask) <- site_df$site
 ```
 
 
-```{r lc-of-abn-terra}
+```{r lcc-of-abn-terra}
 # write code to calculate the land cover in each pixel 5 years and older
 i <- 9
 print(compareGeom(abn_mask[[i]], age_t[[i]]))
@@ -1838,6 +1863,8 @@ for(lc_class in 1:4) {
 # /Users/christophercrawford/work/projects/abandonment_trajectories/data_derived/lc_r_clean/shaanxi_clean.tif
 ```
 
+
+
 # Tomorrow
 ```{r}
 aoh_31_dfc %>% print(n = 100)
@@ -1903,12 +1930,12 @@ species_list %>%
 run_date <- "_2021_12_12" # "_2021_12_05"
 
 aoh_lc_df <- lapply(
-  list.files(paste0(p_derived, "aoh"), full.names = T) %>% 
+  list.files(paste0(p_derived, "aoh/old"), full.names = T) %>% 
     grep(paste0("aoh_tmp_2021_12_1[23]"), ., value = T),
   read_csv) %>% 
   bind_rows() %>% 
   left_join(iucn_status, by = "binomial") %>%
-  left_join(select(species_list, -synonym), by = c("site", "binomial"))
+  left_join(species_list, by = c("site", "binomial"))
 
 
 
@@ -1951,7 +1978,7 @@ species_list %>%
 
 ```{r load-abn-lc-results}
 aoh_abn <- lapply(1:18, function(i) {
-  read_csv(paste0(p_derived, "aoh/aoh_abn_lc_tmp", "_2021_12_13", "_c", i, ".csv"))
+  read_csv(paste0(p_derived, "aoh/old/aoh_abn_lc_tmp", "_2021_12_13", "_c", i, ".csv"))
   }
   ) %>% 
   bind_rows() %>% 
@@ -1959,7 +1986,7 @@ aoh_abn <- lapply(1:18, function(i) {
   left_join(species_list, by = c("site", "binomial"))
 
 aoh_max_abn <- lapply(1:18, function(i) {
-  read_csv(paste0(p_derived, "aoh/aoh_max_abn_lc_tmp", "_2021_12_13", "_c", i, ".csv"))
+  read_csv(paste0(p_derived, "aoh/old/aoh_max_abn_lc_tmp", "_2021_12_13", "_c", i, ".csv"))
   }
   ) %>% 
   bind_rows() %>% 
