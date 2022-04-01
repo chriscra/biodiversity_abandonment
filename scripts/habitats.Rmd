@@ -7,9 +7,8 @@ editor_options:
   chunk_output_type: console
 ---
 
-
 This is part of the **Biodiversity Impacts of Abandonment** project, developed by Christopher L. Crawford, starting fall of 2021. 
-See https://github.com/chriscra/biodiversity_abandonment.
+See <https://github.com/chriscra/biodiversity_abandonment>.
 
 ```{r initialize}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
@@ -19,11 +18,49 @@ source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_star
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/_util/_util_files.R")
 ```
 
+```{r clean-up}
+os <- get_sizes(ls())
 
+os %>% 
+  summarise(total_env_size = sum(size)) %>% 
+  mutate(gb = total_env_size / 1024^3)
 
-# Habitats
+os %>% print(n = 30)
 
-## PNV
+rm(list = os$object[c(1:6)])
+# rm(list = os$object[c(3:18)])
+get(os$object[c(30)])
+
+# terra and raster temp files
+terra::tmpFiles(current=TRUE, orphan=TRUE, old=TRUE, remove=FALSE)
+terra::tmpFiles(current=TRUE, orphan=TRUE, old=TRUE, remove=TRUE)
+
+raster::rasterTmpFile()
+raster::showTmpFiles()
+raster::removeTmpFiles()
+
+warnings()
+```
+
+# Development
+
+```{r conditional-summarise}
+
+mpg %>% 
+  group_by(manufacturer) %>%
+  summarise(mean_cyl = mean(cyl),
+            if (TRUE) {mean_hyw = mean(hwy)}
+          )
+
+mpg %>% 
+  group_by(manufacturer) %>%
+  summarise(mean_cyl = mean(cyl),
+            mean_hyw = if (FALSE) mean(hwy)
+          )
+
+```
+
+# PNV
 
 ```{r pnv}
 # load PNV
@@ -501,7 +538,7 @@ copernicus_table$Name
 ```
 
 
-## IUCN Habitat types
+# IUCN Habitat types
 
 ```{r load-jung-habitat-types}
 # level 1
@@ -1076,7 +1113,7 @@ b_habitat_area <- habitat_table %>%
 
 ```
 
-### Crosswalks
+## Crosswalks
 
 
 ```{r jung-table-crosswalk}
@@ -1434,11 +1471,6 @@ plot(pnv_lc, ext = ext(lc[[i]]$y2017 + 1), maxcell = 1e8)
 ```
 
 
-
-```{r backwards-crosswalk}
-
-```
-
 ## Directly assign land cover to IUCN habitat types
 
 In a previous version of the AOH function, we calculated the area in each land cover class (i.e., of the four land cover classes in the original Yin et al. 2020 land cover maps).
@@ -1474,50 +1506,51 @@ We essentially follow four steps:
 
 7. Use this as the final habitat map for calculating area of habitat.
 
-```{r make-composite-habitat-map}
 
+```{r lcc-iucn-habitat-composite}
 site_index <- 3
 lc_class <- 2
 
-lc_classes <- 1:4 
-lc_classes <- c(2, 4)
+lc_classes <- 1:4
+# lc_classes <- c(2, 4)
 
 
 plot(abn_lcc[[site_index]][["y2015"]])
 plot(lcc[[site_index]][["y2015"]])
 
 
+# loop through all 11 sites:
+
+lapply(1:11, function(site_index) {
+cat(fill = TRUE, 
+    "Direct reclassification of land cover classes into IUCN habitat map codes:", 
+    site_df$site[site_index])
 
 # -------------------------------------------- # 
 # 1. Reclassify the habitat map to extract only those habitat types that fall within the above land cover class (e.g., 2, woody vegetation).
 
 # for multiple land cover classes at once:
-iucn_tmp <- rep(site_jung_l2[[site_index]], length(lc_classes))# %>% crop(., lcc[[site_index]])
-names(iucn_tmp) <- c("lc2", "lc4")
+cat(fill = TRUE, "Subset the Jung habitat map into maps corresponding to four land cover classes.")
 
 iucn_sub <- lapply(seq_along(lc_classes), function(i) {
   lc_class <- lc_classes[i]
   
   classify(
-    iucn_tmp[[i]], # crop first, since focal takes care of NA border cells
+    site_jung_l2[[site_index]],
     rcl = iucn_crosswalk %>% 
       filter(lc != lc_class) %>% select(is = map_code) %>% mutate(becomes = NA),
-    # othersNA = TRUE,
-    filename = paste0(p_tmp, site_df$site[site_index], "_iucn_sub_", lc_class, ".tif"),
-    overwrite=TRUE
+    names = paste0("lc", lc_class)
     )
   }) %>% rast()
 
-
-# just a single land cover class:
-
-plot(iucn_sub)
-
+# plot(iucn_sub)
 
 # -------------------------------------------- # 
 # 2. Fill all NA values in this reclassified habitat map with the modal value of the surrounding 9 cell values, using `terra::focal(fun = "modal")`.
 
 # loop through each land cover layer until there are no more NA values.
+cat(fill = TRUE, "Use focal() to fill all NA cells with modal value for each lc subset.")
+
 tic()
 iucn_focal <- lapply(seq_along(lc_classes), function(i) {
   x <- terra::focal(iucn_sub[[i]], w = 3, 
@@ -1528,126 +1561,148 @@ iucn_focal <- lapply(seq_along(lc_classes), function(i) {
     x <- terra::focal(x, w = 3, fun = "modal", 
                       na.rm = TRUE, na.policy = "only", expand = TRUE)
   }
+  
   x
   }) %>% rast()
 toc()
 
-plot(iucn_focal)
+names(iucn_focal) <- paste0(names(iucn_sub), "_iucn_focal")
+
+# plot(iucn_focal)
+# iucn_crosswalk %>% print(n = 50)
+
 
 # save this composite layer:
 writeRaster(iucn_focal,
-            filename = paste0(p_derived, "iucn_habitat_lcc_composite/", 
+            filename = paste0(p_derived, "lcc_iucn_habitat/", 
                               site_df$site[site_index], "_iucn_focal.tif"),
-            names = "iucn_focal_composite",
+            names = names(iucn_focal),
             overwrite = TRUE)
+
+
+# iucn_focal <- rast(paste0(p_derived, "lcc_iucn_habitat/", 
+#                               site_df$site[site_index], "_iucn_focal.tif"))
 
 # -------------------------------------------- # 
 # 3. Resample each resampled habitat map to finer resolution.
 
-i <- 1
-plot(lcc_sub[[i]])
-plot(iucn_focal[[i]])
+cat(fill = TRUE, "Resample iucn_focal to site extent and resolution.")
 
 iucn_focal_resampled <- 
   lapply(seq_along(lc_classes), function(i) {
   terra::resample(
-    x = iucn_focal[[i]], y = lcc_sub[[i]], method = "near",
-    # filename = paste0(p_derived, "site_jung/", names(lc[i]), "_jung_l2_30.tif"),
-    # names = paste0(names(lc[i]), "_jung_l2_30"),
-    # overwrite = TRUE
+    x = iucn_focal[[i]], y = lcc[[site_index]][[31]], 
+    method = "near"
     )
   }) %>% rast()
 
-plot(iucn_focal_resampled)
+# plot(iucn_focal_resampled)
 
 
 # -------------------------------------------- # 
 # 4. Mask directly, based on cell values, rather than with a intermediate step mask.
-# this results in a list with a 31-layer spatraster for each land cover class, showing just the habitat map codes for the pixels in that land cover in that year:  
+# this results in a list with a 31-layer spatraster for each land cover class, showing just the habitat map codes for the pixels in that land cover in that year:
+cat(fill = TRUE, "Mask and save iucn_focal_msk.")
+
 tic()
 iucn_focal_msk <- lapply(seq_along(lc_classes), function(i) {
   terra::mask(
-  # these need to have the same number of layers:
     iucn_focal_resampled[[i]], lcc[[site_index]],
     maskvalues = lc_classes[i], inverse = TRUE,
     names = names(lcc[[site_index]]),
-    filename = paste0(p_derived, "iucn_habitat_lcc_composite/", site_df$site[site_index],
+    filename = paste0(p_derived, "lcc_iucn_habitat/", site_df$site[site_index],
                      "_iucn_focal_msk_lc", lc_classes[i], ".tif"),
     overwrite = TRUE
   )}
-) #%>% rast()
+)
 names(iucn_focal_msk) <- paste0("lc", lc_classes)
 toc()
 
-plot(iucn_focal_msk[[1]][[28:31]])
-plot(iucn_focal_msk[[2]][[28:31]])
-
-lcc[[site_index]][[28:31]]
-
-
-# [unused] Alternatively: reclassify land cover map to extract just one land cover class (e.g., 2, woody vegetation).
-# This will be used to mask the resampled IUCN habitat map.
-# 
-# lcc_tmp <- rep(lcc[[site_index]][[29]], length(lc_classes))
-# names(lcc_tmp) <- paste0("lc", lc_classes) #c("lc2", "lc4")
-# lcc_tmp
-# 
-# tic()
-# lcc_sub <- lapply(seq_along(lc_classes), function(i) {
-#   lc_class <- lc_classes[i]
-#   
-#   lc_sub_tmp <- classify(
-#     # lcc[[site_index]][[25:29]],
-#     lcc_tmp[[i]],
-#     # simple rcl, e.g., where 2 stays 2, everything else is converted to NA
-#     rcl = tibble(is = lc_class, becomes = lc_class),
-#     othersNA = TRUE,
-#     # filename = paste0(p_tmp, site_df$site[site_index], "_iucn_sub_", lc_class, ".tif"),
-#     # overwrite=TRUE
-#     )
-#   }) %>% rast()
-# toc()
-# names(lcc_sub) <- paste0("lc", lc_classes)
-# 
-# plot(lcc_sub)
-# names(lcc_sub)
-# 
-# # save:
-# writeRaster(
-#   lcc_sub,
-#   filename = paste0(p_tmp, site_df$site[site_index], "_lcc_sub.tif"),
-#         overwrite=TRUE)
+# plot(iucn_focal_msk[[1]][[28:31]])
+# plot(iucn_focal_msk[[2]][[28:31]])
+# plot(iucn_focal_msk[[3]][[28:31]])
+# plot(iucn_focal_msk[[4]][[28:31]])
+# plot(lcc[[site_index]][[28:31]], col = lc_plot_cols$color)
 
 
 # -------------------------------------------- # 
 # 5. Construct a composite habitat map for each year by knitting together these four resampled habitat maps
 # (Either by converting NAs to zeros and adding, or some other method.)
-iucn_focal_msk %>% length()
+
+cat(fill = TRUE, "Use cover() to knit together four masked SpatRasters.")
 tic()
-iucn_focal_composite <- cover(iucn_focal_msk[[1]], iucn_focal_msk[[2]])
+lcc_iucn_habitat <- cover(iucn_focal_msk[[1]], iucn_focal_msk[[2]])
 if (length(iucn_focal_msk) > 2) {
-  iucn_focal_composite <- cover(iucn_focal_composite, iucn_focal_msk[[3]])
+  lcc_iucn_habitat <- cover(lcc_iucn_habitat, iucn_focal_msk[[3]])
 }
 
 if (length(iucn_focal_msk) > 3) {
-  iucn_focal_composite <- cover(iucn_focal_composite, iucn_focal_msk[[4]])
+  lcc_iucn_habitat <- cover(lcc_iucn_habitat, iucn_focal_msk[[4]])
 }
 toc()
 
-plot(iucn_focal_composite[[28:31]])
+# plot(lcc_iucn_habitat[[28:31]])
+# plot(site_jung_l2[[site_index]])
 
 
 # save this composite layer:
-writeRaster(iucn_focal_composite,
-            filename = paste0(p_derived, "iucn_habitat_lcc_composite/", 
-                              site_df$site[site_index], "_iucn_focal_composite.tif"),
-            names = names(iucn_focal_composite),
+writeRaster(lcc_iucn_habitat,
+            filename = paste0(p_derived, "lcc_iucn_habitat/", 
+                              site_df$site[site_index], "_lcc_iucn_habitat.tif"),
+            names = names(lcc_iucn_habitat),
             overwrite = TRUE)
 
+terra::tmpFiles(current=TRUE, orphan=TRUE, old=TRUE, remove=TRUE)
 
+##### End of lapply() call #####
+})
+```
+
+
+```{r mask-lcc-iucn-habitat-to-abn}
 # -------------------------------------------- # 
 # 7. Mask this composite to the area abandoned in each year, for each site.
- 
+
+# reload
+lcc_iucn_habitat <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "lcc_iucn_habitat/",
+              site_df$site[i], "_lcc_iucn_habitat.tif"))
+  })
+names(lcc_iucn_habitat) <- site_df$site
+
+plot(lcc_iucn_habitat[[1]][[28:31]])
+
+terra::tmpFiles(current=TRUE, orphan=TRUE, old=TRUE, remove=TRUE)
+
+# mask the new iucn habitat composite in lc map to only those areas of abandonment
+i <- 9
+
+tic()
+lapply(1:11, function(i) {
+  # make sure to restrict lc to only 1987:2017 (Nebraska, Wisconsin)
+  # i <- 9
+  cat("Masking:", site_df$site[i], "...", fill = TRUE)
+  tmp <- abn_mask[[i]] + lcc_iucn_habitat[[i]][[paste0("y", 1987:2017)]]
+  
+  cat("Writing SpatRaster to file:", site_df$site[i], "...", fill = TRUE)
+  writeRaster(tmp, 
+              filename = paste0(p_derived, "lcc_iucn_habitat/",
+                        site_df$site[i], "_abn_lcc_iucn_habitat", run_label, ".tif"), 
+              overwrite = TRUE,
+              names = names(tmp))
+  cat(site_df$site[i], "done!", fill = TRUE)
+
+})
+toc()
+
+# plot(abn_lcc_iucn_habitat[[1]][[31]])
+
+# reload
+abn_lcc_iucn_habitat <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "lcc_iucn_habitat/",
+              site_df$site[i], "_abn_lcc_iucn_habitat", run_label, ".tif"))
+  })
+names(abn_lcc_iucn_habitat) <- site_df$site
 
 # -------------------------------------------- # 
 # 8. Save - Use this as the final habitat map for calculating area of habitat.
@@ -1657,11 +1712,287 @@ writeRaster(iucn_focal_composite,
 ```
 
 
-### Resample based on modal value using `terra::focal()`
+### IUCN habitats in potential abandonment without recultivation
+
+Calculating the area of habitat if no recultivation took place.
+How do I go about determining the land cover (and subsequently, the IUCN habitat types) for the potential abandonment layer?
+The issue is that this layer does not have land cover classes associated with it. 
+
+Perhaps I could use the cover() function to add the land cover classes from the abandonment mask to each other, iteratively, to get the latest land cover type before the abandoned cropland was recultivated. I could then use this to determine the habitat type, frozen (if you will) at the point right before it was recultivated, but allowed to continue on. 
+I guess I could also do this with the `lcc_iucn_habitat` rasters, since this has already been constrained to just the lc codes of abandoned pixels.
+
+The max_age raster has the exact same extent as the potential abandonment in the final year of the time series.
+
+```{r test-cover-abn-lcc}
+abn_mask
+
+site_index <- 3
+
+potential_age_t[[site_index]]$y2017 %>% plot()
+age_t[[site_index]]$y2017 %>% plot()
+
+small_cq <- draw()
+
+potential_age_t[[site_index]]$y2017 %>% plot(ext = small_cq)
+
+tt <- crop(abn_lcc[[site_index]], small_cq)
+ait <- crop(abn_lcc_iucn_habitat[[site_index]], small_cq)
+ptt <- crop(potential_age_t[[site_index]], small_cq)
+mtt <- crop(max_age_t[[site_index]], small_cq)
+mt2 <- crop(max_age_mask[[site_index]], small_cq)
+
+plot(ait[[31]])
+freq(abn_lcc_iucn_habitat[[site_index]][[28:31]])
+iucn_crosswalk %>% print(n= 50)
+plot(mt2)
+plot(mtt>4)
+
+mtt <- classify(
+      mtt,
+      rcl = tibble(from = 0,
+                   to = 4,
+                   becomes = NA_real_),
+      othersNA = FALSE,
+      include.lowest = TRUE, right = TRUE)
+plot(mtt)
+plot(is.na(mtt))
+plot(is.na(mt2))
+plot(ptt[[31]]>4)
+plot(is.na(ptt[[31]]>4))
+
+cit <- cover(ait[[31]], ait[[30]])
+for (i in (nlyr(ait)-2):6) {
+  cit <- cover(cit, ait[[i]])
+}
+
+plot(cit)
+plot(ct)
+plot(is.na(cit))
+plot(is.na(ct))
+
+plot(tt[[31]])
+plot(tt[[30]])
+plot(ct)
+
+ct <- cover(tt[[31]], tt[[30]], values = NA)
+for (i in (nlyr(tt)-2):6) {
+  ct <- cover(ct, tt[[i]])
+}
+plot(ct)
 
 
+plot(ct - tt[[31]])
+plot(is.na(ct))
+plot(is.na(tt[[31]]))
+plot(is.na(ptt[[31]]))
+plot(is.na(mtt))
+plot(is.na(ct) - is.na(tt[[31]]))
 
-### Assigning via nearest neighbor
+
+plot(tt[[31]])
+plot(ptt[[31]])
+plot(mtt)
+
+plot(is.na(ptt[[31]]))
+plot(is.na(mtt))
+
+
+plot(is.na(ptt[[31]]) - is.na(mtt))
+
+#
+tt
+plot(tt[[22:31]])
+
+
+# -------------------------------------------------- #
+# full test, with chongqing
+
+tic()
+full_test <- cover(abn_lcc_iucn_habitat[[site_index]][[31]], abn_lcc_iucn_habitat[[site_index]][[30]])
+for (i in (nlyr(abn_lcc_iucn_habitat[[site_index]])-2):6) {
+  full_test <- cover(full_test, abn_lcc_iucn_habitat[[site_index]][[i]])
+}
+toc()
+```
+
+```{r *create-potential-abn-iucn}
+# site_index <- 3
+
+tic()
+lapply(5:11, function(site_index) {
+  cat("Build potential habitat layer sequentially using terra::cover(), for",
+      site_df$site[site_index], fill = TRUE)
+  potential_tmp <- lapply(1:31, function(i) {abn_lcc_iucn_habitat[[site_index]][[i]]})
+  
+  # start in year 6 ("y1992"), which is the first year abandonment is possible.
+  for (i in 6:31) {
+    tic(paste0("cover() on i = ", i))
+    potential_tmp[[i]] <- cover(potential_tmp[[i]], potential_tmp[[i-1]])
+    toc()
+  }
+  
+  tic("Combine list layers with rast()")
+  potential_tmp <- rast(potential_tmp)
+  toc()
+
+  cat("Writing potential_tmp SpatRaster to file:", site_df$site[site_index], "...", fill = TRUE)
+  writeRaster(potential_tmp, 
+              filename = paste0(p_derived, "lcc_iucn_habitat/",
+                        site_df$site[site_index], "_potential_abn_lcc_iucn_habitat",
+                        run_label, ".tif"), 
+              overwrite = TRUE,
+              names = names(potential_tmp))
+  
+  cat(site_df$site[site_index], "done!", fill = TRUE)
+})
+toc()
+
+# load back in:
+potential_abn_lcc_iucn_habitat <- lapply(1:11, function(i){
+  rast(paste0(p_derived, "lcc_iucn_habitat/",
+                    site_df$site[i], "_potential_abn_lcc_iucn_habitat",
+                    run_label, ".tif"))
+})
+names(potential_abn_lcc_iucn_habitat) <- site_df$site
+```
+
+
+```{r check-lapply-results}
+potential_abn_lcc_iucn_habitat
+potential_abn_lcc_iucn_habitat0
+# Check - everything looks ok.
+# --------------------------------------------- #
+# test to make sure this worked:
+
+# --------
+# test 1 - compare to the full manual test of layer 31:
+plot(potential_abn_lcc_iucn_habitat$chongqing$y2017, ext = small_cq)
+plot(full_test, ext = small_cq)
+
+# --------
+# two ways to compare rasters:
+# 1. Do the same cells have values in each?
+# 2. Are the values of the cells in each equal to each other?
+
+# --------
+# 1.
+tic()
+global(potential_abn_lcc_iucn_habitat$chongqing$y2017, fun = "isNA")
+toc()
+
+tic()
+global(full_test, fun = "isNA") # or global(is.na(full_test), fun = "sum")
+toc()
+
+# --------
+# 2. Fill NAs with 0s, match
+
+# check chongqing
+t1 <- potential_abn_lcc_iucn_habitat$chongqing$y2017
+t2 <- full_test
+
+tic()
+t1 <- classify(t1, rcl = tibble("is" = NA_real_, "becomes" = 0))
+toc()
+
+tic()
+t2 <- classify(t2, rcl = tibble("is" = NA_real_, "becomes" = 0))
+toc()
+
+plot(t1)
+plot(t2)
+global(t1, fun = "isNA")
+global(t2, fun = "isNA")
+
+plot(t1 - t2)
+global(t1 - t2, "sum")
+
+
+# --------
+# test 2 - compare to the extent of potential_abn, for 5 and older.
+
+# compare chongqing
+site_index <- 3
+plot(potential_abn_lcc_iucn_habitat[[site_index]]$y2017, ext = small_cq)
+
+plot(potential_abn_lcc_iucn_habitat$chongqing$y2017>0)
+plot(potential_abn_mask$chongqing$y2017)
+
+t3 <- potential_abn_lcc_iucn_habitat$chongqing$y2017
+t4 <- potential_abn_mask$chongqing$y2017
+as.numeric(global(t3, fun = "isNA")) == 
+  as.numeric(global(t4, fun = "isNA"))
+
+# compare belarus
+plot(potential_abn_lcc_iucn_habitat$belarus$y2017>0)
+plot(potential_abn_mask$belarus$y2017)
+
+t3 <- potential_abn_lcc_iucn_habitat$belarus$y2017
+t4 <- potential_abn_mask$belarus$y2017
+global(t3, fun = "isNA")
+global(t4, fun = "isNA")
+
+
+# compare, sequentially:
+site_index <- 3
+for (site_index in 1:11) {
+# plot(potential_abn_lcc_iucn_habitat[[site_index]]$y2017>0, main = "Main result")
+# plot(potential_abn_mask[[site_index]]$y2017, main = "Potential abn mask")
+
+t3 <- potential_abn_lcc_iucn_habitat[[site_index]]$y2017
+t4 <- potential_abn_mask[[site_index]]$y2017
+print("Do the number of NAs match?")
+print(
+  as.numeric(global(t3, fun = "isNA")) == 
+    as.numeric(global(t4, fun = "isNA"))
+)
+}
+
+# everything looks good. 
+
+```
+
+
+```{r generic-compare-two-rasters}
+# --------------------------------------------------------- #
+#  BE CAREFUL with comparing two rasters
+# --------
+# two ways to compare rasters:
+# 1. Do the same cells have values in each?
+# 2. Are the values of the cells in each equal to each other?
+
+t1 <- potential_abn_lcc_iucn_habitat$chongqing$y2017
+t2 <- full_test
+
+# --------
+# 1.
+tic()
+global(t1, fun = "isNA")
+toc()
+
+tic()
+global(t2, fun = "isNA") # global(is.na(t2), fun = "sum")
+toc()
+
+# --------
+# 2. Fill NAs with 0s, match
+tic()
+t1 <- classify(t1, rcl = tibble("is" = NA_real_, "becomes" = 0))
+toc()
+
+tic()
+t2 <- classify(t2, rcl = tibble("is" = NA_real_, "becomes" = 0))
+toc()
+
+plot(t1)
+plot(t2)
+plot(t1 - t2)
+global(t1 - t2, "sum")
+
+
+```
+
+## [Old, Development] Assigning via nearest neighbor
 
 ```{r direct-assignment}
 site_index <- 9
@@ -2453,7 +2784,7 @@ sqrt(1000000/700)
 
 ```
 
-
+# Basic plots
 ## Plot Yin et al. 2020 land cover:
 ```{r plot-lc}
 inset_map_titles <- paste0("(", gsub("_", "", site_df$label), ") ", site_df$description)
@@ -2825,7 +3156,7 @@ plot(nj_aea$geometry, add = T)
 
 
 
-## Ecoregions (TNC/WWF)
+# Ecoregions (TNC/WWF)
 
 ```{r biomes}
 # use this version to match to PREDICTS
