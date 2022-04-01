@@ -3,7 +3,7 @@
 
 This repository houses analysis scripts and documentation for:
 
-> Crawford C.L.\*, Senior, R.A., Yin, H., Radeloff, V.C., and Wilcove, D.S. Year. Title. *Journal Status.*
+> Crawford C.L.\*, Yin, H., Wiebe, R.A., Radeloff, V.C., and Wilcove, D.S. Year. Title. *Journal Status.*
 
 \*@chriscra, ccrawford@princeton.edu, Robertson Hall, Princeton University, Princeton, NJ
 

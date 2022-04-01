@@ -3,7 +3,6 @@ title: "Implications of cropland abandonment and recultivation for biodiversity"
 author:
   - Christopher L. Crawford$^1$^[Corresponding Author, ccrawford@princeton.edu, Robertson Hall, Princeton University, Princeton, NJ]
   - He Yin$^2$
-  - Yiwen Zeng$^{1}$
   - Alex Wiebe$^{4}$
   - Volker C. Radeloff$^3$
   - David S. Wilcove$^{1,4}$
