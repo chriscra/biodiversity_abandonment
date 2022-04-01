@@ -33,11 +33,8 @@ rm(list = os$object[c(1:6)])
 get(os$object[c(30)])
 
 # terra and raster temp files
-terra::tmpFiles(current=TRUE, orphan=TRUE, old=TRUE, 
-                remove=FALSE)
-
-terra::tmpFiles(current=TRUE, orphan=TRUE, old=TRUE, 
-                remove=TRUE)
+terra::tmpFiles(current=TRUE, orphan=TRUE, old=TRUE, remove=FALSE)
+terra::tmpFiles(current=TRUE, orphan=TRUE, old=TRUE, remove=TRUE)
 
 raster::rasterTmpFile()
 raster::showTmpFiles()
@@ -639,30 +636,36 @@ aoh_dt_11_test %>%
   select(site, binomial, time) %>% unique() %>% print(n = 200)
 
 
-# comparing_times0 <- aoh_31_df %>%
-# comparing_times_abn <- aoh_abn %>%
-comparing_times_lc <- aoh_lc_df %>%
-  select(site, binomial, time) %>% unique() %>%
+comparing_times <- lapply(c("aoh_lc_df", "aoh_abn"), function(i) {
+  get(i) %>%
+    select(site, binomial, time) %>% unique() %>%
     group_by(site) %>%
     summarise(max_time = max(time),
               mean_time = mean(time)) %>% 
-  mutate(time_rel_max_mx = max_time / max(max_time),
-         time_rel_max_mn = mean_time / max(mean_time),
-         ncell = sapply(1:11, function(i) {ncell(lcc[[i]])}),
-         ncell_rel_max = ncell / max(ncell),
-         factor_mx = pmax(time_rel_max_mx, ncell_rel_max),
-         record_multiplier_mx = max(factor_mx)/factor_mx,
-         record_multiplier_mn = max(time_rel_max_mn)/time_rel_max_mn,
-         )
+    mutate(type = i,
+           time_rel_max_mx = max_time / max(max_time),
+           time_rel_max_mn = mean_time / max(mean_time),
+           ncell = sapply(1:11, function(i) {ncell(lcc[[i]])}),
+           ncell_rel_max = ncell / max(ncell),
+           factor_mx = pmax(time_rel_max_mx, ncell_rel_max),
+           record_multiplier_mx = max(factor_mx)/factor_mx,
+           record_multiplier_mn = max(time_rel_max_mn)/time_rel_max_mn,
+           )
+  }) %>% bind_rows()
 
-
-comparing_times0
-comparing_times0 %>% select(site, max_time, mean_time, ncell, record_multiplier_mn)
-comparing_times_abn %>% select(site, max_time, mean_time, ncell, record_multiplier_mn)
-comparing_times_lc %>% select(site, max_time, mean_time, ncell, record_multiplier_mn)
 
 # time scales linearly with the number of cells
 # so, I can run about X times as many records at smaller sites.
+
+comparing_times$type %>% unique()
+
+comparing_times %>% 
+  filter(
+    type == "aoh_lc_df"
+    # type == "aoh_abn"
+    ) %>%
+  select(site, max_time, mean_time, ncell, time_rel_max_mx, ncell_rel_max, factor_mx, record_multiplier_mn)
+
 
 vert_sites %>%
   st_drop_geometry() %>%
@@ -677,19 +680,19 @@ species_list %>% nrow() # 4001 unique runs, after filtering
 records_by_site <- species_list %>%
   group_by(site) %>% summarise(runs = length(unique(binomial)))
 
-comparing_times0
-comparing_times
 
 # calculate the number of cores, across a range of batch sizes
-# core_tests_lc <-
-core_tests_abn <-
+core_tests <-
   lapply(80:190, function(i) {
   tmp <- 
-    # comparing_times_lc %>%
-    comparing_times_abn %>%
-    select(site, max_time, mean_time, record_multiplier = record_multiplier_mn) %>%
+    comparing_times %>%
+    select(site, type, max_time, mean_time, 
+           # it takes x times longer for a species run in a given site, 
+           # relative to the largest site
+           record_multiplier = record_multiplier_mn) %>%
     left_join(records_by_site, by = "site") %>%
-    mutate(sp_per_core = i * record_multiplier,
+    mutate(block_size = i,
+           sp_per_core = i * record_multiplier, # how many species can be run at a given sites core
            cores_needed = runs/sp_per_core,
            cores_rounded = ceiling(cores_needed),
            runs_per_core = ceiling(runs/cores_rounded),
@@ -697,33 +700,37 @@ core_tests_abn <-
            hr_if_mean = runs_per_core * mean_time / 60 / 60,         
            diff = cores_rounded - cores_needed)   
   
-  tibble(block_size = i,
-         num_cores = sum(tmp$cores_rounded),
-         diff = sum(tmp$diff),
-         mean_time_needed_mn = mean(tmp$hr_if_mean),
-         mean_time_needed_mx = mean(tmp$hr_if_max)
-         )
+  tmp <- tmp %>% 
+    group_by(type) %>% 
+    summarise(block_size = unique(block_size),
+              num_cores = sum(cores_rounded),
+              diff = sum(diff),
+              mean_time_needed_mn = mean(hr_if_mean),
+              mean_time_needed_mx = mean(hr_if_max))
+  
+  tmp
   }) %>% bind_rows
 
-core_tests_abn %>% arrange(diff) %>% print(n = 20)
+core_tests %>% arrange(diff) %>% print(n = 40)
+core_tests %>% filter(block_size == 186)
 core_tests_lc %>% arrange(diff) %>% print(n = 20)
 
 # best mix of size and time, minimizing "unused" cores, and minimizing cores:
 # full lc: 105 runs per core, 22 cores
 # abn only: 114 runs per core, 30 cores
-block_size_abn <- 159
-block_size_lc <- 186
-block_sizes <- tibble(type = c("abn", "lc"), 
-                      block = c(159, 186))
 
-i <- "lc"
+block_sizes <- tibble(type = c("abn", "lc"), 
+                      block = c(114, 105))
+
+i <- "abn"
 calc_cores <-
   lapply(c("abn", "lc"), function(i) {
     comparing_times %>% 
+      filter(grepl(i, type)) %>%
       select(site, max_time, mean_time, record_multiplier = record_multiplier_mn) %>%
       left_join(records_by_site, by = "site") %>%
       mutate(type = i,
-             sp_per_core = filter(block_sizes, type == i)$block * record_multiplier,
+             sp_per_core = filter(block_sizes, type == "lc")$block * record_multiplier,
              cores_needed = runs/sp_per_core,
              cores_rounded = ceiling(cores_needed),
              runs_per_core = ceiling(runs/cores_rounded),
@@ -733,7 +740,10 @@ calc_cores <-
   }) %>% bind_rows()
   
 
-calc_cores %>% print(n = 22)
+calc_cores %>% 
+  # left_join(records_by_site, by = "site") %>% 
+  print(n = 22)
+
 calc_cores %>% 
   group_by(type) %>% 
   summarise(total_cores = sum(cores_rounded))
@@ -741,6 +751,9 @@ calc_cores %>%
 # construct a vector of index numbers based on the number of cores, the species per core, etc.
 
 i <- 9
+calc_cores %>% filter(type == "lc") %>%
+  select(cores_rounded) %>% sum()
+
 della_index <- lapply(1:11, function(i) {
   calc_cores_tmp <- calc_cores %>% filter(type == "lc")
   tmp <- calc_cores_tmp %>% filter(site == site_df$site[i])
@@ -758,14 +771,23 @@ tail(della_index, n = 500)
 length(della_index)
 nrow(species_list)
 
-# add index to the species_list
+# ----------
+# *add index to the species_list*
 # species_list <- species_list %>% select(-index)
 species_list <- species_list %>%
   mutate(core_index = della_index)
 
+
+
 unique(species_list$core_index)
 
 species_list %>% filter(site %in% c("shaanxi", "chongqing")) %>% .$core_index %>% unique()
+
+species_list %>%
+  select(site, core_index) %>%
+  unique() %>%
+  print(n = 25)
+
 calc_cores
 ```
 
@@ -779,6 +801,7 @@ write_csv(species_list, file = paste0(p_derived, "species_list.csv"))
 
 
 ```{r common-names}
+# no longer necessary, but could be useful
 
 common_names <- lapply(c("LC", "nonLC"), function(i) {
   read_csv(
@@ -791,6 +814,11 @@ common_names <- lapply(c("LC", "nonLC"), function(i) {
   bind_rows() %>% 
   filter(binomial %in% unique(species_ranges$binomial))
 
+unique(species_ranges$binomial) %>% length()
+unique(common_names$binomial) %>% length()
+
+species_list %>%
+  filter(!binomial %in% unique(common_names$binomial))
 
 write_csv(common_names, file = paste0(p_derived, "iucn_common_names_subset.csv"))
 
