@@ -13,38 +13,61 @@ cc_AOH_data.table <-
   function(index,
            site_index,
            year_index, # the real year(s)
-           calc_lc = TRUE, # switch between area in "lc" (Yin et al.) vs. "map_code" (IUCN)
-           include_time = FALSE, 
+           calc_lc = FALSE, # switch between area in "lc" (Yin et al.) vs. "map_code" (IUCN)
+           include_time = TRUE, 
            major_importance_only = FALSE, # calc. area of only habitats coded as "majorImportance"
            hab_dt = hab_dt,
            sp_ranges = species_ranges, 
            sp_list = species_list
   ) {
     # ------------------- details ------------------- #
-    # This function calculates the Area of Habitat for one species (index)
-    # at one site (site_index), and in one or more years (year_index).
-    # It requires the following elements to be pre-loaded
-    # a. "habitat_prefs"
-    # b. "jung_hab_type_area_df"
-    # c. "iucn_crosswalk"
-    # d. "elevation_prefs"
-    # e. "site_df"
+    # This function calculates the Area of Habitat for one species ("index")
+    # at one site ("site_index"), and in one or more years ("year_index").
     
-    # It takes as parameters:
-    # i. "hab_dt", the habitat map  (e.g., Yin et al. 2020, lc maps or otherwise), 
-    #     loaded as a data.table. This must include a column with elevation 
-    #     (e.g., elevation_map, derived from  "p_derived/elevation/shaanxi_srtm_crop.tif"), and a column
-    #     of area (derived from site_area_ha, e.g., "p_derived/site_area_ha/shaanxi_area_ha.tif"),
-    #     which are selected by site_index, then converted to data.table and added to hab_dt.
-    # ii. "sp_ranges," a sf file of species range maps, 
-    #     which is "species_ranges" by default, filtered to just 
-    #     mammals, birds, and amphibians, following standard presence/origin filtering,
-    #     and cropped to my 11 sites.
-    # iii."sp_list," a simple data.frame containing all unique runs to be calculated
-    #     during the function call. The index is used to isolate a specific species/site
-    #     combination for AOH to be calculated.
+    # Prerequisites:
+    # It requires the following elements to be pre-loaded into the current environment.
+    # a. "habitat_prefs"          -- .csv of the IUCN habitat preferences for all species at all sites.
+    # b. "jung_hab_type_area_df"  -- .csv containing the area in each IUCN habitat type 
+    #                             -- at each site, which is used to determine the proportion
+    #                             -- in each lc class, to adjust AOH.
+    # c. "iucn_crosswalk"         -- .csv crosswalking "map_code" (IUCN habitat types) with
+    #                             -- "lc" (Yin et al. 2020)
+    # d. "elevation_prefs"        -- .csv of IUCN elevation prefs for all species at all sites.
+    # e. "site_df"                -- a simple .csv with information about eleven sites.
     
-    # for testing
+    # Parameters:
+    # 1. "index"                  -- selects a binomial from "species_list", and subsequently 
+    #                             -- a range from "species_ranges."
+    # 2. "site_index"             -- the site index denoting the site for which AOH is being run.
+    # 3. "year_index"             -- the year(s) to calculate AOH for. For the entire time series,
+    #                             -- this begins with 1987 if using the full map (all pixels), or
+    #                             -- 1992 if only using abandoned pixels.
+    # 4. "calc_lc"                -- a switch telling the function telling the calculate area
+    #                             -- for either "lc" codes (Yin et al. 2020) if TRUE, or 
+    #                             -- for "map_code" (IUCN habitat codes, from Jung et al. 2021) 
+    #                             -- if FALSE (the default)
+    # 5. "include_time"           -- a switch that adds the processing time to the resulting 
+    #                             -- data.frame if TRUE (the default).
+    # 6. "major_importance_only"  -- a switch telling the function to only calculate AOH for 
+    #                             -- only habitats coded as "majorImportance" by the IUCN.
+    #                             -- FALSE is the default.
+    # 7. "hab_dt"                 -- the habitat map (e.g., Yin et al. 2020 lc maps, IUCN habitat
+    #                             -- maps [either my interpolated one, or the original from 
+    #                             -- Jung et al. 2021], or otherwise), loaded as a data.table. 
+    #                             -- This must include a column with elevation (e.g., elevation_map, 
+    #                             -- derived from  "p_derived/elevation/shaanxi_srtm_crop.tif"), 
+    #                             -- and a column of area (derived from site_area_ha, e.g., 
+    #                             -- "p_derived/site_area_ha/shaanxi_area_ha.tif"), which are selected
+    #                             -- by site_index, then converted to data.table and added to hab_dt.
+    # 8. "sp_ranges"              -- a sf file of species range maps, which is "species_ranges" by
+    #                             -- default, filtered to just mammals, birds, and amphibians, 
+    #                             -- following standard presence/origin filtering, and cropped 
+    #                             -- to my 11 sites.
+    # 9. "sp_list"                -- a simple data.frame containing all unique runs to be calculated 
+    #                             -- during the function call. The index is used to isolate a specific
+    #                             -- species/site combination for AOH to be calculated.
+    
+    # Parameters for testing:
     # index <- 3
     # index <- grep("Alauda arvensis", sp_list$binomial)
     # site_index <- 3
@@ -118,14 +141,18 @@ cc_AOH_data.table <-
       select(codes = if(calc_lc) "lc" else "map_code") %>% # select lc class codes, or IUCN habitat map codes, depending on the "calc_lc" switch
       arrange(codes) %>% unique() %>% .$codes
     
-    # data.frame to use to adjust area estimates based on the proportion of each
-    # land cover type that is made up by suitable habitat types
-    adj_df <- jung_hab_type_area_df %>%
-      filter(site == site_df$site[site_index],
-             habitat_type %in% unique(z1$map_code)
-             ) %>%
-      group_by(lc) %>%
-      summarise(adjustment = sum(prop_lc))
+    
+    if (calc_lc) {
+      # data.frame to use to adjust area estimates based on the proportion of each
+      # land cover type that is made up by suitable habitat types
+      
+      adj_df <- jung_hab_type_area_df %>%
+        filter(site == site_df$site[site_index],
+               habitat_type %in% unique(z1$map_code)
+               ) %>%
+        group_by(lc) %>%
+        summarise(adjustment = sum(prop_lc))
+    }
     
     # ------------------------------------------------------------------------- #
     ### Elevation Filter ###
@@ -141,8 +168,8 @@ cc_AOH_data.table <-
                                       elevation <= elevation_prefs_rcl$elevation_upper &
                                       elevation >= elevation_prefs_rcl$elevation_lower]
     
-    # calculate AOH in each year
-    # i think this is going to list the area in each map_code / lc, which would allow for 
+    # Calculate AOH in each year.
+    # This will list the area in each map_code / lc, which would allow for 
     # filtering based on major importance at a later point.
     df_tmp <- lapply(year_index, function(i){
       tmp <-
@@ -172,8 +199,8 @@ cc_AOH_data.table <-
              binomial = sp_name) %>%
       select(site, binomial, year, everything())
     
-    # adjust area by the proportion of land cover that is suitable
     if (calc_lc) {
+      # adjust area by the proportion of land cover that is suitable
       df_tmp <- df_tmp %>%
         left_join(adj_df, by = "lc") %>% 
         mutate(adj_area_ha = area_ha * adjustment)
@@ -181,24 +208,29 @@ cc_AOH_data.table <-
     
     # calculate the AOH summed across habitat types, join to original df
     dt_tmp <- df_tmp %>%
-      left_join(df_tmp %>% 
-                  group_by(site, binomial, year) %>% 
-                  summarise(IUCN_aoh_ha = sum(area_ha),
-                            adj_IUCN_aoh_ha = sum(adj_area_ha, na.rm = TRUE))
-      )
+      left_join(
+        df_tmp %>% 
+          group_by(site, binomial, year) %>% 
+          summarise(IUCN_aoh_ha = sum(area_ha),
+                    adj_IUCN_aoh_ha = if (calc_lc) sum(adj_area_ha, na.rm = TRUE))
+        )
     
     toc(log = T)
     
     if (include_time) {
       dt_tmp <- dt_tmp %>%
-        mutate(time = 
-                 tic.log(format = F) %>% bind_rows() %>%
+        mutate(time = tic.log(format = F) %>% bind_rows() %>%
                  mutate(time = toc - tic) %>% .$time)
-    }
+      }
     
     cat("calculated AOH for", sp_name, fill = TRUE)
-    cat("Adjusted AOH in", year_index[length(year_index)],
-        "=", dt_tmp$adj_IUCN_aoh_ha[nrow(dt_tmp)], "ha", fill = TRUE)
+    cat("AOH in", year_index[length(year_index)],
+        "=", dt_tmp$IUCN_aoh_ha[nrow(dt_tmp)], "ha", fill = TRUE)
+    
+    if (calc_lc) {
+      cat("Adjusted AOH in", year_index[length(year_index)],
+          "=", dt_tmp$adj_IUCN_aoh_ha[nrow(dt_tmp)], "ha", fill = TRUE)
+      }
     
     # return summary table
     dt_tmp
@@ -747,19 +779,28 @@ cc_AOH_terra <- function(index,
 }
 
 
-# data.table ----
+# save SpatRaster to data.table
+cc_save_spatraster_as_dt <- function(input_raster_path) {
+  
+  # raster_path <- paste0(p_derived, "abn_lcc/", 
+  #                       site_df$site[site_index], 
+  #                       "_abn_lcc", run_label, ".tif")
+  
+  cat(fill = TRUE, "Converting SpatRaster to data.table...:", input_raster_path)
+  
+  r_tmp <- rast(input_raster_path) # load SpatRaster
+  
+  dt <- spatraster_to_dt(r_tmp) # convert SpatRaster to data.table
+  
+  output_path <- gsub(".tif", ".csv", input_raster_path)
+  fwrite(dt, file = gsub(".tif", ".csv", output_path)) # write to file
+  cat(fill = TRUE, "Done! Wrote data.table to:", output_path)
+  
+  rm(dt, r_tmp)
+}
 
 
-# Miscellaneous ----
-
-# ------------------------- #
-# Calculate standard error 
-# ------------------------- #
-se <- function(x) sqrt(var(x, na.rm = TRUE) / length(na.omit(x)))
-# also the same as sd(x)/sqrt(length(na.omit(x)))
-
-
-
+# data.table helper functions -----
 
 # ------------------------- #
 # convert a data.table to a SpatRaster, via an intermediary data.frame, trimming NA border
@@ -768,15 +809,17 @@ se <- function(x) sqrt(var(x, na.rm = TRUE) / length(na.omit(x)))
 # note that this process introduces a single cell border on the top and right edge of the SpatRaster filled with NA values. 
 # introducing terra::trim() fixes this issue. 
 # I have confirmed that the spatraster %>% dt_to_spatraster() %>% spatraster_to_dt() workflow results in an identical spatraster.
+# However, this would be worth additional checks to confirm that it works.
 
-dt_to_spatraster <- function(dt){
+dt_to_spatraster <- function(dt, trim = TRUE){
   spt <- dt %>%
     as.data.frame() %>%
     terra::rast(
       type = "xyz",
       crs = "+proj=longlat +datum=WGS84 +no_defs"
-    ) %>% 
-    terra::trim()
+    ) 
+  
+  if(trim) {spt <- terra::trim(spt)}
   
   spt
 }
@@ -799,14 +842,47 @@ spatraster_to_dt <- function(spt, xy_switch = TRUE) {
 
 
 
+# ------------------------- #
+# calculate a dummy data.table
+# ------------------------- #
+cc_create_dt <- function(numrow = 15, numcol = 15, seed = 34L) {
+  set.seed(seed)
+  dt <- matrix(round(runif(numrow*numcol)), nrow = numrow, ncol = numcol)
+  dt <- as.data.frame(dt)
+  setDT(dt)
+}
+
+# ------------------------- #
 #
+# ------------------------- #
+cc_create_bin <- function(numrow = 15, numcol = 15, seed = 34L) {
+  dt <- cc_create_dt(numrow = numrow, numcol = numcol, seed = seed)
+  dt[3] <- 1
+  dt[13] <- 1
+  dt[12] <- 0
+  dt[4, 1:4] <- 1
+  dt[14, 1] <- 1
+  dt[1, 9] <- 1
+  dt[3, 1:2] <- 0
+  dt
+}
+
+
+
 
 
 # --------------------------------------------------------------- #
 #
-# Miscellaneous functions
+# Miscellaneous ----
 # 
 # --------------------------------------------------------------- #
+
+# ------------------------- #
+# Calculate standard error 
+# ------------------------- #
+se <- function(x) {sqrt(var(x, na.rm = TRUE) / length(na.omit(x)))}
+# also the same as sd(x)/sqrt(length(na.omit(x)))
+
 
 
 # ------------------------- #
