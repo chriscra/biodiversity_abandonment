@@ -4,7 +4,13 @@
 # 
 # --------------------------------------------------------------- #
 
+# Switches ----
+load_habitats_aoh <- FALSE
+load_abn_lcc_and_masks <- FALSE
+load_ecoregions <- FALSE
+
 site_df <- read.csv(file = paste0(p_derived, "site_df.csv"))
+
 run_label # check "_util_main.R"
 
 
@@ -20,13 +26,15 @@ site_sf <- site_sf %>% st_make_valid()
 # plot(site_sf %>% filter(site == "shaanxi") %>% st_geometry())
 
 
+
 # biomes
+if(load_ecoregions) {
 site_ecoregions2017 <- st_read(paste0(p_derived, "sf/site_ecoregions2017.shp"))
 site_biomes2017 <- st_read(paste0(p_derived, "sf/site_biomes2017.shp"))
 
 ecoregions2017_simple <- st_read(paste0(p_derived, "sf/ecoregions2017_simple.shp"))
 biomes2017_simple <- st_read(paste0(p_derived, "sf/biomes2017_simple.shp"))
-
+}
 
 
 # ------------------------------------------------------------ # 
@@ -70,7 +78,6 @@ names(lcc) <- site_df$site
 # abandonment age maps (produced by Chris)
 age_t <- lapply(1:11, function(i) {
   terra::rast(
-    # raster::brick(
     paste0(p_dat_derived, "age_rasters/", run_label, "/",
            site_df$site[i], "_age", run_label, ".tif")
   )
@@ -98,9 +105,12 @@ names(age_t_bins) <- site_df$site
 # --- max_age of abandonment --- #
 # ----------------------- #
 
-max_age_t <- lapply(list.files(paste0(p_dat_derived, "max_age/", run_label), full.names = TRUE) %>% 
-                      grep(".tif", ., value = TRUE), 
-                    function(i) {terra::rast(i)})
+max_age_t <- lapply(1:11, function(i) {
+  terra::rast(
+    paste0(p_dat_derived, "max_age/", run_label, "/",
+           site_df$site[i], "_max_age", run_label, ".tif")
+  )
+})
 names(max_age_t) <- site_df$site
 for (i in seq_along(max_age_t)) {names(max_age_t[[i]]) <- "max_age"} # remember: these are just 1987:2017
 
@@ -114,7 +124,6 @@ names(max_age_t_bins) <- site_df$site
 # potential abandonment age maps, assuming no recultivation
 potential_age_t <- lapply(1:11, function(i) {
   terra::rast(
-    # raster::brick(
     paste0(p_dat_derived, "age_rasters/", run_label, "/",
            site_df$site[i], "_potential_age", run_label, ".tif")
   )
@@ -143,7 +152,6 @@ names(lcc_total_crop_mask) <- site_df$site
 # --- abandonment mask (>5 years) --- #
 # ----------------------- #
 
-# This needs to be recreated.
 # see "/Users/christophercrawford/work/projects/biodiversity_abn/scripts/AOH.Rmd"
 
 abn_mask <- lapply(1:11, function(i){
@@ -151,6 +159,14 @@ abn_mask <- lapply(1:11, function(i){
               site_df$site[i], "_abn_5_30_mask", run_label,".tif"))
 })
 names(abn_mask) <- site_df$site
+
+
+potential_abn_mask <- lapply(1:11, function(i){
+  rast(paste0(p_dat_derived, "age_rasters/", run_label, "/",
+              site_df$site[i], "_potential_abn_5_30_mask", run_label,".tif"))
+})
+
+names(potential_abn_mask) <- site_df$site
 
 max_age_mask <- lapply(1:11, function(i){
   rast(paste0(p_dat_derived, "max_age/", run_label, "/",
@@ -164,7 +180,6 @@ names(max_age_mask) <- site_df$site
 # --- land cover class of abandoned land --- #
 # ----------------------- #
 
-# Needs to be recreated, with a run_label
 abn_lcc <- lapply(1:11, function(i) {
   rast(paste0(p_derived, "abn_lcc/",
               site_df$site[i], "_abn_lcc", run_label, ".tif"))
@@ -193,6 +208,36 @@ names(max_abn_lcc) <- site_df$site
 # ------------------------------------------------------------ # 
 # ---------------- Derived Habitat Rasters --------------------------- 
 # ------------------------------------------------------------ # 
+
+# ----------------------- #
+# -------- IUCN habitat types (Jung et al. 2021) 
+# directly mapped onto Yin et al. 2020 land cover classes, using
+# focal(fun = "modal"), masked to each land cover class, and knit 
+# back together. -------- #
+# ----------------------- #
+
+lcc_iucn_habitat <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "lcc_iucn_habitat/",
+              site_df$site[i], "_lcc_iucn_habitat.tif"))
+})
+names(lcc_iucn_habitat) <- site_df$site
+
+
+# IUCN habitat types interpolated to only abandoned pixels
+abn_lcc_iucn_habitat <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "lcc_iucn_habitat/",
+              site_df$site[i], "_abn_lcc_iucn_habitat", run_label, ".tif"))
+})
+names(abn_lcc_iucn_habitat) <- site_df$site
+
+
+# IUCN habitat types interpolated to only *potential* abandoned pixels
+potential_abn_lcc_iucn_habitat <- lapply(1:11, function(i){
+  rast(paste0(p_derived, "lcc_iucn_habitat/",
+              site_df$site[i], "_potential_abn_lcc_iucn_habitat",
+              run_label, ".tif"))
+})
+names(potential_abn_lcc_iucn_habitat) <- site_df$site
 
 
 # ----------------------- #
@@ -261,10 +306,9 @@ names(site_forest_c_30) <- site_df$site
 # ----------------------- #
 # --- pixel area (ha) --- #
 # ----------------------- #
-site_area_ha <- lapply(
-  list.files(paste0(p_derived, "site_area_ha"), full.names = TRUE), 
-  function(i) rast(i)
-)
+site_area_ha <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "site_area_ha/", site_df$site[i], "_area_ha.tif"))
+  })
 names(site_area_ha) <- site_df$site
 
 # ----------------------- #
@@ -302,10 +346,10 @@ iucn_crosswalk <- read_csv(paste0(p_derived, "iucn_lc_crosswalk.csv")) %>%
 habitat_prefs <- read_csv(file = paste0(p_derived, "iucn_habitat_prefs_subset.csv"))
 elevation_prefs <- read_csv(file = paste0(p_derived, "iucn_elevation_prefs_subset.csv"))
 habitat_details <- read_csv(file = paste0(p_derived, "iucn_habitat_details_subset.csv"))
-species_synonyms <- read_csv(file = paste0(p_derived, "iucn_species_synonyms_subset.csv"))
-common_names <- read_csv(file = paste0(p_derived, "iucn_common_names_subset.csv"))
+# species_synonyms <- read_csv(file = paste0(p_derived, "iucn_species_synonyms_subset.csv"))
+# common_names <- read_csv(file = paste0(p_derived, "iucn_common_names_subset.csv"))
 
-habitat_age_req <- read_csv(file = paste0(p_derived, "iucn_habitat_age_req.csv"))
+# habitat_age_req <- read_csv(file = paste0(p_derived, "iucn_habitat_age_req.csv"))
 
 
 
