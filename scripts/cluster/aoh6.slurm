@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=aoh_hab3                              # create a name for the job
+#SBATCH --job-name=aoh_hab6                              # create a name for the job
 #SBATCH --nodes=1 					                              # node count
 #SBATCH --ntasks=1	 				                              # total number of tasks across all nodes
 #SBATCH --cpus-per-task=1                                 # cpu-cores per task (>1 if multi-threaded tasks)
@@ -22,7 +22,7 @@ cd /home/clc6/biodiversity_abn/scripts
 # aoh_type_df$label
 # 1) "full_lc" - 2) "abn_lc" - 3) "max_abn_lc"
 # 4) "full_iucn" - 5) "abn_iucn" - 6) "max_abn_iucn" - 7) "potential_abn_iucn"
-Rscript ./aoh.R $SLURM_ARRAY_TASK_ID 3
+Rscript ./aoh.R $SLURM_ARRAY_TASK_ID 6
 
 
 # # send scripts

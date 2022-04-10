@@ -19,13 +19,16 @@ cd /home/clc6/biodiversity_abn/scripts
 
 # r script passing array job number to the script, along with 
 # a simple numeric index to determine which AOH run:
-# 1) "full_lc" - 2) "abn_lc" - 3) "full_iucn" - 4) "abn_iucn" - 5)"potential_abn_iucn"
+# aoh_type_df$label
+# 1) "full_lc" - 2) "abn_lc" - 3) "max_abn_lc"
+# 4) "full_iucn" - 5) "abn_iucn" - 6) "max_abn_iucn" - 7) "potential_abn_iucn"
 Rscript ./aoh.R $SLURM_ARRAY_TASK_ID 5
 
 
 # # send scripts
 # cd /Users/christophercrawford/work/projects/biodiversity_abn/scripts/
-# scp ./cluster/aoh[1-5].* clc6@della:/home/clc6/biodiversity_abn/scripts/
+# scp ./cluster/aoh.* clc6@della:/home/clc6/biodiversity_abn/scripts/
+# scp ./cluster/aoh[1-7].* clc6@della:/home/clc6/biodiversity_abn/scripts/
 # scp ./_util/_util_functions.R clc6@della:/home/clc6/biodiversity_abn/scripts/_util/
 # 
 # # send files
@@ -62,6 +65,6 @@ Rscript ./aoh.R $SLURM_ARRAY_TASK_ID 5
 # download results from della
 # replace [] with time_stamp
 # cd /Users/christophercrawford/work/projects/biodiversity_abn/derived/
-# scp clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/aoh_abn_lc_tmp_[]_c* ./aoh/
+# scp clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/aoh/aoh_tmp*_2022_04_08_c* ./aoh/
 
 
