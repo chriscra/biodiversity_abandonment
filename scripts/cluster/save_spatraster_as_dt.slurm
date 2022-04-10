@@ -30,8 +30,10 @@ Rscript ./save_spatraster_as_dt.R
 # 
 # # send files
 # cd /Users/christophercrawford/work/projects/biodiversity_abn/derived/
-# # scp ./abn_lcc/*abn_lcc* clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/abn_lcc/
-# # scp ./lcc_iucn_habitat/*lcc_iucn_habitat* clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/lcc_iucn_habitat/
+# scp ./abn_lcc/*abn_lcc* clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/abn_lcc/
+# scp ./abn_lcc/*max*abn_lcc* clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/abn_lcc/
+# scp ./lcc_iucn_habitat/*lcc_iucn_habitat* clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/lcc_iucn_habitat/
+# scp ./lcc_iucn_habitat/*max*lcc_iucn_habitat* clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/lcc_iucn_habitat/
 # scp ./lcc_iucn_habitat/*potential_abn_lcc_iucn_habitat* clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/lcc_iucn_habitat/
 
 
