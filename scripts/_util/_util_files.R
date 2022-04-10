@@ -116,8 +116,11 @@ for (i in seq_along(max_age_t)) {names(max_age_t[[i]]) <- "max_age"} # remember:
 
 
 # max age bins
-max_age_t_bins <- lapply(list.files(paste0(p_dat_derived, "max_age/", run_label, "/bins"), full.names = TRUE), 
-                         function(i) {rast(i)})
+max_age_t_bins <- lapply(1:11, function(i) {
+  rast(paste0(p_dat_derived, "max_age/", run_label, "/bins/", 
+              site_df$site[i], "_max_age_bins", run_label, ".tif"))
+  })
+
 names(max_age_t_bins) <- site_df$site
 
 
@@ -231,6 +234,14 @@ abn_lcc_iucn_habitat <- lapply(1:11, function(i) {
 names(abn_lcc_iucn_habitat) <- site_df$site
 
 
+max_abn_lcc_iucn_habitat <- 
+  lapply(1:11, function(i) {
+    rast(paste0(p_derived, "lcc_iucn_habitat/",
+                site_df$site[i], "_max_abn_lcc_iucn_habitat", run_label, ".tif"))
+  })
+names(max_abn_lcc_iucn_habitat) <- site_df$site
+
+
 # IUCN habitat types interpolated to only *potential* abandoned pixels
 potential_abn_lcc_iucn_habitat <- lapply(1:11, function(i){
   rast(paste0(p_derived, "lcc_iucn_habitat/",
@@ -243,10 +254,12 @@ names(potential_abn_lcc_iucn_habitat) <- site_df$site
 # ----------------------- #
 # -------- PNV ---------- #
 # ----------------------- #
-site_pnv_30 <- lapply(
-  list.files(paste0(p_derived, "site_pnv"), full.names = TRUE) %>% grep("_30.tif", ., value = TRUE), 
-  function(i) rast(i)
-)
+site_pnv_30 <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "site_pnv/",  
+              site_df$site[i], "_pnv_30.tif"))
+  })
+
+
 names(site_pnv_30) <- site_df$site
 
 
@@ -255,26 +268,22 @@ names(site_pnv_30) <- site_df$site
 # -------- Jung IUCN Habitat Types ---------- #
 # ----------------------- #
 # level 2, at ~ 100m resolution (i.e., not resampled to 30m)
-site_jung_l2 <- lapply(
-  list.files(paste0(p_derived, "site_jung"), full.names = TRUE) %>%
-    grep("_l2_buff", ., value = TRUE), 
-  function(i) rast(i)
-)
+site_jung_l2 <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "site_jung/", site_df$site[i], "_jung_l2_buff.tif"))
+  })
 names(site_jung_l2) <- site_df$site
 
 # resampled to ~30 m resolution
 # level 1
-site_jung_l1_30 <- lapply(
-  list.files(paste0(p_derived, "site_jung"), full.names = TRUE) %>% grep("l1_30.tif", ., value = TRUE), 
-  function(i) rast(i)
-)
+site_jung_l1_30 <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "site_jung/", site_df$site[i], "_jung_l1_30.tif"))
+  })
 names(site_jung_l1_30) <- site_df$site
 
 # level 2
-site_jung_l2_30 <- lapply(
-  list.files(paste0(p_derived, "site_jung"), full.names = TRUE) %>% grep("l2_30.tif", ., value = TRUE), 
-  function(i) rast(i)
-)
+site_jung_l2_30 <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "site_jung/", site_df$site[i], "_jung_l2_30.tif"))
+  })
 names(site_jung_l2_30) <- site_df$site
 
 
@@ -292,15 +301,6 @@ site_habitats <- jung_hab_type_area_df %>%
 
 
 
-
-# ----------------------- #
-# ---- forest carbon ---- #
-# ----------------------- #
-site_forest_c_30 <- lapply(
-  list.files(paste0(p_derived, "site_forest_carbon"), full.names = TRUE) %>% grep("_forest_c_30.tif", ., value = TRUE), 
-  function(i) rast(i)
-)
-names(site_forest_c_30) <- site_df$site
 
 
 # ----------------------- #
@@ -336,12 +336,14 @@ load(file = paste0(p_derived, "species_ranges/species_ranges.RData"), verbose = 
 
 # list of unique species-site combinations at my sites
 species_list <- read_csv(file = paste0(p_derived, "/species_list.csv"))
+old_species_list <- read_csv(file = paste0(p_derived, "/species_list_2021_12_08.csv"))
 
 iucn_crosswalk <- read_csv(paste0(p_derived, "iucn_lc_crosswalk.csv")) %>%
   mutate(code = as.character(code)) %>%
   # fix 5.10 being converted to 5.1 issue:
   mutate(code = ifelse(map_code == 510, "5.10", code))
 
+iucn_status <- read_csv(file = paste0(p_derived, "iucn_status.csv"))
 
 habitat_prefs <- read_csv(file = paste0(p_derived, "iucn_habitat_prefs_subset.csv"))
 elevation_prefs <- read_csv(file = paste0(p_derived, "iucn_elevation_prefs_subset.csv"))
@@ -349,9 +351,32 @@ habitat_details <- read_csv(file = paste0(p_derived, "iucn_habitat_details_subse
 # species_synonyms <- read_csv(file = paste0(p_derived, "iucn_species_synonyms_subset.csv"))
 # common_names <- read_csv(file = paste0(p_derived, "iucn_common_names_subset.csv"))
 
-# habitat_age_req <- read_csv(file = paste0(p_derived, "iucn_habitat_age_req.csv"))
+habitat_age_req <- read_csv(paste0(p_derived, "habitat_age_req/iucn_habitat_age_req.csv"))
+habitat_age_req_coded <- read_csv(paste0(p_derived, "habitat_age_req/", "habitat_age_req_coded.csv"))
+#
 
+# ------------------------------------------------------------ # 
+# ----------------------------- AOH --------------------- 
+# ------------------------------------------------------------ # 
 
+aoh_type_df <- 
+  tibble(index = 1:7,
+         class_type = c("lc", "lc", "lc", "iucn", "iucn", "iucn", "iucn"),
+         map_type = c("full", "abn", "max_abn", "full", "abn", "max_abn", "potential_abn"),
+         start_year = case_when(map_type %in% c("full", "max_abn") ~ 1987, 
+                                map_type %in% c("abn", "potential_abn") ~ 1992),
+         label = paste0(map_type, "_", class_type),
+         p1 = case_when(
+           class_type == "lc" ~ "Yin land cover codes (proportional)", 
+           class_type == "iucn" ~ "IUCN habitats (directly mapped to lc)"
+         ),
+         p2 = case_when(
+           map_type == "full" ~ "entire landscape", 
+           map_type == "max_abn" ~ "abandoned pixels (before & after)",
+           map_type == "abn" ~ "abandonment only",
+           map_type == "potential_abn" ~ "potential abandonment only"),
+         desc = paste0(p1, "; ", p2)
+  )
 
 
 # ------------------------------------------------------------ # 
