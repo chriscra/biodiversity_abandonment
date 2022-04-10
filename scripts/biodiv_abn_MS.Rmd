@@ -237,10 +237,12 @@ Link to figure showing crosswalk Jaccard similarities.
 
 ## Filtering species by habitat age requirements
 
-Species were given a binary classification indicating whether it required mature habitat (in our case, any habitat requiring at least 30 years of secondary succession to become suitable for that species), which we used to further classify our results.
+Species were given a binary classification indicating whether it required mature habitat in at least one season at each site (in our case, any habitat requiring at least 30 years of secondary succession to become suitable for that species), which we used to further classify our results.
 Classifications were manually determined based on species accounts from the handbook of the birds of the world, and handbook of the mammals of the world.
 Neotropical bird species were independently verified by expert observer Alex Wiebe.
 
+
+Note to self: marking species that I'm less sure about with 0.1 (on the cusp, but likely 0, non-mature habitat obligates) or 0.9 (on the cusp, but likely 1, mature habitat obligates).
 
 ## 
 

@@ -203,8 +203,6 @@ plot(age_t[[i]]$y2017, col = "black", breaks = c(5, 31))
 
 
 
-  
-
 plot(lc_abn_mask, col = lc_plot_cols$color[2:4])
 plot(lc_abn_mask2)#, col = lc_plot_cols$color[c(2,4)])
 plot(lc_abn_mask3)#, col = lc_plot_cols$color[c(2,4)])
