@@ -30,33 +30,52 @@ site_df <- read.csv(file = paste0(p_dat, "site_df.csv"))
 # iterate through all 11 sites, saving SpatRasters as data.tables
 
 lapply(1:11, function(i) { 
+  # # ----------------------- #
+  # # 1. Convert abn_lcc (land cover class of abandoned land)
+  # cc_save_spatraster_as_dt(
+  #   paste0(p_derived, "abn_lcc/",
+  #          site_df$site[i], "_abn_lcc", run_label, ".tif")
+  # )
+  # 
+  # # ----------------------- #
+  # # 2. Convert lcc_iucn_habitat (IUCN habitat classes interpolated to lc classes)
+  # cc_save_spatraster_as_dt(
+  #   paste0(p_derived, "lcc_iucn_habitat/",
+  #          site_df$site[i], "_lcc_iucn_habitat.tif")
+  # )
+  # 
+  # # ----------------------- #
+  # # 3. Convert abn_lcc_iucn_habitat (IUCN habitat classes, interpolated, restricted to abandoned lands)
+  # cc_save_spatraster_as_dt(
+  #   paste0(p_derived, "lcc_iucn_habitat/",
+  #          site_df$site[i], "_abn_lcc_iucn_habitat", run_label, ".tif")
+  # )
+  #  
+  # # ----------------------- #
+  # # 4. Convert *potential* abn_lcc_iucn_habitat (IUCN habitat classes, interpolated, restricted to *potential* abandoned lands)
+  # cc_save_spatraster_as_dt(
+  #   paste0(p_derived, "lcc_iucn_habitat/",
+  #          site_df$site[i], "_potential_abn_lcc_iucn_habitat", run_label, ".tif")
+  # )
+  
   # ----------------------- #
-  # 1. Convert abn_lcc (land cover class of abandoned land)
+  # 5. max_abn_lcc
   cc_save_spatraster_as_dt(
     paste0(p_derived, "abn_lcc/",
-           site_df$site[i], "_abn_lcc", run_label, ".tif")
+           site_df$site[i], "_max_abn_lcc", run_label, ".tif")
   )
-
+  
   # ----------------------- #
-  # 2. Convert lcc_iucn_habitat (IUCN habitat classes interpolated to lc classes)
+  # 6. max_abn_lcc_iucn_habitat
   cc_save_spatraster_as_dt(
     paste0(p_derived, "lcc_iucn_habitat/",
-           site_df$site[i], "_lcc_iucn_habitat.tif")
+           site_df$site[i], "_max_abn_lcc_iucn_habitat", run_label, ".tif")
   )
-
-  # ----------------------- #
-  # 3. Convert abn_lcc_iucn_habitat (IUCN habitat classes, interpolated, restricted to abandoned lands)
-  cc_save_spatraster_as_dt(
-    paste0(p_derived, "lcc_iucn_habitat/",
-           site_df$site[i], "_abn_lcc_iucn_habitat", run_label, ".tif")
-  )
-   
-  # ----------------------- #
-  # 4. Convert *potential* abn_lcc_iucn_habitat (IUCN habitat classes, interpolated, restricted to *potential* abandoned lands)
-  cc_save_spatraster_as_dt(
-    paste0(p_derived, "lcc_iucn_habitat/",
-           site_df$site[i], "_potential_abn_lcc_iucn_habitat", run_label, ".tif")
-  )
+  
+  # 7. max_potential_abn_lcc_iucn_habitat
+  
+  
+  
 })
 
 
