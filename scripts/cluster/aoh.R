@@ -40,9 +40,9 @@ core <- as.numeric(args[1])
 hab_index <- as.numeric(args[2])
 # hab_index <- 3
 # hab_index refer to .csvs of 
-# lc (1, 2) or iucn habitat maps (3, 4, 5),
-# and full (1, 3), abn (2, 4), or potential_abn (5) types.
-# See hab_dt_options below, which contains start year, label etc.
+# lc (1, 2, 3) or iucn habitat maps (4, 5, 6, 7),
+# and full (1, 4), abn (2, 5), max_abn (3, 6), or potential_abn (7) types.
+# See aoh_type_df below, which contains start year, label etc.
 # Full indicates that all pixels are considered, not just abandonment.
 
 cat(fill = TRUE, "Core index:", core)
@@ -99,34 +99,61 @@ site_index <- grep(unique(species_list_tmp$site), site_df$site)
 # options are:
 # ------------ #
 
-hab_dt_files <- c(
-  # 1. land cover (i.e., 1, 2, 3, 4), to be adjusted proportionally
-  paste0(p_input_rasters, site_df$site[site_index], "_clean.csv"),
-  
-  # 2. land cover, only in abandoned pixels
-  paste0(p_derived, "abn_lcc/", site_df$site[site_index], "_abn_lcc", run_label, ".csv"),
-  
-  # 3. IUCN habitat directly mapped to land cover classes, using focal(fun = "modal")
-  paste0(p_derived, "lcc_iucn_habitat/", site_df$site[site_index], "_lcc_iucn_habitat.csv"),
-  
-  # 4. IUCN habitat, only in abandoned pixels
-  paste0(p_derived, "lcc_iucn_habitat/", site_df$site[site_index], "_abn_lcc_iucn_habitat", run_label, ".csv"),
-  
-  # 5. IUCN habitat, in *potential* abandoned pixels only
-  paste0(p_derived, "lcc_iucn_habitat/", site_df$site[site_index], "_potential_abn_lcc_iucn_habitat", run_label, ".csv")
-)
-
-hab_dt_options <- 
-  tibble(index = 1:5,
-         class_type = c("lc", "lc", "iucn", "iucn", "iucn"),
-         map_type = c("full", "abn", "full", "abn", "potential_abn"),
-         start_year = case_when(map_type == "full" ~ 1987, 
-                                grepl("abn", map_type) ~ 1992),
+aoh_type_df <- 
+  tibble(index = 1:7,
+         class_type = c("lc", "lc", "lc", "iucn", "iucn", "iucn", "iucn"),
+         map_type = c("full", "abn", "max_abn", "full", "abn", "max_abn", "potential_abn"),
+         start_year = case_when(map_type %in% c("full", "max_abn") ~ 1987, 
+                                map_type %in% c("abn", "potential_abn") ~ 1992),
          label = paste0(map_type, "_", class_type),
-         path = hab_dt_files)
+         path = c(
+           # 1. land cover (i.e., 1, 2, 3, 4), to be adjusted proportionally
+           paste0(p_input_rasters, site_df$site[site_index], "_clean.csv"),
+           
+           # 2. land cover, for only abandonment periods themselves
+           paste0(p_derived, "abn_lcc/", site_df$site[site_index], "_abn_lcc", run_label, ".csv"),
+           
+           # 3. land cover, in all pixels that are abandoned at any time (including lc before and after abandonment)
+           paste0(p_derived, "abn_lcc/", site_df$site[site_index], "_max_abn_lcc", run_label, ".csv"),
+           
+           # 4. IUCN habitat directly mapped to land cover classes, using focal(fun = "modal")
+           paste0(p_derived, "lcc_iucn_habitat/", site_df$site[site_index], "_lcc_iucn_habitat.csv"),
+           
+           # 5. IUCN habitat, only in abandoned pixels
+           paste0(p_derived, "lcc_iucn_habitat/", site_df$site[site_index], "_abn_lcc_iucn_habitat", run_label, ".csv"),
+           
+           # 6. IUCN habitat, in all pixels that are abandoned at any time (including habitat before and after abandonment)
+           paste0(p_derived, "lcc_iucn_habitat/", site_df$site[site_index], "_max_abn_lcc_iucn_habitat", run_label, ".csv"),
+           
+           # 7. IUCN habitat, in *potential* abandoned pixels only
+           paste0(p_derived, "lcc_iucn_habitat/", site_df$site[site_index], "_potential_abn_lcc_iucn_habitat", run_label, ".csv")
+         )
+         )
+
+# testing <- 
+# aoh_type_df %>%
+#   mutate(
+#     s = case_when(
+#       class_type == "lc" & map_type == "full" ~ p_input_rasters,
+#       class_type == "lc" & grepl("abn", map_type) ~ paste0(p_derived, "abn_lcc/"),
+#       class_type == "iucn" ~ paste0(p_derived, "lcc_iucn_habitat/")
+#     ),
+#     m = case_when(
+#       map_type == "full" ~ "",
+#       map_type == "abn" ~ "_abn",
+#       map_type == "max_abn" ~ "_max_abn",
+#       map_type == "potential_abn" ~ "_potential_abn",
+#     ),
+#     e = case_when(
+#       class_type == "lc" & map_type == "full" ~ "_clean.csv",
+#       class_type == "lc" & grepl("abn", map_type) ~ paste0("_lcc", run_label, ".csv"),
+#       class_type == "iucn" ~ paste0("_lcc_iucn_habitat", if_else(map_type == "full", "", run_label), ".csv")),
+#     p = paste0(s, site_df$site[site_index], m, e)
+#   ) %>%
+#   mutate(test = path == p)
 
 
-hab_dt <- fread(filter(hab_dt_options, index == hab_index)$path)
+hab_dt <- fread(filter(aoh_type_df, index == hab_index)$path)
 
 # hab_dt <- fread("/Users/christophercrawford/Downloads/chongqing_abn_lcc_2021_03_13.csv",
 #                 select = c(1, 2, 31))
@@ -162,8 +189,8 @@ aoh_tmp <- lapply(
   function(i) {
   cc_AOH_data.table(index = i, 
                     site_index = site_index,
-                    year_index = filter(hab_dt_options, index == hab_index)$start_year:2017, 
-                    calc_lc = if (filter(hab_dt_options, index == hab_index)$class_type == "lc") TRUE else FALSE, 
+                    year_index = filter(aoh_type_df, index == hab_index)$start_year:2017, 
+                    calc_lc = if (filter(aoh_type_df, index == hab_index)$class_type == "lc") TRUE else FALSE, 
                     include_time = TRUE,
                     hab_dt = hab_dt,
                     sp_ranges = species_ranges, 
@@ -172,7 +199,7 @@ aoh_tmp <- lapply(
 }) %>% bind_rows()
 
 aoh_output_path <- paste0(p_derived, "aoh/aoh_tmp_", 
-                          filter(hab_dt_options, index == hab_index)$label,
+                          filter(aoh_type_df, index == hab_index)$label,
                           time_stamp, "_c", core, ".csv")
 # write to file
 write_csv(aoh_tmp, file = aoh_output_path)
