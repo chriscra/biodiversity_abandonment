@@ -33,6 +33,18 @@ long_labels <- c("belarus" = "Vitebsk, Belarus / Smolensk, Russia",
                  "volgograd" = "Volgograd, Russia",
                  "wisconsin" = "Wisconsin, USA")
 
+cap_labels <- c("belarus" = "Belarus",
+                "bosnia_herzegovina" = "Bosnia & Herzegovina",
+                "chongqing" = "Chongqing",
+                "goias" = "Goiás",
+                "iraq" = "Iraq",
+                "mato_grosso" = "Mato Grosso",
+                "nebraska" = "Nebraska/Wyoming",
+                "orenburg" = "Orenburg",
+                "shaanxi" = "Shaanxi",
+                "volgograd" = "Volgograd",
+                "wisconsin" = "Wisconsin")
+
 site_labels <- 
   tibble(
     site = names(long_labels),
