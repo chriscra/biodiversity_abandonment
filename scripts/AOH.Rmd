@@ -29,7 +29,8 @@ os
 os %>% print(n = 30)
 
 site_pnv_30
-rm(list = os$object[c(1:6)])
+rm(list = os$object[c(1:4)])
+rm(list = os$object[c(2)])
 # rm(list = os$object[c(3:18)])
 get(os$object[c(30)])
 
@@ -2005,11 +2006,14 @@ aoh_combo
 ```
 
 
-## Final Results
+# Final Results
+
+## Processing & Distilling
 
 ```{r hab-dt-options}
 aoh_type_df # see _util_files.
 
+aoh_type_df$label
 ```
 
 
@@ -2019,22 +2023,27 @@ aoh_run_date # see _util_main.R
 
 list.files(paste0(p_derived, "aoh"), full.names = FALSE) %>%
   grep(".csv", ., value = TRUE) %>%
-  gsub(aoh_run_date, "", .) %>%
+  gsub("_2022_04_01", "", .) %>%
+  gsub("_2022_04_08", "", .) %>%
+  gsub("_2022_04_12", "", .) %>%
   gsub("_c[0-9]{1,2}", "", .) %>%
   gsub(".csv", "", .) %>%
+  gsub("aoh_tmp_", "", .) %>% 
   unique()
   
-aoh_type <- aoh_type_df$label[3]
 aoh_type_df
 
-aoh_types <- aoh_type_df$label[c(1, 3, 4, 6)]
+aoh_types <- aoh_type_df$label[c(4, 6, 8)]
+aoh_type <- aoh_types[3]
 
 aoh_l <- lapply(aoh_types, 
   function(aoh_type) {
   lapply(1:21, 
          function(i) {
     read_csv(paste0(p_derived, "aoh/aoh_tmp_", aoh_type,
-                    ifelse(grepl("max", aoh_type), "_2022_04_08", aoh_run_date),
+                    ifelse(grepl("max", aoh_type), 
+                           ifelse(grepl("potential", aoh_type),
+                                  aoh_run_date, "_2022_04_08"), "_2022_04_01"),
                     "_c", i, ".csv"))
     }
     ) %>% 
@@ -2046,25 +2055,32 @@ aoh_l <- lapply(aoh_types,
       select(st_drop_geometry(species_ranges), 
              site, vert_class, binomial, # presence, origin, seasonal, 
              total_range_area, range_size_quantile) %>% unique(),
-              by = c("site", "binomial", "vert_class")) %>% # range area
+              by = c("site", "binomial", "vert_class")) %>% 
     left_join(
       habitat_age_req_coded %>% 
         select(binomial, mature_forest_obl, water_obl, coder, common_names),
-      by = "binomial")  # mature_forest_obl
+      by = "binomial")
 }) %>% 
   bind_rows() %>%
-  mutate(
-    aoh = case_when(
-      grepl("lc", aoh_type) ~ adj_IUCN_aoh_ha,
-      grepl("iucn", aoh_type) ~ IUCN_aoh_ha),
-    
-    # create a composite area, which is either area_ha or adj_area_ha, depending on whether the run was lc or IUCN
-    area = case_when(
-      grepl("lc", aoh_type) ~ adj_area_ha,
-      grepl("iucn", aoh_type) ~ area_ha),
-  ) %>% 
-  select(aoh_type, vert_class, site, binomial, year, map_code, lc, season = seasonality, 
-         area, aoh, IUCN_aoh_ha, adj_IUCN_aoh_ha,mature_forest_obl, redlistCategory, area_ha, adj_area_ha, everything())
+  
+  # create a composite area, which is either area_ha or adj_area_ha, depending on whether the run was lc or IUCN
+  # mutate(
+  #   aoh = case_when(
+  #     grepl("lc", aoh_type) ~ adj_IUCN_aoh_ha,
+  #     grepl("iucn", aoh_type) ~ IUCN_aoh_ha),
+  #   area = case_when(
+  #     grepl("lc", aoh_type) ~ adj_area_ha,
+  #     grepl("iucn", aoh_type) ~ area_ha)) %>%
+  
+  select(aoh_type, vert_class, site, binomial, year, map_code, 
+         # lc, 
+         season = seasonality, 
+         area = area_ha, 
+         mature_forest_obl, redlistCategory, 
+         # area_ha, 
+         IUCN_aoh_ha,
+         # adj_IUCN_aoh_ha, adj_area_ha,
+         everything())
 
 
 # write_csv(aoh_l, file = paste0(p_derived, "aoh_l.csv"))
@@ -2073,34 +2089,17 @@ write_parquet(aoh_l, paste0(p_derived, "aoh_l.parquet"))
 aoh_l <- read_parquet(paste0(p_derived, "aoh_l.parquet"))
 
 
-habitat_age_req_coded %>% 
-  mutate(mature_forest_obl = as.numeric(mature_forest_obl)) %>%
-  select(binomial, mature_forest_obl, water_obl, coder, common_names)
-
-species_list$vert_class %>% unique()
-
-obj_size(aoh_l)
-
-aoh_l %>% select(aoh_type) %>% unique() %>% .$aoh_type %>% grepl("lc", .)
-
-aoh_l %>% names()
-
-aoh_l %>%
-  mutate(aoh = case_when(
-    grepl("lc", aoh_type) ~ adj_IUCN_aoh_ha,
-    grepl("iucn", aoh_type) ~ IUCN_aoh_ha
-  )) %>%
-  select(aoh_type, contains("aoh")) %>%
-  filter(aoh_type == aoh_type_df$label[4])
+aoh_l <- read_parquet(paste0(p_derived, "aoh_l.parquet"))
+```
 
 
+```{r expl-aoh-l}
 aoh_l %>%
   group_by(aoh_type, vert_class) %>%
-  summarise(num_sp = n(),
+  summarise(num_records = n(),
             sp = length(unique(binomial))) %>%
   arrange(vert_class)
   
-
 # number of unique species
 species_list %>% 
   group_by(#site, 
@@ -2109,9 +2108,15 @@ species_list %>%
   summarise(num_sp = n(),
             sp = length(unique(binomial)))
 
-aoh_l %>%
-  filter(aoh_type == "abn_iucn")
+
+# number of species in each model run
+aoh_l %>% group_by(aoh_type) %>% summarise(n_sp = length(unique(binomial))) # there are different numbers of species due to variance in the habitats that show up in different parts of sites. 
+# the lc runs have more, because they are not restricted to the habitats only in abandoned pixels. The proportional adjustment is based on the habitats that are present in any part of the site, not just the abn.
+aoh_l %>% group_by(aoh_type, site) %>% summarise(n_sp = length(unique(binomial))) %>%
+  ungroup() %>% group_by(aoh_type) %>% summarise(n_runs = sum(n_sp))
+
 i <- 9
+
 missing_sp_aoh <- lapply(1:11, function(i){
   sp_run <- aoh_l %>% 
     filter(site == site_df$site[i]) %>%
@@ -2145,8 +2150,6 @@ jung_hab_type_area_df %>%
 
 ```
 
-### various restrictions:
-
 Restricting by:
 1. seasonality, so that only 1, 2, 3 are considered (Codes are: "Resident" (1), "Breeding" (2), "Non-breeding Season" (3), Passage (4), and Seasonal Occurrence Uncertain (5).)
 
@@ -2155,218 +2158,213 @@ Restricting by:
 3. mature_forest_obl, so that only non-mature forest obligates are included.
 4. Abandonment only vs. the entire landscape
 
+```{r filter-suitability-by-season}
+# Extract a list of species with some habitat suitabilities with season marked as NA, and some with a code.
+# In these contexts, the NA season should be filtered out.
+# Note that some species have been directly updated in the creation of "habitat_prefs" [Glaucidium brodiei (collared owlet) and Mustela sibirica (siberian weasel)].
+# For species with *only* NA season codes, I'll leave these in, and treat them as suitable in all seasons.
 
-```{r remove-passage}
-# Calculate the AOH under different constraints:
+habitat_prefs %>%
+  filter(binomial %in% unique(species_list$binomial), 
+         !is.na(map_code), suitability == "Suitable") %>%
+  left_join(select(species_list, vert_class, binomial) %>% unique()) %>%
+  # filter(!(vert_class == "bird" & is.na(season))) %>%
+  group_by(season_code, vert_class) %>%
+  summarise(n_sp = n()) %>%
+  print(n = 30)
 
-# Restricting by:
-# 1. seasonality, so that only 1, 2, 3 are considered (Codes are: "Resident" (1), "Breeding" (2), "Non-breeding Season" (3), Passage (4), and Seasonal Occurrence Uncertain (5).)
-species_ranges$seasonal %>% unique()
+# ---------- #
+# extract list of species with NA season suitabilities:
+sp_w_na_suitabilities <- habitat_prefs %>%
+  filter(is.na(season_code), suitability == "Suitable", !is.na(map_code)) %>%
+  # select(binomial, season_code) %>% unique() %>%
+  .$binomial %>% unique()
 
-species_ranges %>% filter(seasonal == 4)
-species_ranges %>% filter(str_detect(binomial, "Falco peregrinus"))
-habitat_prefs %>% filter(str_detect(binomial, "Falco peregrinus"), !is.na(map_code))
+# ---------- #
+# Extract list of species with some habitat suitabilities with season marked as NA, and some with a code.
+# i.e., with more than one habitat suitability season code, one of which is NA
+# In these contexts, the NA season should be filtered out.
 
-# testing
-aoh_l %>%
+sp_w_na_suit_and_more <- 
+  habitat_prefs %>%
+  filter(binomial %in% sp_w_na_suitabilities, suitability == "Suitable", !is.na(map_code)) %>%
+  select(binomial, season_code) %>% unique() %>%
+  group_by(binomial) %>% summarise(n_sp = n()) %>% arrange(desc(n_sp)) %>%
+  filter(n_sp > 1) %>%
+  left_join(habitat_age_req_coded %>% select(binomial, common_names, vert_class)) %>%
+  .$binomial
+
+# ------------------------------------- #
+# extract a list of species with NA season_codes, so that I can make sure to treat them separately.
+sp_na_season <- 
+  habitat_prefs %>%
   filter(
-    # binomial == "Falco peregrinus", 
-    site == "belarus",
-    binomial == "Bombina bombina"
+    !(binomial %in% sp_w_na_suit_and_more & is.na(season_code)), # filter out NA season_codes for species with multiple season codes, one being NA 
+    binomial %in% unique(species_list$binomial),
+    !is.na(map_code), suitability == "Suitable",
+    
+    # select those species with na season codes
+    is.na(season_code)
     ) %>%
-  left_join(
-    aoh_l %>%
-      filter(
-        # binomial == "Falco peregrinus", 
-        binomial == "Bombina bombina", 
-        site == "belarus", 
-        aoh_type %in% aoh_type_df$label[c(1)],
-        # year == 2015,
-        season %in% c(1, 2, 3)) %>% # filtering out passage areas:
-      group_by(aoh_type, vert_class, site, binomial, year) %>% 
-      summarise(
-        aoh_no_passage = sum(area, na.rm = TRUE)
-                )
-  ) %>% select(aoh_type:aoh, aoh_no_passage, everything()) %>%
-  mutate(aoh_no_passage = case_when(
-    season == 4 ~ NA_real_,
-    TRUE ~ aoh_no_passage
-  ))
-
-aoh_distill %>%
-  filter(binomial == "Bombina bombina", site == "belarus") %>%
-  print(n = 40)
+  .$binomial %>% unique()
+# 607 species
 
 
-# calculate:
-aoh_l <- aoh_l %>%
+# ------------------------- #
+# My approach is to use a simple inner_join to filter out mismatched combinations of season and habitat, and then manually add back in the species with NA season codes associated with their suitabilities (by binding to it a filtered aoh file with just the above species with NA season codes).
+
+aoh_filter <- 
+  aoh_l %>%
+  # rename(season_code = season) %>% # must update so that season_code matches
+  inner_join(
+    habitat_prefs %>% # extract the habitat classifications for the species in question
+      filter(suitability == "Suitable", !is.na(map_code)) %>%
+      select(binomial, season_code, map_code) %>%
+      mutate(season = season_code) # add a new column to 1) match season in aoh, and 2) to retain season_code
+    ) %>%
+  bind_rows(aoh_l %>% 
+              filter(binomial %in% sp_na_season) %>% # to bind back to the inner_joined df
+              mutate(season_code = NA)
+            )
+
+write_parquet(aoh_filter, paste0(p_derived, "aoh_filter.parquet"))
+aoh_filter <- read_parquet(paste0(p_derived, "aoh_filter.parquet"))
+```
+
+```{r calc-aoh}
+# calculate AOH for multiple conditions: across all habitats and seasons, and excluding passage areas:
+aoh_filter
+
+aoh <- lapply(c("include_passage", "exclude_passage"), function(i) {
+  
+  aoh_filter %>%
+    
+    # filtering out passage areas:
+    # Codes are: "Resident" (1), "Breeding" (2), "Non-breeding Season" (3),
+    # Passage (4), and Seasonal Occurrence Uncertain (5).
+    {if (i == "exclude_passage") filter(., season %in% c(1, 2, 3)) else .} %>%
+    
+    # group and sum area to calculate AOH
+    group_by(aoh_type, vert_class, site, binomial, year) %>% 
+    summarise(aoh = sum(area, na.rm = TRUE)) %>%
+    mutate(passage_type = i)
+}) %>% bind_rows() %>% ungroup()
+
+# ------------ #
+# combine with relevant columns from aoh_l
+aoh <- 
+  aoh %>% 
   left_join(
     aoh_l %>% 
-      filter(season %in% c(1, 2, 3)) %>% # filtering out passage areas:
-      group_by(aoh_type, vert_class, site, binomial, year) %>% 
-      summarise(aoh_no_passage = sum(area, na.rm = TRUE)) # make sure to sum area (which is either area_ha or adj_area_ha, depending on whether it is lc or IUCN)
-  ) %>% 
-  select(aoh_type:aoh, aoh_no_passage, everything()) %>%
-  mutate(aoh_no_passage = case_when(
-    season == 4 ~ NA_real_,
-    TRUE ~ aoh_no_passage
-  ))
-
-
-
-
-aoh_l %>%
-  select(aoh_type:aoh_no_passage) %>%
-  mutate(test = aoh - aoh_no_passage
-         # equal = all.equal(.$aoh, .$aoh_no_passage)
-         ) %>%
-  filter(test < -0.000001)
-```
-
-```{r save-aoh-l}
-write_parquet(aoh_l, paste0(p_derived, "aoh_l.parquet"))
-aoh_l <- read_parquet(paste0(p_derived, "aoh_l.parquet"))
-
-```
-
-```{r remove-mature-forest-obl}
-# 2. mature_forest_obl, so that only non-mature forest obligates are included.
-
-
-aoh_l %>%
-  filter(mature_forest_obl < 0.5)
-
-aoh_l
-  group_by(aoh_type, vert_class) %>%
-  summarise(num_sp = n(),
-            sp = length(unique(binomial))) %>%
-  arrange(vert_class)
-
-```
-
-```{r remove-unimportant-habitats}
-# TBD
-
-# 3. only those map_codes (habitats) that are marked as majorImportance for the species.
-names(aoh_l)
-
-t1 <- aoh_l %>%   
-  filter(!is.na(map_code)) %>%
-  filter(str_detect(binomial, "Acanthis flammea"), year == 1987, site == "belarus") 
-
-t1 %>% select(binomial, map_code)
-
-# It's complicated. habitat_prefs actually includes majorImportance for each habitat type in non-breeding and breeding seasons. So, I'll need to figure out a way to match the importance to the season code.
-habitat_prefs$season %>% unique()
-
-t2 <- habitat_prefs %>%
-  filter(!is.na(map_code), 
-         # !is.na(majorImportance)
-         ) %>%
-  # select(binomial, map_code, majorImportance) %>% 
-  filter(str_detect(binomial, "Acanthis flammea"))
-
-t3 <- t1 %>% 
-  filter(!is.na(map_code)) %>%
-  left_join(
-    t2 %>% 
-      # filter(!is.na(majorImportance)) %>%
-      select(binomial, map_code, majorImportance),
-    by = c("binomial", "map_code"))
-
-aoh_l_iucn <- aoh_l %>%
-  filter(!is.na(map_code)) %>%
-  left_join(
-    habitat_prefs %>% 
-      filter(!is.na(majorImportance)) %>%
-      select(binomial, map_code, majorImportance),
-    by = c("binomial", "map_code"))
+      select(aoh_type, vert_class, site, binomial, 
+             redlistCategory, mature_forest_obl, common_names) %>% 
+      unique()
+  ) %>%
   
-aoh_l_iucn$majorImportance %>% unique()
-
-
-# calculate:
-# aoh_l_iucn <-
-  aoh_l_iucn %>%
-  left_join(
-    aoh_l_iucn %>% 
-      filter(majorImportance == "Yes") %>% # include only habitats of major importance:
-      group_by(aoh_type, vert_class, site, binomial, year) %>% 
-      summarise(aoh_majorImportance = sum(area, na.rm = TRUE)) # make sure to sum area (which is either area_ha or adj_area_ha, depending on whether it is lc or IUCN)
-  ) %>% 
-  select(aoh_type:aoh, aoh_majorImportance, everything()) %>%
-  mutate(aoh_majorImportance = case_when(
-    majorImportance == "Yes" ~ aoh_majorImportance
-  ))
-
-aoh_l_iucn %>% filter(!is.na(aoh_majorImportance)) %>%
-  select(aoh, aoh_majorImportance)
-
-aoh_l_iucn %>% filter(str_detect(binomial, "Acanthis flammea"), year == 1987, site == "belarus")
-aoh_l %>% filter(str_detect(binomial, "Acanthis flammea"), year == 1987, site == "belarus") 
-
-```
-
-
-```{r}
-# 4. Abandonment only vs. the entire landscape
-
-
-
-```
-
-## Synthesize
-
-```{r aoh-distill}
-
-# -------------- extract just species and yearly aoh ------------- #
-aoh_distill <- 
-  aoh_l %>% 
-  select(aoh_type, vert_class, site, binomial, redlistCategory, year, 
-         aoh, aoh_no_passage, mature_forest_obl, common_names) %>% 
-  unique() %>% 
+  # add year0 for models
+  # in this case, the full, max_abn, and max_potential_abn runs all start in 1987
   mutate(year0 = case_when(
     grepl("full|max", aoh_type) ~ year - 1986,
     grepl("^abn_|^potential", aoh_type) ~ year - 1991
   ))
 
-run_indices %>%
-  filter(mature_forest_obl != "NA")
 
-aoh_l %>% select(aoh_type, vert_class, site, binomial) %>% unique() %>% nrow()
-aoh_distill %>% select(aoh_type, vert_class, site, binomial) %>% unique() %>% nrow()
-
-aoh_l %>% select(mature_forest_obl)
- 
 # create an index for running the linear models,
-# one index for each unique species at each site, in each of the aoh runs
+# one index for each unique species at each site, in each of the aoh runs, with and without passage areas.
 run_indices <- 
-  aoh_distill %>%
-  arrange(aoh_type, vert_class, site, binomial) %>%
-  select(aoh_type, vert_class, site, binomial, common_names, redlistCategory, mature_forest_obl) %>%
+  aoh %>% 
+  arrange(passage_type, aoh_type, vert_class, site, binomial) %>%
+  select(aoh_type, vert_class, site, binomial, passage_type,
+         common_names, redlistCategory, mature_forest_obl) %>%
   unique() %>% 
   mutate(run_index = 1:n())
 
 # add this index back to the distilled df
-aoh_distill <- aoh_distill %>%
+aoh <- aoh %>%
   left_join(run_indices)
 
+# save file ----------------- #
 
-aoh_distill$run_index %>% unique() %>% sort() %>% tail
-aoh_distill %>% select(site, binomial) %>% unique() %>% nrow
+write_parquet(aoh, paste0(p_derived, "aoh.parquet"))
+aoh <- read_parquet(paste0(p_derived, "aoh.parquet"))
 
 
-write_parquet(aoh_distill, paste0(p_derived, "aoh_distill.parquet"))
-aoh_distill <- read_parquet(paste0(p_derived, "aoh_distill.parquet"))
+
+
+
+# -------------------------------------------------------- #
+
+# taking stock:
+# lots of stuff gets filtered out, which is why these numbers are not 2x each other.
+aoh_l %>% select(aoh_type, site, binomial) %>% unique() # 10,739
+aoh %>% select(aoh_type, site, binomial) %>% unique() # 8642 * 2
+aoh %>% select(aoh_type, site, binomial, passage_type) %>% unique() # 17,266
+
+
+aoh %>% group_by(aoh_type, site, binomial, vert_class) %>% 
+  summarise(n_yr = length(year)) %>%
+  filter(n_yr < 62)
+
+species_list %>% nrow() # 4001 unique species - site combinations
+aoh_l %>% 
+  select(aoh_type, vert_class, site, binomial, 
+         redlistCategory, mature_forest_obl, common_names) %>%
+  unique() %>% nrow()
+
+
+aoh$year0 %>% min()
+
+aoh$year %>% summary()
+aoh %>% group_by(aoh_type) %>% summarise(min_year = min(year), max_year = max(year))
+
+# ------ extras ------- #
+
+# test
+aoh %>% 
+  pivot_wider(id_cols = c(aoh_type:year), values_from = aoh, 
+              names_from = passage_type, names_prefix = "aoh_") %>%
+  mutate(test = include_passage - exclude_passage) %>%
+  filter(test < -0.000000001)
+
+
+# if you want to add it back to aoh_l, you can do this: but don't think this is necessary
+aoh_l %>%
+  left_join(
+    aoh %>% 
+      pivot_wider(id_cols = c(aoh_type:year), values_from = aoh, 
+                  names_from = passage_type, names_prefix = "aoh_")
+    ) %>% 
+  select(aoh_type:area, starts_with("aoh"), everything()) %>%
+  mutate(aoh_exclude_passage = case_when(
+    season == 4 ~ NA_real_,
+    TRUE ~ aoh_exclude_passage
+  ))
 ```
 
 
+```{r pivot-aoh}
+aoh %>%
+  filter(site == site_df$site[1], binomial == sp_name) %>% #print(n = 124)
+  pivot_wider(
+    id_cols = c("vert_class", "site", "binomial", 
+                "redlistCategory", "year", "mature_forest_obl", "passage_type"),
+    names_from = aoh_type, values_from = aoh, names_pref = "aoh_") %>%
+  mutate(diff_obs = aoh_full_iucn - aoh_max_abn_iucn, 
+         diff_pot = aoh_full_iucn - aoh_max_potential_abn_iucn) %>%
+  pivot_longer(cols = c("aoh_full_iucn", "aoh_max_abn_iucn", 
+                        "aoh_max_potential_abn_iucn", 
+                        "diff_obs", "diff_pot"),
+               names_to = "type", values_to = "aoh")
+```
+
+
+## Explore
 ```{r prelim-plots}
 sp_to_plot <- "Agamia agami"
 sp_to_plot <- "Certhia familiaris"
 
-aoh_distill %>%
-  filter(binomial == sp_to_plot, aoh_type %in% aoh_type_df$label[c(3,4)]) %>%
+aoh %>%
+  filter(binomial == sp_to_plot, aoh_type %in% aoh_type_df$label[c(6, 8)]) %>%
   ggplot(mapping = aes(x = year, y = aoh, 
                        col = aoh_type, group = aoh_type
                        )) +
@@ -2375,15 +2373,97 @@ aoh_distill %>%
   facet_wrap(vars(site), scales = "free")
 
 
+
 ```
 
 
+```{r example-plots-extracting-trend-abn}
+
+sp_name <- "Certhia familiaris"
+
+cc_plot_aoh_sp_site(binomial = c("Certhia familiaris", "Poecile palustris",
+                                 "Agamia agami", "Anser fabalis"), 
+                    site_index = c(1:11))
+
+cc_plot_aoh_trend_sp_site(
+  binomial = c("Certhia familiaris", "Poecile palustris",
+               "Agamia agami", "Anser fabalis"), 
+  site_index = c(1:11))
+
+
+aoh %>% 
+  filter(run_index == 3) %>%
+  ggplot(mapping = aes(x = year0, y = aoh)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = 0.95) + 
+  labs(x = "Year", y = "AOH (ha)", title = unique(filter(aoh, run_index == i)$binomial))
+  
+# ------ #
+
+ habitat_prefs %>% filter(str_detect(binomial, "Poecile palustris")) %>%
+  select(binomial, name, season, suitability, map_code)
+
+habitat_age_req_coded %>%
+  filter(vert_class == "bird") %>%
+  group()
+  
+
+# -------------------------------------------------- #
+# declining trend
+
+aoh_max_abn_change_df %>%
+  left_join(run_indices_max_abn, by = "run_index") %>%
+  filter(site == "shaanxi", rel_change < 0)
+
+sp_name2 <- "Anser fabalis"
+
+gg_aoh_example2 <-
+  aoh_distill %>%
+  filter(site == site_df$site[9], binomial == sp_name2) %>% #print(n = 124)
+  pivot_wider(
+    id_cols = c("vert_class", "site", "binomial", "redlistCategory", "year", "mature_forest_obl"),
+              names_from = aoh_type, values_from = c("aoh", "aoh_no_passage")) %>% #unique() %>% print(n = 100)
+  mutate(diff_iucn = aoh_full_iucn - aoh_max_abn_iucn, diff_lc = aoh_full_lc - aoh_max_abn_lc) %>%
+  pivot_longer(cols = c("aoh_full_iucn", "aoh_max_abn_iucn", "aoh_full_lc", "aoh_max_abn_lc", "diff_iucn", "diff_lc"),
+               names_to = "type", values_to = "aoh") %>%
+  # print(n = 80)
+  # filter(type %in% c("max_abn", "lc", "diff_max")) %>%
+  
+  ggplot(mapping = aes(x = year, y = aoh, col = type)) + 
+  geom_line(size = 1.5) + 
+  labs(x = "Year", y = "AOH (ha)", 
+       title = paste(sp_name2, "(Taiga bean goose)"),
+       subtitle = site_df$site[9]) +
+  scale_color_manual(
+    name = "Type",
+                     labels = c("diff_iucn" = "Difference, IUCN",
+                                "diff_lc" = "Difference, lc",
+                                "aoh_full_iucn" = "Landscape, IUCN",
+                                "aoh_full_lc" = "Landscape, lc",
+                                "aoh_max_abn_iucn" = "Abandonment, IUCN",
+                                "aoh_max_abn_lc" = "Abandonment, lc"),
+                     values = gg_color_hue(6)
+                     )
+# save plot
+ggsave(plot = gg_aoh_example2,
+       filename = paste0(p_output, "plots/aoh/", "aoh_example_species2", aoh_run_date, ".pdf"),
+     width = 8, height = 6, units = "in")
+
+
+  
+
+# What proportion of the change in habitat resulted from abandonment?
+
+
+```
+
+## Model 
 
 ```{r calc-linear-regression}
 # aoh_trends
 # aoh_distill %>% filter(run_index == 212)
 
-df_sp_subset <- aoh_distill %>%
+df_sp_subset <- aoh %>%
   filter(binomial == sp_to_plot, site == "belarus",
          aoh_type %in% aoh_type_df$label[6])
 
@@ -2413,12 +2493,15 @@ ggplot(data = df_sp_subset,
 # aoh_lm_df <- tidy(tmp_all)
 
 
+
 # -------------------
 # run simple regression on each species' and extract AOH trend over time.
 # -------------------
 tic()
-aoh_trends <- lapply(1:length(unique(aoh_distill$run_index)), function(i) {
-  aoh_distill %>% 
+aoh_trends <- lapply(
+  1:length(unique(aoh$run_index)), 
+  function(i) {
+  aoh %>% 
     filter(run_index == i) %>%
     lm(aoh ~ year0, data = .) %>%
     tidy() %>% 
@@ -2427,7 +2510,25 @@ aoh_trends <- lapply(1:length(unique(aoh_distill$run_index)), function(i) {
 
 write_parquet(aoh_trends, paste0(p_derived, "aoh_trends.parquet"))
 toc()
+
 warnings()
+# ------------------
+# determine the relative trend (percent change in AOH start to end)
+# ------------------
+# calculate percent changes
+aoh_change_df <- 
+  aoh_trends %>%
+  select(run_index, 
+         term, estimate) %>%
+  mutate(term = ifelse(term == "(Intercept)", "intercept", "slope")) %>%
+  pivot_wider(id_cols = run_index, 
+              names_from = term, values_from = estimate) %>%
+  mutate(aoh_start = slope*1 + intercept,
+         aoh_end = slope*31 + intercept,
+         rel_change = ((aoh_end/aoh_start) - 1)) %>%
+  left_join(run_indices, by = "run_index")
+
+
 
 tic()
 aoh_trends_no_passage <- lapply(
@@ -2459,45 +2560,6 @@ aoh_trends_combo <- bind_rows(
   aoh_trends_no_passage %>% mutate(include_passage = "no")
 )
 
-# ------------------
-# determine the relative trend (percent change in AOH start to end)
-# ------------------
-i <- 4696
-# plot trend for a given species:
-aoh_distill %>% 
-  filter(vert_class == "bird") %>%
-  select(run_index) %>% summary()
-
-habitat_age_req_coded %>% 
-  filter(binomial == unique(filter(aoh_distill, run_index == i)$binomial))
-
-
-aoh_distill %>% 
-  filter(run_index == i) %>%
-  ggplot(mapping = aes(x = year0, y = aoh)) +
-  geom_point() + 
-  geom_smooth(method = "lm", se = 0.95) + 
-  labs(x = "Year", y = "AOH (ha)", title = unique(filter(aoh_distill, run_index == i)$binomial))
-  
-
-
-# calculate percent changes
-aoh_change_df <- 
-  aoh_trends_combo %>% #filter(run_index == i) %>%
-  select(run_index, include_passage, 
-         term, estimate) %>%
-  mutate(term = ifelse(term == "(Intercept)", "intercept", "slope")) %>%
-  pivot_wider(id_cols = c(run_index, include_passage
-                          ), 
-              names_from = term, values_from = estimate) %>%
-  mutate(aoh_start = slope*1 + intercept,
-         aoh_end = slope*31 + intercept,
-         rel_change = ((aoh_end/aoh_start) - 1)) %>%
-  left_join(run_indices, by = "run_index")
-
-
-aoh_trends$run_index %>% unique()
-aoh_change_df %>% filter(vert_class != "amp")
 
 hist(aoh_change_df$rel_change)
 
@@ -2507,6 +2569,8 @@ aoh_change_df %>%
   .$rel_change %>%
   hist(breaks = 100)
 ```
+
+## Plots
 
 
 ```{r hist-percent-changes}
@@ -2866,6 +2930,175 @@ trend_by_site %>%
   summarise(totals = sum(trend_count))
 1321/ 854
 ```
+
+
+## Extras - old
+
+```{r aoh-l-remove-passage}
+# Calculate the AOH under different constraints:
+
+# Restricting by:
+# 1. seasonality, so that only 1, 2, 3 are considered (Codes are: "Resident" (1), "Breeding" (2), "Non-breeding Season" (3), Passage (4), and Seasonal Occurrence Uncertain (5).)
+species_ranges$seasonal %>% unique()
+
+aoh_l %>%
+  filter(season %in% c(1, 2, 3)) %>% # filtering out passage areas:
+  group_by(aoh_type, vert_class, site, binomial, year) %>% 
+  summarise(aoh_no_passage = sum(area, na.rm = TRUE))
+                
+# calculate:
+aoh_l <- aoh_l %>%
+  left_join(
+    aoh_l %>% 
+      filter(season %in% c(1, 2, 3)) %>% # filtering out passage areas:
+      group_by(aoh_type, vert_class, site, binomial, year) %>% 
+      summarise(aoh_no_passage = sum(area, na.rm = TRUE)) # make sure to sum area (which is either area_ha or adj_area_ha, depending on whether it is lc or IUCN)
+  ) %>% 
+  select(aoh_type:aoh, aoh_no_passage, everything()) %>%
+  mutate(aoh_no_passage = case_when(
+    season == 4 ~ NA_real_,
+    TRUE ~ aoh_no_passage
+  ))
+
+
+
+aoh_l %>%
+  select(aoh_type:aoh_no_passage) %>%
+  mutate(test = aoh - aoh_no_passage
+         # equal = all.equal(.$aoh, .$aoh_no_passage)
+         ) %>%
+  filter(test < -0.000001)
+```
+
+
+```{r remove-mature-forest-obl}
+# 2. mature_forest_obl, so that only non-mature forest obligates are included.
+
+
+aoh_l %>%
+  filter(mature_forest_obl < 0.5)
+
+aoh_l
+  group_by(aoh_type, vert_class) %>%
+  summarise(num_sp = n(),
+            sp = length(unique(binomial))) %>%
+  arrange(vert_class)
+
+```
+
+```{r remove-unimportant-habitats}
+# TBD
+
+# 3. only those map_codes (habitats) that are marked as majorImportance for the species.
+names(aoh_l)
+
+t1 <- aoh_l %>%   
+  filter(!is.na(map_code)) %>%
+  filter(str_detect(binomial, "Acanthis flammea"), year == 1987, site == "belarus") 
+
+t1 %>% select(binomial, map_code)
+
+# It's complicated. habitat_prefs actually includes majorImportance for each habitat type in non-breeding and breeding seasons. So, I'll need to figure out a way to match the importance to the season code.
+habitat_prefs$season %>% unique()
+
+t2 <- habitat_prefs %>%
+  filter(!is.na(map_code), 
+         # !is.na(majorImportance)
+         ) %>%
+  # select(binomial, map_code, majorImportance) %>% 
+  filter(str_detect(binomial, "Acanthis flammea"))
+
+t3 <- t1 %>% 
+  filter(!is.na(map_code)) %>%
+  left_join(
+    t2 %>% 
+      # filter(!is.na(majorImportance)) %>%
+      select(binomial, map_code, majorImportance),
+    by = c("binomial", "map_code"))
+
+aoh_l_iucn <- aoh_l %>%
+  filter(!is.na(map_code)) %>%
+  left_join(
+    habitat_prefs %>% 
+      filter(!is.na(majorImportance)) %>%
+      select(binomial, map_code, majorImportance),
+    by = c("binomial", "map_code"))
+  
+aoh_l_iucn$majorImportance %>% unique()
+
+
+# calculate:
+# aoh_l_iucn <-
+  aoh_l_iucn %>%
+  left_join(
+    aoh_l_iucn %>% 
+      filter(majorImportance == "Yes") %>% # include only habitats of major importance:
+      group_by(aoh_type, vert_class, site, binomial, year) %>% 
+      summarise(aoh_majorImportance = sum(area, na.rm = TRUE)) # make sure to sum area (which is either area_ha or adj_area_ha, depending on whether it is lc or IUCN)
+  ) %>% 
+  select(aoh_type:aoh, aoh_majorImportance, everything()) %>%
+  mutate(aoh_majorImportance = case_when(
+    majorImportance == "Yes" ~ aoh_majorImportance
+  ))
+
+aoh_l_iucn %>% filter(!is.na(aoh_majorImportance)) %>%
+  select(aoh, aoh_majorImportance)
+
+aoh_l_iucn %>% filter(str_detect(binomial, "Acanthis flammea"), year == 1987, site == "belarus")
+aoh_l %>% filter(str_detect(binomial, "Acanthis flammea"), year == 1987, site == "belarus") 
+
+```
+```{r aoh-l-distill}
+names(aoh)
+names(aoh_l)
+# -------------- extract just species and yearly aoh ------------- #
+# aoh_l version of aoh_distill:
+aoh_distill <- 
+  aoh_l %>%
+  select(aoh_type, vert_class, site, binomial, redlistCategory, year, 
+         aoh, aoh_no_passage, mature_forest_obl, common_names) %>% 
+  unique() %>% 
+  mutate(year0 = case_when(
+    grepl("full|max", aoh_type) ~ year - 1986,
+    grepl("^abn_|^potential", aoh_type) ~ year - 1991
+  ))
+
+run_indices %>%
+  filter(mature_forest_obl != "NA")
+
+aoh_l %>% select(aoh_type, vert_class, site, binomial) %>% unique() %>% nrow()
+aoh_distill %>% select(aoh_type, vert_class, site, binomial) %>% unique() %>% nrow()
+
+aoh_l %>% select(mature_forest_obl)
+
+
+
+
+# create an index for running the linear models,
+# one index for each unique species at each site, in each of the aoh runs, with and without passage areas.
+run_indices <- 
+  # aoh_distill %>%
+  aoh %>% 
+  arrange(aoh_type, vert_class, site, binomial) %>%
+  select(aoh_type, vert_class, site, binomial, passage_type,
+         common_names, redlistCategory, mature_forest_obl) %>%
+  unique() %>% 
+  mutate(run_index = 1:n())
+
+# add this index back to the distilled df
+aoh_distill <- aoh_distill %>%
+  left_join(run_indices)
+
+
+aoh_distill$run_index %>% unique() %>% sort() %>% tail
+aoh_distill %>% select(site, binomial) %>% unique() %>% nrow
+
+
+write_parquet(aoh_distill, paste0(p_derived, "aoh_distill.parquet"))
+aoh_distill <- read_parquet(paste0(p_derived, "aoh_distill.parquet"))
+```
+
+### older
 
 ```{r prelim-abn-plots}
 sp_to_plot <- "Agamia agami"
@@ -3353,103 +3586,7 @@ ggsave(gg_aoh_max_abn_trend_by_site,
 
 ```
 
-```{r extracting-trend-abn}
-
-
-aoh_combo %>%
-  filter(site == site_df$site[9], vert_class == "bird") %>%
-  select(binomial) %>% unique() %>% print(n = 50)
-
-sp_name <- "Certhia familiaris"
-
-gg_aoh_example1 <-
-  aoh_distill %>%
-  filter(site == site_df$site[1], binomial == sp_name) %>% #print(n = 124)
-  pivot_wider(
-    id_cols = c("vert_class", "site", "binomial", "redlistCategory", "year", "mature_forest_obl"),
-              names_from = aoh_type, values_from = c("aoh", "aoh_no_passage")) %>% #unique() %>% print(n = 100)
-  mutate(diff_iucn = aoh_full_iucn - aoh_max_abn_iucn, diff_lc = aoh_full_lc - aoh_max_abn_lc) %>%
-  pivot_longer(cols = c("aoh_full_iucn", "aoh_max_abn_iucn", "aoh_full_lc", "aoh_max_abn_lc", "diff_iucn", "diff_lc"),
-               names_to = "type", values_to = "aoh") %>%
-  # print(n = 80)
-  # filter(type %in% c("max_abn", "lc", "diff_max")) %>%
-  
-  ggplot(mapping = aes(x = year, y = aoh, col = type)) + 
-  geom_line(size = 1.5) + 
-  labs(x = "Year", y = "AOH (ha)", 
-       title = paste(sp_name, "(Eurasian treecreeper)"),
-       subtitle = site_df$site[1]) +
-  scale_color_manual(
-    name = "Type",
-                     labels = c("diff_iucn" = "Difference, IUCN",
-                                "diff_lc" = "Difference, lc",
-                                "aoh_full_iucn" = "Landscape, IUCN",
-                                "aoh_full_lc" = "Landscape, lc",
-                                "aoh_max_abn_iucn" = "Abandonment, IUCN",
-                                "aoh_max_abn_lc" = "Abandonment, lc"),
-                     values = gg_color_hue(6)
-                     )
-  # save plot
-  ggsave(plot = gg_aoh_example1,
-         filename = paste0(p_output, "plots/aoh/", "aoh_example_species1", aoh_run_date, ".pdf"),
-       width = 8, height = 6, units = "in")
-
-habitat_prefs %>% filter(str_detect(binomial, "Poecile palustris")) %>%
-  select(binomial, name, season, suitability, map_code)
-
-habitat_age_req_coded %>%
-  filter(vert_class == "bird") %>%
-  group()
-  
-
-# -------------------------------------------------- #
-# declining trend
-
-aoh_max_abn_change_df %>%
-  left_join(run_indices_max_abn, by = "run_index") %>%
-  filter(site == "shaanxi", rel_change < 0)
-
-sp_name2 <- "Anser fabalis"
-
-gg_aoh_example2 <-
-  aoh_distill %>%
-  filter(site == site_df$site[9], binomial == sp_name2) %>% #print(n = 124)
-  pivot_wider(
-    id_cols = c("vert_class", "site", "binomial", "redlistCategory", "year", "mature_forest_obl"),
-              names_from = aoh_type, values_from = c("aoh", "aoh_no_passage")) %>% #unique() %>% print(n = 100)
-  mutate(diff_iucn = aoh_full_iucn - aoh_max_abn_iucn, diff_lc = aoh_full_lc - aoh_max_abn_lc) %>%
-  pivot_longer(cols = c("aoh_full_iucn", "aoh_max_abn_iucn", "aoh_full_lc", "aoh_max_abn_lc", "diff_iucn", "diff_lc"),
-               names_to = "type", values_to = "aoh") %>%
-  # print(n = 80)
-  # filter(type %in% c("max_abn", "lc", "diff_max")) %>%
-  
-  ggplot(mapping = aes(x = year, y = aoh, col = type)) + 
-  geom_line(size = 1.5) + 
-  labs(x = "Year", y = "AOH (ha)", 
-       title = paste(sp_name2, "(Taiga bean goose)"),
-       subtitle = site_df$site[9]) +
-  scale_color_manual(
-    name = "Type",
-                     labels = c("diff_iucn" = "Difference, IUCN",
-                                "diff_lc" = "Difference, lc",
-                                "aoh_full_iucn" = "Landscape, IUCN",
-                                "aoh_full_lc" = "Landscape, lc",
-                                "aoh_max_abn_iucn" = "Abandonment, IUCN",
-                                "aoh_max_abn_lc" = "Abandonment, lc"),
-                     values = gg_color_hue(6)
-                     )
-# save plot
-ggsave(plot = gg_aoh_example2,
-       filename = paste0(p_output, "plots/aoh/", "aoh_example_species2", aoh_run_date, ".pdf"),
-     width = 8, height = 6, units = "in")
-
-
-  
-
-# What proportion of the change in habitat resulted from abandonment?
-
-
-```
+# End
 
 ```{r seff}
 # extract run codes:
@@ -3503,7 +3640,7 @@ seff <- tibble(
       list.files("scripts/cluster/slurm_out") %>% 
       grep("aoh_hab*", ., value = TRUE) %>% 
       str_subset(array_id),
-    label = str_replace(all_slurm_out_files,
+    label = str_replace(file,
                         paste0("_", array_id, ".txt"), "")
     ) %>%
   select(label, everything())
@@ -3512,6 +3649,14 @@ seff %>% arrange(array) %>% print(n = 30)
 seff %>% filter(grepl("COMPLETED", state)) %>% arrange(array) %>% print(n = 30)
 
 seff %>% select(state) %>% unique()
+seff %>% select(label) %>% unique()
+
+seff %>%
+  filter(label == "aoh_hab8") %>% arrange(array) %>% print(n = 30)
+
+seff %>% arrange(desc(time))
+
+seff
 seff %>%
   filter(grepl("fail", state, ignore.case = TRUE)) %>% arrange(array) %>% print(n = 30)
 
@@ -3520,21 +3665,407 @@ seff %>%
 
 ```
 
+# Latest
 
-# Following up from presentation
+```{r AOH-suitability-by-season}
+# Do species have seasonal suitabilities?
+habitat_prefs$binomial %>% unique() %>% length() # 2312
+habitat_prefs %>%
+  filter(binomial %in% unique(species_list$binomial), 
+         !is.na(map_code), suitability == "Suitable") %>%
+  left_join(select(species_list, vert_class, binomial) %>% unique()) %>%
+  # filter(!(vert_class == "bird" & is.na(season))) %>%
+  group_by(season_code, vert_class) %>%
+  summarise(n_sp = n()) %>%
+  print(n = 30)
 
-1. How is 100 and 104 allocated?
-2. Species ranges - breeding, passage, etc.
-```{r}
+# ok, once I filter this to just suitable habitats, the unknown seasonality and na birds disappear
+# 4 season == NA bird entries
+# 20 seasonal unknown entries (17 mammals, 3 birds), totaling 6 species.
+# unk_sp <-
+  habitat_prefs %>%
+  filter(binomial %in% unique(species_list$binomial), 
+         !is.na(map_code), suitability == "Suitable") %>%
+  left_join(select(species_list, vert_class, binomial) %>% unique()) %>%
+  left_join(habitat_age_req_coded %>% select(binomial, common_names)) %>%
+  filter(
+    #!(vert_class == "bird" & is.na(season)),
+    is.na(season)
+    # grepl("unknown", season, ignore.case = TRUE)
+    ) %>%
+  select(vert_class, binomial, common_names, name, map_code, season_code) #%>%
+  # .$binomial %>% unique()
+
+habitat_prefs %>% 
+  filter(binomial %in% unk_sp, !is.na(map_code)) %>% 
+  left_join(habitat_age_req_coded %>% select(binomial, common_names)) %>%
+
+  select(binomial, common_names, name, map_code, season) %>%
+  print(n = 100)
+
+# what are their habitat descriptions?
+habitat_age_req_coded %>% filter(binomial %in% unk_sp) %>%
+  select(vert_class, binomial, common_names, habitat)
+  
+
+habitat_prefs %>%
+  filter(binomial %in% unique(species_list$binomial), !is.na(map_code)) %>%
+  left_join(select(species_list, vert_class, binomial) %>% unique()) %>% nrow()
+  filter(!(vert_class == "bird" & is.na(season)))
+
+habitat_prefs %>%
+  filter(binomial %in% c("Recurvirostra americana", "Glaucidium brodiei"),
+         !is.na(map_code))
+
+species_ranges %>% st_drop_geometry() %>% as_tibble() %>%
+  filter(binomial %in% c("Recurvirostra americana", "Glaucidium brodiei"))
+
+species_ranges %>% filter(binomial == "Glaucidium brodiei") %>% select(seasonal) %>% plot()
+
+jung_hab_type_area_df %>%
+  filter(site == "nebraska") %>%
+  arrange(habitat_type)
+
+jung_hab_type_area_df %>%
+  filter(site == "chongqing") %>%
+  arrange(habitat_type)
+
+
+species_list %>% nrow() # 4001 (old: 4038)
+species_list$binomial %>% unique %>% length # 2187 # number of unique species (after filtering by habitat, elevation)
+
+
+# number of species in each class at each site
+species_list %>% 
+  group_by(site, vert_class) %>% 
+  summarise(num_sp = n()) 
+
+
+# If they don't have suitabilities, should I drop them?
+
+
+
+# Drop passage areas
+
+species_ranges %>% 
+  # st_drop_geometry() %>% 
+  filter(binomial %in% unique(species_list$binomial),
+         vert_class == "bird",
+         binomial == "Catharus swainsoni", 
+         site == site_df$site[11]) %>%
+  # as_tibble() %>%
+  select(
+    # site, binomial,
+         seasonal) %>%
+  plot()
+
+
+species_list %>% filter(str_detect(binomial, "Catharus swainsoni"))
+
+
+
+# testing with the Swainson's Thrush
+habitat_prefs %>% 
+  filter(str_detect(binomial, "Catharus swainsoni")) %>%
+  select(binomial, majorImportance:season, map_code, IUCNLevel) %>%
+  arrange(season)
+
+
+
+species_ranges$seasonal %>% unique() %>% sort()
+habitat_prefs$season %>% unique() %>% sort()
+habitat_prefs %>%
+  filter(
+    # season %in% c("Seasonal Occurrence Unknown","unknown")
+    is.na(season), vert_class == "bird"
+    )
+  
+
+habitat_prefs %>%
+  select(binomial, majorImportance:season, map_code, IUCNLevel) %>%
+  
+  # update season_code:
+  # --- Codes are: "Resident" (1), "Breeding" (2), "Non-breeding Season" (3), Passage (4), and Seasonal Occurrence Uncertain (5).
+  mutate(season_code = case_when(
+    grepl("resident", season, ignore.case = TRUE) ~ 1,
+    season %in% c("breeding", "Breeding Season") ~ 2,
+    season %in% c("non-breeding", "Non-Breeding Season") ~ 3,
+    grepl("passage", season, ignore.case = TRUE) ~ 4,
+    grepl("unknown", season, ignore.case = TRUE) ~ 5
+    )) %>%
+  # filter(season_code == 1) %>%
+  select(season_code,season) %>% arrange(season_code) %>% unique()
+
+
+habitat_prefs
 
 habitat_prefs %>%
   left_join(unique(select(species_list, binomial, vert_class)), by = "binomial") %>%
   filter(vert_class == "bird") %>%
   select(season, suitability) %>% unique() %>% arrange(suitability)
 
+habitat
+
+
 species_ranges %>%
   filter(vert_class == "bird", binomial == sp_name2)
+```
 
+
+```{r inner-join-suitability-by-season}
+aoh_l$aoh_type %>% unique()
+
+tmp_aoh <- aoh_l %>% 
+  filter(aoh_type == "max_abn_iucn", #binomial == sp_name, 
+         # site == site_df$site[site_index],
+         year %in% 2011:2015) %>% 
+  select(binomial, year, map_code, season, area) #%>% print(n=200)
+
+# filter to just the combinations of map_code and season_code that are suitable
+habitat_combos <- z1 %>% select(binomial, season_code, map_code, IUCNLevel) %>% arrange(season_code, map_code)
+habitat_prefs %>% # extract the habitat classifications for the species in question
+  filter(suitability == "Suitable", !is.na(map_code)) %>%
+  select(binomial, season_code, map_code, IUCNLevel)
+  
+
+tmp_aoh %>%
+  rename(season_code = season) %>%
+  inner_join(z1 %>% select(binomial, season_code, map_code, IUCNLevel))
+
+
+# ok, now I need to figure out how to get the combo of NA seasons to not drop those AOH areas.
+
+# here's a way to update the NA season_codes to 99
+habitat_prefs %>% # extract the habitat classifications for the species in question
+  filter(suitability == "Suitable", !is.na(map_code),
+         binomial == "Acris crepitans") %>%
+  select(binomial, season_code, map_code, IUCNLevel) %>%
+  mutate(season_code = case_when(
+    is.na(season_code) ~ 99,
+    TRUE ~ season_code
+  ))
+
+# create a new column showing whether the species has NA season suitabilities
+habitat_prefs %>% # extract the habitat classifications for the species in question
+  filter(suitability == "Suitable", !is.na(map_code),
+         binomial == "Acris crepitans") %>%
+  select(binomial, season_code, map_code, IUCNLevel) %>%
+  mutate(season_na = is.na(season_code))
+```
+
+
+```{r deal-w-multiple-season-NA}
+tmp1 <- habitat_prefs %>% # extract the habitat classifications for the species in question
+  filter(suitability == "Suitable", !is.na(map_code),
+         binomial == "Acris crepitans")
+
+tmp1 <- rbind(tmp1, tmp1[4,])
+tmp1[5, "season_code"] <- 1
+
+sp_w_na_suitabilities <- habitat_prefs %>%
+  filter(is.na(season_code)) %>%
+  # select(binomial, season_code) %>% unique() %>%
+  .$binomial %>% unique()
+
+sp_w_na_suitabilities_gt_1 <- habitat_prefs %>%
+  filter(binomial %in% sp_w_na_suitabilities, suitability == "Suitable", !is.na(map_code)) %>%
+  select(binomial, season_code) %>% unique() %>%
+  group_by(binomial) %>% summarise(n_sp = n()) %>% arrange(desc(n_sp)) %>%
+  filter(n_sp > 1) %>%
+  left_join(habitat_age_req_coded %>% select(binomial, common_names, vert_class)) %>%
+  .$binomial
+
+sp_w_na_suitabilities_gt_1
+# "Arctonyx albogularis" # hog badger, exclude NA season (grassland)
+# "Canis latrans" # coyote - exclude NA season (urban areas - these are probably suitable, but not large enough to matter for abandonment context)
+# "Glaucidium brodiei" # These were shrubland high altitude, but this should be updated to 1
+# "Monodelphis americana" # Northern Three-striped Opossum, removed from species_list for lack of habitat in Goias.
+# "Mustela sibirica" # Siberian weasel, NA seas is 109 forest, but this should be updated to 1
+# "Myotis daubentonii" # Daubenton's Myotis (bat) - this just has two different seasons. No update necessary
+habitat_prefs %>% 
+  filter(binomial %in% sp_w_na_suitabilities_gt_1, suitability == "Suitable", !is.na(map_code)) %>%
+  select(binomial, season_code, map_code, IUCNLevel) %>%
+  arrange(binomial, season_code) %>%
+  print(n = 40)
+
+habitat_age_req_coded %>% filter(binomial == "Monodelphis americana") # not in the habitat_coded
+species_ranges %>% filter(binomial == "Monodelphis americana") %>%
+  select(seasonal) %>% plot()
+habitat_prefs %>% filter(binomial == "Monodelphis americana")
+species_list %>% filter(binomial == "Monodelphis americana") # not in the species list - removed for lack of habitat at Goias
+jung_hab_type_area_df %>%
+  filter(site == "goias") 
+elevation_prefs %>% filter(binomial == "Monodelphis americana")
+
+# five species have habitat preferences that include NA and other codes.
+
+
+# for these species, I'll fix these codes so that they are changed if they should be included (Glaucidium brodiei (collared owlet) and Mustela sibirica (siberian weasel)) or left alone if they should be excluded with NA season codes.
+```
+
+
+```{r dev-inner-join}
+# for these species, I'll fix these codes so that they are changed if they should be included (Glaucidium brodiei (collared owlet) and Mustela sibirica (siberian weasel)) or left alone if they should be excluded with NA season codes.
+
+# Extract list of species with some habitat suitabilities with season marked as NA, and some with a code.
+# In these contexts, the NA season should be filtered out.
+# Note that some species have been directly updated in the creation of "habitat_prefs" [Glaucidium brodiei (collared owlet) and Mustela sibirica (siberian weasel)].
+# For species with *only* NA season codes, I'll leave these in, and treat them as suitable in all seasons.
+
+habitat_prefs %>%
+  filter(binomial %in% unique(species_list$binomial), 
+         !is.na(map_code), suitability == "Suitable") %>%
+  left_join(select(species_list, vert_class, binomial) %>% unique()) %>%
+  # filter(!(vert_class == "bird" & is.na(season))) %>%
+  group_by(season_code, vert_class) %>%
+  summarise(n_sp = n()) %>%
+  print(n = 30)
+
+# ---------- #
+# extract list of species with NA season suitabilities:
+sp_w_na_suitabilities <- habitat_prefs %>%
+  filter(is.na(season_code)) %>%
+  # select(binomial, season_code) %>% unique() %>%
+  .$binomial %>% unique()
+
+# ---------- #
+# Extract list of species with some habitat suitabilities with season marked as NA, and some with a code.
+# i.e., with more than one habitat suitability season code, one of which is NA
+# In these contexts, the NA season should be filtered out.
+
+sp_w_na_suit_and_more <- habitat_prefs %>%
+  filter(binomial %in% sp_w_na_suitabilities, suitability == "Suitable", !is.na(map_code)) %>%
+  select(binomial, season_code) %>% unique() %>%
+  group_by(binomial) %>% summarise(n_sp = n()) %>% arrange(desc(n_sp)) %>%
+  filter(n_sp > 1) %>%
+  left_join(habitat_age_req_coded %>% select(binomial, common_names, vert_class)) %>%
+  .$binomial
+
+
+# ------------------------------------ #
+# now, filter the NA season habitats out for these species.
+# exclude na seasons for just these species:
+
+habitat_prefs %>%
+  filter(
+    !(binomial %in% sp_w_na_suit_and_more & is.na(season_code))) %>% # filter out NA season_codes for species with multiple season codes, one being NA
+
+  filter(binomial %in% unique(species_list$binomial),
+         !is.na(map_code), suitability == "Suitable"
+         ) %>%
+  left_join(select(species_list, vert_class, binomial) %>% unique()) %>%
+  # filter(!(vert_class == "bird" & is.na(season))) %>%
+  group_by(season_code, vert_class) %>%
+  summarise(n_sp = n()) %>%
+  print(n = 30)
+
+# above is the number of habitat entries (multiple per species) - below is the number of species with each season_code
+habitat_prefs %>%
+  filter(
+    !(binomial %in% sp_w_na_suit_and_more & is.na(season_code))) %>% # filter out NA season_codes for species with multiple season codes, one being NA
+  
+  filter(binomial %in% unique(species_list$binomial),
+         !is.na(map_code), suitability == "Suitable"
+         ) %>%
+  left_join(select(species_list, vert_class, binomial) %>% unique()) %>%
+  select(binomial, vert_class, season_code) %>% unique() %>%
+  # filter(!(vert_class == "bird" & is.na(season))) %>%
+  group_by(season_code, vert_class) %>%
+  summarise(n_sp = n()) %>%
+  print(n = 30)
+
+# ------------------------------------- #
+# extract a list of species with NA season_codes, so that I can make sure to treat them separately.
+sp_na_season <- 
+  habitat_prefs %>%
+  filter(
+    !(binomial %in% sp_w_na_suit_and_more & is.na(season_code)), # filter out NA season_codes for species with multiple season codes, one being NA 
+    binomial %in% unique(species_list$binomial),
+    !is.na(map_code), suitability == "Suitable",
+    
+    # select those species with na season codes
+    is.na(season_code)
+    ) %>%
+  .$binomial %>% unique()
+# 607 species
+
+# check that these species *only* have NA season codes
+habitat_prefs %>% filter(binomial %in% sp_na_season) %>% select(season_code) %>% unique() # check
+
+
+
+# ------------------------- #
+# Default approach is to use a simple inner_join, then bind to it a filtered aoh file with just the above species (with NA season codes)
+
+tmp_aoh %>% filter(binomial %in% sp_na_season) # to bind back to the inner_joined df
+
+aoh_l$binomial %>% unique() %>% length() # 2181 species:
+aoh_l %>% group_by(aoh_type) %>% summarise(n_sp = length(unique(binomial))) # there are different numbers of species due to variance in the habitats that show up in different parts of sites. 
+# the lc runs have more, because they are not restricted to the habitats only in abandoned pixels. The proportional adjustment is based on the habitats that are present in any part of the site, not just the abn.
+
+aoh_l %>% filter(aoh_type == "max_abn_lc") %>% 
+  filter(!binomial %in% unique(filter(aoh_l, aoh_type == "max_abn_iucn")$binomial)) %>%
+  select(aoh_type:binomial) %>% unique()
+  #1939 species:
+
+species_ranges %>%
+  filter(binomial == "Acrocephalus scirpaceus", site == "belarus") %>%
+  select(seasonal) %>% plot()
+
+
+
+tmp_aoh$binomial %>% unique() %>% length() # 1933 species:
+tmp_aoh_filter$binomial %>% unique() %>% length() # 1664 species:
+aoh_l %>%
+  filter(aoh_type == "max_abn_lc")
+
+aoh_filter %>% 
+  select(aoh_type) %>%
+unique()
+
+aoh_filter <- 
+  aoh_l %>%
+  # rename(season_code = season) %>% # must update so that season_code matches
+  inner_join(
+    habitat_prefs %>% # extract the habitat classifications for the species in question
+      filter(suitability == "Suitable", !is.na(map_code)) %>%
+      select(binomial, season_code, map_code) %>%
+      mutate(season = season_code) # add a new column to 1) match season in aoh, and 2) to retain season_code
+    ) #%>%
+  bind_rows(aoh_l %>% 
+              filter(binomial %in% sp_na_season) %>% # to bind back to the inner_joined df
+              mutate(season_code = NA)
+            )
+
+tmp_aoh_filter$binomial %>% unique() %>% length()
+
+
+
+# ******* 
+
+# ok - next steps: 
+# add this as a filtering step right after loading the aoh_l layers
+# build from this aoh_filter df going forward
+# only load in the specific aoh types I'm actually going to use (i.e., IUCN ones)
+```
+
+
+```{r unresolved-hab-during-passage}
+# one option is to have habitats for breeding or non-breeding count as suitable during passage
+# assuming that passage habitat requirements are the most permissive
+
+# how does this apply to shorebirds?
+habitat_age_req_coded %>% filter(water_obl > 0.5, grepl("wisc", site_presence))
+habitat_prefs %>% filter(str_detect(binomial, "Actitis macularius"))
+
+habitat_prefs %>% filter(season_code == 4) %>%
+  left_join(habitat_age_req_coded %>% select(binomial, water_obl, common_names, site_presence)) %>%
+  filter(water_obl > 0.5) %>%
+  # select(binomial, common_names, site_presence) %>% unique()
+  filter(binomial == "Xenus cinereus") %>%
+  select(season_code, map_code, IUCNLevel) %>% arrange(season_code, map_code)
+
+# Not sure.. might be more complicated, but at least it won't apply for now, since I'm excluding passage areas.
 ```
 
 
