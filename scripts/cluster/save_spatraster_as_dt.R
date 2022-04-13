@@ -57,23 +57,26 @@ lapply(1:11, function(i) {
   #   paste0(p_derived, "lcc_iucn_habitat/",
   #          site_df$site[i], "_potential_abn_lcc_iucn_habitat", run_label, ".tif")
   # )
-  
-  # ----------------------- #
-  # 5. max_abn_lcc
-  cc_save_spatraster_as_dt(
-    paste0(p_derived, "abn_lcc/",
-           site_df$site[i], "_max_abn_lcc", run_label, ".tif")
-  )
-  
-  # ----------------------- #
-  # 6. max_abn_lcc_iucn_habitat
+  # 
+  # # ----------------------- #
+  # # 5. max_abn_lcc
+  # cc_save_spatraster_as_dt(
+  #   paste0(p_derived, "abn_lcc/",
+  #          site_df$site[i], "_max_abn_lcc", run_label, ".tif")
+  # )
+  # 
+  # # ----------------------- #
+  # # 6. max_abn_lcc_iucn_habitat
+  # cc_save_spatraster_as_dt(
+  #   paste0(p_derived, "lcc_iucn_habitat/",
+  #          site_df$site[i], "_max_abn_lcc_iucn_habitat", run_label, ".tif")
+  # )
+  # 
+  # 7. max_potential_abn_lcc_iucn_habitat
   cc_save_spatraster_as_dt(
     paste0(p_derived, "lcc_iucn_habitat/",
-           site_df$site[i], "_max_abn_lcc_iucn_habitat", run_label, ".tif")
+           site_df$site[i], "_max_potential_abn_lcc_iucn_habitat", run_label, ".tif")
   )
-  
-  # 7. max_potential_abn_lcc_iucn_habitat
-  
   
   
 })

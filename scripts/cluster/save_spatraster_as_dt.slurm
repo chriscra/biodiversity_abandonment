@@ -35,6 +35,7 @@ Rscript ./save_spatraster_as_dt.R
 # scp ./lcc_iucn_habitat/*lcc_iucn_habitat* clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/lcc_iucn_habitat/
 # scp ./lcc_iucn_habitat/*max*lcc_iucn_habitat* clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/lcc_iucn_habitat/
 # scp ./lcc_iucn_habitat/*potential_abn_lcc_iucn_habitat* clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/lcc_iucn_habitat/
+# scp ./lcc_iucn_habitat/*max_potential_abn_lcc_iucn_habitat* clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/lcc_iucn_habitat/
 
 
 # download slurm_out:
