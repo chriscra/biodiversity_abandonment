@@ -69,12 +69,13 @@ cc_AOH_data.table <-
     
     # Parameters for testing:
     # index <- 3
-    # index <- grep("Alauda arvensis", sp_list$binomial)
-    # site_index <- 3
-    # core <- 5
+    # index <- grep("Catharus swainsoni", sp_list$binomial)
+    # site_index <- 11 
+    # species_list %>% filter(site == site_df$site[site_index], str_detect(binomial, "Catharus swainsoni"))
+    # core <- 20
     # year_index <- 2011:2017
     # year_index <- 2015
-    # calc_lc <- TRUE
+    # calc_lc <- FALSE
     # include_time <- TRUE
     # sp_ranges <- species_ranges
     # sp_list <- species_list %>% filter(core_index == core)
@@ -87,7 +88,7 @@ cc_AOH_data.table <-
              ", run index ", index,
              ", for years ", min(year_index), "-", max(year_index))
     )
-
+    
     print(sp_list[index, ])
     sp_name <- sp_list$binomial[index]
     
@@ -168,6 +169,20 @@ cc_AOH_data.table <-
                                       elevation <= elevation_prefs_rcl$elevation_upper &
                                       elevation >= elevation_prefs_rcl$elevation_lower]
     
+    #testing ground:
+    # hab_filtered_range_el[!is.na(y2015), .N, by = "range"] # area in each season type
+    # z1
+    # z1$map_code %>% sort()
+    # hab_filtered_range_el[get(paste0("y", i)) %in% z1$map_code, 
+    #                       sum(area_ha), 
+    #                       by = c(paste0("y", i), "range")
+    #                       ][,"year" := i][]
+    # tmp <- hab_filtered_range_el[#range == 2
+    #   , 
+    #                       .N, by = c("y2015", "range")] %>% as_tibble()
+    # tmp %>% filter(y2015 %in% z1$map_code)
+    # z1 %>% select(season_code, map_code, IUCNLevel) %>% arrange(season_code, map_code)
+
     # Calculate AOH in each year.
     # This will list the area in each map_code / lc, which would allow for 
     # filtering based on major importance at a later point.
@@ -868,8 +883,114 @@ cc_create_bin <- function(numrow = 15, numcol = 15, seed = 34L) {
 }
 
 
+# --------------------------------------------------------------- #
+#
+# Plotting ----
+# 
+# --------------------------------------------------------------- #
+
+cc_plot_aoh_sp_site <- function(binomial, site_index,
+                                passage_opt = "exclude_passage") {
+  sp_name <- binomial
+  lapply(binomial, function(sp_name) {
+    gg_aoh_example_tmp <-
+      aoh %>%
+      filter(site %in% site_df$site[site_index], binomial == sp_name) %>% #print(n = 124)
+      pivot_wider(
+        id_cols = c("vert_class", "site", "binomial", "common_names",
+                    "redlistCategory", "year", "mature_forest_obl", "passage_type"),
+        names_from = aoh_type, values_from = aoh, names_pref = "aoh_") %>%
+      mutate(diff_obs = aoh_full_iucn - aoh_max_abn_iucn, 
+             diff_pot = aoh_full_iucn - aoh_max_potential_abn_iucn) %>%
+      pivot_longer(cols = c("aoh_full_iucn", "aoh_max_abn_iucn", 
+                            "aoh_max_potential_abn_iucn", 
+                            "diff_obs", "diff_pot"),
+                   names_to = "type", values_to = "aoh") %>%
+      filter(passage_type %in% passage_opt) %>%
+      
+      ggplot(mapping = aes(x = year, y = aoh, col = type)) + 
+      geom_line(size = 1) + 
+      labs(x = "Year", y = "AOH (ha)", 
+           title = sp_name,
+           caption = unique(filter(run_indices, binomial == sp_name)$common_names)
+      ) +
+      scale_color_manual(
+        name = "Type",
+        labels = c("aoh_full_iucn" = "Landscape",
+                   "aoh_max_abn_iucn" = "Abn, observed", 
+                   "aoh_max_potential_abn_iucn" = "Abn, potential", 
+                   "diff_obs" = "Diff., observed", 
+                   "diff_pot" = "Diff., potential"),
+        values = gg_color_hue(5)
+      ) +
+      facet_wrap(vars(site), labeller = as_labeller(cap_labels),
+                 scales = "free")
+    
+    # save plot
+    ggsave(plot = gg_aoh_example_tmp,
+           filename = paste0(p_output, "plots/aoh/", "aoh_ex_sp_", 
+                             gsub(" ", "_", sp_name),  
+                             {if (length(site_df$site[site_index]) == 1) 
+                               paste0("_", site_df$site[site_index])},
+                             aoh_run_date, ".pdf"),
+           width = 8, height = 6, units = "in")
+  })
+}
 
 
+cc_plot_aoh_trend_sp_site <- function(binomial, site_index, 
+                                      passage_opt = "exclude_passage",
+                                      aoh_type = "aoh_max_abn_iucn") {
+  sp_name <- binomial
+  lapply(binomial, function(sp_name) {
+    gg_aoh_example_tmp <-
+      aoh %>%
+      filter(site %in% site_df$site[site_index], binomial == sp_name) %>% #print(n = 124)
+      pivot_wider(
+        id_cols = c("vert_class", "site", "binomial", "common_names",
+                    "redlistCategory", "year", "mature_forest_obl", "passage_type"),
+        names_from = aoh_type, values_from = aoh, names_pref = "aoh_") %>%
+      mutate(diff_obs = aoh_full_iucn - aoh_max_abn_iucn, 
+             diff_pot = aoh_full_iucn - aoh_max_potential_abn_iucn) %>%
+      pivot_longer(cols = c("aoh_full_iucn", "aoh_max_abn_iucn", 
+                            "aoh_max_potential_abn_iucn", 
+                            "diff_obs", "diff_pot"),
+                   names_to = "type", values_to = "aoh") %>%
+      filter(passage_type %in% passage_opt,
+             type == aoh_type) %>%
+      
+      ggplot(mapping = aes(x = year, y = aoh, 
+                           # col = type, group = type
+                           )) + 
+      geom_point() + 
+      geom_smooth(method = "lm", se = 0.95) +
+      labs(x = "Year", y = "AOH (ha)", 
+           title = sp_name,
+           subtitle = aoh_type,
+           caption = unique(filter(run_indices, binomial == sp_name)$common_names)
+      ) +
+      scale_color_manual(
+        name = "Type",
+        labels = c("aoh_full_iucn" = "Landscape",
+                   "aoh_max_abn_iucn" = "Abn, observed", 
+                   "aoh_max_potential_abn_iucn" = "Abn, potential", 
+                   "diff_obs" = "Diff., observed", 
+                   "diff_pot" = "Diff., potential"),
+        values = gg_color_hue(5)
+      ) +
+      facet_wrap(vars(site), labeller = as_labeller(cap_labels),
+                 scales = "free")
+    
+    # save plot
+    ggsave(plot = gg_aoh_example_tmp,
+           filename = paste0(p_output, "plots/aoh/", "aoh_trend_", 
+                             gsub(" ", "_", sp_name),  
+                             {if (length(site_df$site[site_index]) == 1) 
+                               paste0("_", site_df$site[site_index])},
+                             aoh_run_date, ".pdf"),
+           width = 8, height = 6, units = "in")
+  })
+}
 
 # --------------------------------------------------------------- #
 #
