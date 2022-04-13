@@ -326,8 +326,27 @@ habitat_prefs <- lapply(c("LC", "nonLC"), function(i) {
   filter(binomial %in% unique(species_ranges$binomial)) %>%
   
   # update: add map_code to habitat_prefs for more exact filtering and joining.
-  left_join(iucn_crosswalk, by = "code")
+  left_join(iucn_crosswalk, by = "code") %>%
+  
+  # update season_code:
+  # --- Codes are: "Resident" (1), "Breeding" (2), "Non-breeding Season" (3), Passage (4), and Seasonal Occurrence Uncertain (5).
+  mutate(season_code = case_when(
+    grepl("resident", season, ignore.case = TRUE) ~ 1,
+    season %in% c("breeding", "Breeding Season") ~ 2,
+    season %in% c("non-breeding", "Non-Breeding Season") ~ 3,
+    grepl("passage", season, ignore.case = TRUE) ~ 4,
+    grepl("unknown", season, ignore.case = TRUE) ~ 5
+    )) %>%
+  
+  # update prefers for Glaucidium brodiei (collared owlet) and Mustela sibirica (siberian weasel)
+  mutate(season_code = ifelse(is.na(season_code) & 
+                                !is.na(map_code) &
+                                suitability == "Suitable" &
+                                binomial %in% c("Glaucidium brodiei", "Mustela sibirica"),
+                              1, season_code))
 
+
+# habitat_prefs %>% select(season_code,season) %>% arrange(season_code) %>% unique()
 
 
 # "code" is now listed as character, so don't have any issue matching:
@@ -530,22 +549,24 @@ species_without_habitat %>% .$binomial %>% unique() %>% sort()
 #                          code %in% jung_hab_type_area_df$code)$binomial))
 
 # Sequentially figure out which species have habitat at each specific site, and filter to those
-
+# i <- 5
 species_to_remove <- lapply(1:11, function(i){
-  site_habitats_tmp <- sort(filter(jung_hab_type_area_df, site == site_df$site[i])$code)
+  site_habitats_tmp <- sort(filter(jung_hab_type_area_df, site == site_df$site[i])$habitat_type)
   site_species <- sort(filter(species_list, site == site_df$site[i])$binomial)
   
   # a list of species at a given site, with habitat at that site
   species_with_habitat_at_site <- habitat_prefs %>% 
     filter(binomial %in% site_species,
            suitability == "Suitable",
-           code %in% site_habitats_tmp) %>% 
+           map_code %in% site_habitats_tmp) %>% 
     .$binomial %>% unique()
   
-  species_list %>% 
+  species_list %>% st_drop_geometry() %>%
   filter(site == site_df$site[[i]],
          !binomial %in% species_with_habitat_at_site)
 }) %>% bind_rows()
+
+
 
 
 # ------ update species_list again -------- #
@@ -1767,6 +1788,7 @@ t1[2, 3] %>% unlist %>% str_squish()
 # Ask David and Alex about this.
 
 species_ranges %>% filter(str_detect(binomial, "Catharus swainsoni|Catharus ustulatus"))
+species_ranges %>% filter(str_detect(binomial, "Catharus swainsoni"), site == "wisconsin") %>% select(seasonal) %>% plot()
 
 species_ranges %>% filter(str_detect(binomial, "Microhierax melanoleucos"))
 species_ranges %>% filter(str_detect(binomial, "Myiomela leucura"))
