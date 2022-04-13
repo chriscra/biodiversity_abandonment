@@ -100,10 +100,10 @@ site_index <- grep(unique(species_list_tmp$site), site_df$site)
 # ------------ #
 
 aoh_type_df <- 
-  tibble(index = 1:7,
-         class_type = c("lc", "lc", "lc", "iucn", "iucn", "iucn", "iucn"),
-         map_type = c("full", "abn", "max_abn", "full", "abn", "max_abn", "potential_abn"),
-         start_year = case_when(map_type %in% c("full", "max_abn") ~ 1987, 
+  tibble(index = 1:8,
+         class_type = c("lc", "lc", "lc", "iucn", "iucn", "iucn", "iucn", "iucn"),
+         map_type = c("full", "abn", "max_abn", "full", "abn", "max_abn", "potential_abn", "max_potential_abn"),
+         start_year = case_when(map_type %in% c("full", "max_abn", "max_potential_abn") ~ 1987, 
                                 map_type %in% c("abn", "potential_abn") ~ 1992),
          label = paste0(map_type, "_", class_type),
          path = c(
@@ -122,11 +122,17 @@ aoh_type_df <-
            # 5. IUCN habitat, only in abandoned pixels
            paste0(p_derived, "lcc_iucn_habitat/", site_df$site[site_index], "_abn_lcc_iucn_habitat", run_label, ".csv"),
            
-           # 6. IUCN habitat, in all pixels that are abandoned at any time (including habitat before and after abandonment)
+           # 6. IUCN habitat, for max extent of abandonment, i.e.
+           # all pixels that are abandoned at any time (including habitat before and after abandonment)
            paste0(p_derived, "lcc_iucn_habitat/", site_df$site[site_index], "_max_abn_lcc_iucn_habitat", run_label, ".csv"),
            
-           # 7. IUCN habitat, in *potential* abandoned pixels only
-           paste0(p_derived, "lcc_iucn_habitat/", site_df$site[site_index], "_potential_abn_lcc_iucn_habitat", run_label, ".csv")
+           # 7. IUCN habitat, for scenario of *potential* abandonment without recultivation
+           paste0(p_derived, "lcc_iucn_habitat/", site_df$site[site_index], "_potential_abn_lcc_iucn_habitat", run_label, ".csv"),
+           
+           # 8. IUCN habitat, for scenario of *potential* abandonment without recultivation, 
+           # for max extent of abandonment, i.e. all pixels that are abandoned at any time 
+           # (including habitat before and after abandonment).
+           paste0(p_derived, "lcc_iucn_habitat/", site_df$site[site_index], "_max_potential_abn_lcc_iucn_habitat", run_label, ".csv")
          )
          )
 
@@ -155,8 +161,14 @@ aoh_type_df <-
 
 hab_dt <- fread(filter(aoh_type_df, index == hab_index)$path)
 
-# hab_dt <- fread("/Users/christophercrawford/Downloads/chongqing_abn_lcc_2021_03_13.csv",
-#                 select = c(1, 2, 31))
+# hab_dt <- fread(
+#   paste0("/Users/christophercrawford/Downloads/",  
+#          "wisconsin_max_abn_lcc_iucn_habitat_2022_02_07.csv"
+#          # "nebraska_max_abn_lcc_iucn_habitat_2022_02_07.csv"
+#          # "chongqing_abn_lcc_2021_03_13.csv"
+#          
+#          ),
+#   select = c(1, 2, 31))
 # names(hab_dt)
 
 

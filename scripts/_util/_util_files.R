@@ -233,7 +233,8 @@ abn_lcc_iucn_habitat <- lapply(1:11, function(i) {
 })
 names(abn_lcc_iucn_habitat) <- site_df$site
 
-
+# IUCN habitat types in the max_abn extent, showing IUCN habitat types for each pixel that was 
+# abandoned at any point during the time series.
 max_abn_lcc_iucn_habitat <- 
   lapply(1:11, function(i) {
     rast(paste0(p_derived, "lcc_iucn_habitat/",
@@ -249,6 +250,16 @@ potential_abn_lcc_iucn_habitat <- lapply(1:11, function(i){
               run_label, ".tif"))
 })
 names(potential_abn_lcc_iucn_habitat) <- site_df$site
+
+
+# IUCN habitat types for the scenario of potential abandonment, for the full max_abn extent
+# therefore allowing for the before and after comparison of abandonment
+max_potential_abn_lcc_iucn_habitat <- lapply(1:11, function(i){
+  rast(paste0(p_derived, "lcc_iucn_habitat/",
+              site_df$site[i], "_max_potential_abn_lcc_iucn_habitat",
+              run_label, ".tif"))
+})
+names(max_potential_abn_lcc_iucn_habitat) <- site_df$site
 
 
 # ----------------------- #
@@ -349,7 +360,7 @@ habitat_prefs <- read_csv(file = paste0(p_derived, "iucn_habitat_prefs_subset.cs
 elevation_prefs <- read_csv(file = paste0(p_derived, "iucn_elevation_prefs_subset.csv"))
 habitat_details <- read_csv(file = paste0(p_derived, "iucn_habitat_details_subset.csv"))
 # species_synonyms <- read_csv(file = paste0(p_derived, "iucn_species_synonyms_subset.csv"))
-# common_names <- read_csv(file = paste0(p_derived, "iucn_common_names_subset.csv"))
+common_names <- read_csv(file = paste0(p_derived, "iucn_common_names_subset.csv"))
 
 habitat_age_req <- read_csv(paste0(p_derived, "habitat_age_req/iucn_habitat_age_req.csv"))
 habitat_age_req_coded <- read_csv(paste0(p_derived, "habitat_age_req/", "habitat_age_req_coded.csv"))
@@ -360,24 +371,41 @@ habitat_age_req_coded <- read_csv(paste0(p_derived, "habitat_age_req/", "habitat
 # ------------------------------------------------------------ # 
 
 aoh_type_df <- 
-  tibble(index = 1:7,
-         class_type = c("lc", "lc", "lc", "iucn", "iucn", "iucn", "iucn"),
-         map_type = c("full", "abn", "max_abn", "full", "abn", "max_abn", "potential_abn"),
-         start_year = case_when(map_type %in% c("full", "max_abn") ~ 1987, 
+  tibble(index = 1:8,
+         class_type = c("lc", "lc", "lc", "iucn", "iucn", "iucn", "iucn", "iucn"),
+         map_type = c("full", "abn", "max_abn", "full", "abn", "max_abn", "potential_abn", "max_potential_abn"),
+         start_year = case_when(map_type %in% c("full", "max_abn", "max_potential_abn") ~ 1987, 
                                 map_type %in% c("abn", "potential_abn") ~ 1992),
          label = paste0(map_type, "_", class_type),
          p1 = case_when(
            class_type == "lc" ~ "Yin land cover codes (proportional)", 
            class_type == "iucn" ~ "IUCN habitats (directly mapped to lc)"
          ),
+         
          p2 = case_when(
            map_type == "full" ~ "entire landscape", 
-           map_type == "max_abn" ~ "abandoned pixels (before & after)",
+           map_type == "max_abn" ~ "max extent of abandonment (before & after)",
+           map_type == "max_potential_abn" ~ "max extent of abandonment, potential",
            map_type == "abn" ~ "abandonment only",
            map_type == "potential_abn" ~ "potential abandonment only"),
-         desc = paste0(p1, "; ", p2)
+         desc = paste0(p1, "; ", p2),
+         
+         p3 = case_when(
+           class_type == "lc" ~ "LC", 
+           class_type == "iucn" ~ "IUCN"
+         ),
+         p4 = case_when(
+           map_type == "full" ~ "landscape", 
+           map_type == "max_abn" ~ "Abn, obs. (max ext.)",
+           map_type == "max_potential_abn" ~ "Abn, pot. (max ext.)",
+           map_type == "abn" ~ "Abn only, obs.",
+           map_type == "potential_abn" ~ "Abn only, pot."),
+         
+         short_desc = paste0(p4, ", ", p3)
   )
 
+aoh_type_labels <- aoh_type_df$label
+names(aoh_type_labels) <- aoh_type_df$short_desc
 
 # ------------------------------------------------------------ # 
 # ----------------------------- Basemaps --------------------- 
