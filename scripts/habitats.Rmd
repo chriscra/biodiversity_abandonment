@@ -3265,46 +3265,64 @@ new_titles <- inset_map_titles
 new_titles[1] <- "(b) Vitebsk, Belarus /\nSmolensk, Russia"
 new_titles[8] <- "(o) Orenburg, Russia /\nUralsk, Kazakhstan"
 
+fancy_labels
 
+year_index <- 1
 
-pdf(file = paste0(p_output, "plots/land_cover_1987.pdf"), width = 10, height = 7.5)
-mval <- 1.5
-par(mfrow = c(3, 4), 
-      # mar=c(0,0,0,0), 
-      oma=c(1,1,0,0),
-      adj = 0,
-      cex.main = 1#,
-      # tcl = -0.2
-      )
-    
-# i <- 3
-# i <- 2
-
-# if you use maxcell, the 0s start showing up, which messes up the color scale... beware!
-for(i in 1:11) {
-  plot(lcc[[i]]$y1987, col = lc_plot_cols$color, levels = lc_plot_cols$name, 
-     mar = c(mval+0.5, mval, mval + 1.2, mval), # bltr     
-     legend = FALSE, #maxcell = 5000000,
-     type = "classes", main = new_titles[i]#"Land cover, 2015",
-     )
+lapply(c(1, 6, 11, 16, 21, 26, 31),
+       function(year_index) {
+  
+  pdf(file = paste0(p_plots, "land_cover_", 1986 + year_index, ".pdf"), width = 7, height = 6)
+  mval <- 1.5
+  par(mfrow = c(3, 4), 
+        # mar=c(0,0,0,0), 
+        oma=c(1,1,0,0),
+        adj = 0,
+        cex.main = 1#,
+        # tcl = -0.2
+        )
+  
+  # if you use maxcell, the 0s start showing up, which messes up the color scale... beware!
+  for(i in 1:11) {
+    terra::plot(lcc[[i]][[year_index]],
+                # site_jung_l2[[i]], # for testing
+                col = lc_plot_cols$color, levels = lc_plot_cols$name, 
+                colNA = "gray95",
+                mar = c(mval - 1, mval - 0.9, mval + 1.25, mval - 0.9), # bltr     
+                legend = FALSE, #maxcell = 5000000,
+                cex = 1, # controls title sizes
+                type = "classes", main = new_titles[i]#"Land cover, 2015",
+       )
   }
+  
+  
+  # pdf(file = paste0(p_output, "plots/jung_sites_colors_legend.pdf"), width = 7.5, height = 7.5)
+  plot.new()
+  plot(lcc[[i]]$y2017, type = "classes",
+       col = lc_plot_cols$color, levels = lc_plot_cols$name,
+       legend = "left",
+       plg = list(cex = 1.5,
+                  title = paste0("Land cover, ", 1986 + year_index),
+                                  # text.width = 100,
+                  title.adj = 0#,
+                  # y.intersp	= 1.1
+                  # xjust = 0.5
+                  ),
+       legend.only = TRUE)
+  
+  dev.off()
+})
 
-# pdf(file = paste0(p_output, "plots/jung_sites_colors_legend.pdf"), width = 7.5, height = 7.5)
-plot.new()
-plot(lcc[[i]]$y2017, type = "classes",
-     col = lc_plot_cols$color, levels = lc_plot_cols$name,
-     legend = "left",
-     plg = list(cex = 2,
-                title = "Land cover classes",
-                                # text.width = 100,
-                title.adj = 0#,
-                # y.intersp	= 1.1
-                # xjust = 0.5
-                ),
-     legend.only = TRUE)
 
-dev.off()
+# turn into a gif:
+gif_files <-
+  list.files(paste0(p_plots), full.names = TRUE) %>% 
+    grep("land_cover_[0-9]{4}.pdf", ., value = TRUE)
+  
+gif <- image_animate(image_read(gif_files), fps = 2)
+image_write(gif, paste0(p_plots, "lc_gif.pdf"))
 ```
+
 ```{r lc-legend}
 pdf(file = paste0(p_output, "plots/lc_legend2.pdf"), width = 6, height = 3.5)
 plot.new()
