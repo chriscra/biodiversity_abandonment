@@ -378,13 +378,13 @@ aoh_type_df <-
                                 map_type %in% c("abn", "potential_abn") ~ 1992),
          label = paste0(map_type, "_", class_type),
          p1 = case_when(
-           class_type == "lc" ~ "Yin land cover codes (proportional)", 
-           class_type == "iucn" ~ "IUCN habitats (directly mapped to lc)"
+           class_type == "lc" ~ "Yin land cover (proportional)", 
+           class_type == "iucn" ~ "IUCN habitats (mapped directly to lc)"
          ),
          
          p2 = case_when(
            map_type == "full" ~ "entire landscape", 
-           map_type == "max_abn" ~ "max extent of abandonment (before & after)",
+           map_type == "max_abn" ~ "max extent of abandonment, observed",
            map_type == "max_potential_abn" ~ "max extent of abandonment, potential",
            map_type == "abn" ~ "abandonment only",
            map_type == "potential_abn" ~ "potential abandonment only"),
@@ -406,6 +406,16 @@ aoh_type_df <-
 
 aoh_type_labels <- aoh_type_df$label
 names(aoh_type_labels) <- aoh_type_df$short_desc
+
+
+aoh_l <- read_parquet(paste0(p_derived, "aoh_l.parquet"))
+aoh_species_list <- read_parquet(paste0(p_derived, "aoh_species_list.parquet"))
+aoh_filter <- read_parquet(paste0(p_derived, "aoh_filter.parquet"))
+aoh <- read_parquet(paste0(p_derived, "aoh.parquet"))
+aoh_lm <- read_parquet(paste0(p_derived, "aoh_lm.parquet"))
+aoh_trends <- read_parquet(paste0(p_derived, "aoh_trends.parquet"))
+aoh_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_trends_by_sp.parquet"))
+
 
 # ------------------------------------------------------------ # 
 # ----------------------------- Basemaps --------------------- 
