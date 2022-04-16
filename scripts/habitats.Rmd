@@ -2464,6 +2464,75 @@ global(t1 - t2, "sum")
 
 ```
 
+## Extract abandonment signal starting from cultivation
+
+Idea 1:
+1. Extract just cropland. 
+2. Calculate the minimum, in order to figure out the year of first cultivation
+(This might require converting the values of each layer to the layer number, which might or might not be straightforward.)
+
+Or, use data.table to identify the first year of cropland.
+Might be able to do this with dt_diff, or by going through each column, selecting cells that are equal to non-crop, and then set these equal to 0.
+Or, by using dt_binary.
+
+```{r abn-signal-beginning-w-crop}
+dt <- cc_create_bin()
+dt[V1 == 0, NA]
+
+#
+
+site <- site_df$site[indx]
+lapply(site_df$site, function(site){
+  # Step 1. Load dt_binary
+  dt <- fread(paste0(p_input_rasters, site, "_binary", run_label, ".csv"))
+  
+  # Step 2. cc_calc_age()
+  # ------- The codes I'll want to remove are the ones that correspond to 
+  # ------- the column index.
+  cc_calc_age(dt)
+  dt
+  
+  # Step 3. 
+  
+dt
+cc_extract_noncrop_precrop(dt)
+dt
+
+fwrite(dt, file = paste0(p_input_rasters, site, "_noncrop_precrop_mask", run_label,".csv"))
+
+
+# Step 4. Convert this into a SpatRaster:
+noncrop_start_mask_tmp <- dt_to_spatraster(dt)
+terra::writeRaster(noncrop_start_mask_tmp,
+                   filename = paste0(p_input_rasters, site, "_noncrop_start_mask", run_label,".tif"),
+                   overwrite = TRUE,
+                   names = names(noncrop_start_mask_tmp))
+})
+
+# load a list of all noncrop_start_mask rasters
+
+noncrop_start_mask <- lapply(1:11, function(i) {
+  terra::rast(paste0(p_input_rasters, site_df$site[i], "_noncrop_start_mask", run_label,".tif"))
+})
+
+
+# Step 5. Mask the max_abn_iucn_habitat and max_potential_abn_iucn_habitat SpatRasters
+lapply(1:11, function(i) {
+  terra::mask(
+    max_abn_iucn_habitat[[i]], noncrop_start_mask[[i]],
+    maskvalues = NA, inverse = TRUE,
+    names = names(max_abn_iucn_habitat[[i]]),
+    filename = paste0(p_derived, "lcc_iucn_habitat/", site_df$site[i],
+                     "_crop_to_abn_iucn.tif"),
+    overwrite = TRUE
+  )
+})
+
+
+
+```
+
+
 ## [Old, Development] Assigning via nearest neighbor
 
 ```{r direct-assignment}
