@@ -1879,9 +1879,9 @@ aoh_run_date # see _util_main.R
 
 list.files(paste0(p_derived, "aoh"), full.names = FALSE) %>%
   grep(".csv", ., value = TRUE) %>%
-  gsub("_2022_04_01", "", .) %>%
-  gsub("_2022_04_08", "", .) %>%
-  gsub("_2022_04_12", "", .) %>%
+  # gsub("_2022_04_01", "", .) %>%
+  # gsub("_2022_04_08", "", .) %>%
+  # gsub("_2022_04_12", "", .) %>%
   gsub("_c[0-9]{1,2}", "", .) %>%
   gsub(".csv", "", .) %>%
   gsub("aoh_tmp_", "", .) %>% 
@@ -1889,22 +1889,22 @@ list.files(paste0(p_derived, "aoh"), full.names = FALSE) %>%
   
 aoh_type_df
 
-aoh_types <- aoh_type_df$label[c(4, 6, 8)]
-aoh_type <- aoh_types[2]
+aoh_types <- aoh_type_df$label[c(4:8)]
+aoh_type_ <- aoh_types[3]
 
 aoh_l <- lapply(aoh_types, 
-  function(aoh_type) {
+  function(aoh_type_) {
   lapply(1:21, 
          function(i) {
-    read_csv(paste0(p_derived, "aoh/aoh_tmp_", aoh_type,
-                    ifelse(grepl("max", aoh_type), 
-                           ifelse(grepl("potential", aoh_type),
+    read_csv(paste0(p_derived, "aoh/aoh_tmp_", aoh_type_,
+                    ifelse(grepl("max", aoh_type_), 
+                           ifelse(grepl("potential", aoh_type_),
                                   aoh_run_date, "_2022_04_08"), "_2022_04_01"),
                     "_c", i, ".csv"))
     }
     ) %>% 
     bind_rows() %>% 
-    mutate(aoh_type = aoh_type) %>%
+    mutate(aoh_type = aoh_type_) %>%
     left_join(iucn_status, by = "binomial") %>%
     left_join(species_list, by = c("site", "binomial")) %>%
     left_join(
@@ -2323,6 +2323,20 @@ ggsave(plot = gg_aoh_example2,
 
 ```
 
+```{r remove-ag-conversion-signal}
+# I need to figure out some way to extract just the signal of cropland -> abandonment
+# This means that I need to find an intermediary between
+# non-crop > cropland > abandonment
+
+# the current max_abn layers have the full time series for each pixel
+# this means that habitat loss at the start, before cropland abandonment is picked up.
+
+# Probably best to do this using data.table. 
+# look back at the step in cc_calc_age function to see 
+
+```
+
+
 ## Model 
 
 ```{r calc-linear-regression}
@@ -2364,29 +2378,67 @@ ggplot(data = df_sp_subset,
 # -------------------
 # run simple regression on each species' and extract AOH trend over time.
 # -------------------
-i <- run_indices %>% 
-  filter(binomial == sp_to_plot,
-         site == "belarus", 
-         aoh_type == aoh_types[2],
-         grepl("ex", passage_type)) %>%
-  .$run_index
 
+# ------------------------------------------------------ #
+# calculate linear regression for each aoh_type, across all indices for each aoh_type
+# ------------------------------------------------------ #
 tic()
-aoh_lm <- lapply(
-  1:length(unique(aoh$run_index)), 
-  function(i) {
-  aoh %>% 
-    filter(run_index == i) %>%
-    lm(aoh ~ year0, data = .) %>%
-    tidy(., conf.int = TRUE, conf.level = 0.95) %>% 
-    mutate(run_index = i)
-}) %>% bind_rows()
-
-write_parquet(aoh_lm, paste0(p_derived, "aoh_lm.parquet"))
+lapply(aoh_types, 
+       function(aoh_type_) {
+         aoh_tmp <- aoh %>% filter(aoh_type == aoh_type_)
+         
+         # run across aoh_type, site, binomial, passage_type combinations
+         
+         aoh_lm_tmp <- lapply(
+           unique(aoh_tmp$run_index),
+           function(i) {
+             aoh_tmp %>% 
+               filter(run_index == i) %>%
+               lm(aoh ~ year0, data = .) %>%
+               tidy(., conf.int = TRUE, conf.level = 0.95) %>% 
+               mutate(aoh_type = aoh_type_,
+                      run_index = i)
+             }) %>% bind_rows()
+         
+         write_parquet(aoh_lm_tmp, paste0(p_derived, "aoh_lm_", aoh_type_,".parquet"))
+         
+         cat("wrote aoh_lm_tmp for:", aoh_type_, fill = TRUE)
+         })
 toc()
 
+
+# ------------------------------------------------------ #
+# load back in:
+# ------------------------------------------------------ #
+aoh_lm <- 
+  lapply(aoh_types, 
+  function(aoh_type_) {read_parquet(paste0(p_derived, "aoh_lm_", aoh_type_,".parquet"))
+}) %>% bind_rows()
+
+
+aoh_lm$aoh_type %>% unique()
 warnings()
+
+write_parquet(aoh_lm, paste0(p_derived, "aoh_lm.parquet"))
+
 aoh_lm <- read_parquet(paste0(p_derived, "aoh_lm.parquet"))
+
+
+# old
+
+# tic()
+# aoh_lm <- lapply(
+#   1:length(unique(aoh$run_index)), 
+#   function(i) {
+#   aoh %>% 
+#     filter(run_index == i) %>%
+#     lm(aoh ~ year0, data = .) %>%
+#     tidy(., conf.int = TRUE, conf.level = 0.95) %>% 
+#     mutate(run_index = i)
+# }) %>% bind_rows()
+# 
+# write_parquet(aoh_lm, paste0(p_derived, "aoh_lm.parquet"))
+# toc()
 
 ```
 
@@ -2538,8 +2590,30 @@ aoh_trends_by_sp <-
     n_trends == 2 & trend_types == "loss; no trend" ~ "weak loss",
     n_trends == 2 & trend_types == "gain; loss" | n_trends == 3 ~ "context dependent"
   )) %>%
-  left_join(aoh_species_list)
+  left_join(aoh_species_list) %>%
+  mutate(
+    trend_direction = case_when(
+      grepl("gain", overall_trend) ~ "gain",
+      grepl("loss", overall_trend) ~ "loss",
+      grepl("context", overall_trend) ~ "context dependent",
+      grepl("no trend", overall_trend) ~ "no trend"
+      ) %>% fct_relevel(c("gain", "loss", "no trend", "context dependent")),
+    trend_consistency = case_when(
+      n_trends == 1 ~ "consistent",
+      grepl("weak", overall_trend) ~ "weak",
+      grepl("context", overall_trend) ~ "opposite"
+      ) %>% #as_factor() %>% 
+      fct_relevel(c("consistent", "weak", "opposite")),
+    
+    aoh_type = fct_relevel(aoh_type, aoh_types[c(3, 5, 1, 2, 4)])
+    )
 
+aoh_types
+aoh_trends_by_sp %>% 
+  select(aoh_type) %>% 
+  mutate(aoh_type = as_factor(aoh_type)) %>% 
+  .$aoh_type %>% 
+  levels()
 
 write_parquet(aoh_trends_by_sp, paste0(p_derived, "aoh_trends_by_sp.parquet"))
 aoh_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_trends_by_sp.parquet"))
@@ -2567,30 +2641,15 @@ aoh_trends_by_sp %>% select(n_trends, trend_types, overall_trend) %>% unique()
 
 filter(aoh_trends, binomial == filter(aoh_trends_by_sp, is.na(overall_trend))$binomial[3])
 
-
-# count number of each trend type:
+# plot -- number of each trend type:
 aoh_trends_by_sp %>%
-  mutate(
-    trend_direction = case_when(
-      grepl("gain", overall_trend) ~ "gain",
-      grepl("loss", overall_trend) ~ "loss",
-      grepl("context", overall_trend) ~ "context dependent",
-      grepl("no trend", overall_trend) ~ "no trend"
-      ) %>% fct_relevel(c("gain", "loss", "no trend", "context dependent")),
-    trend_consistency = case_when(
-      n_trends == 1 ~ "consistent",
-      grepl("weak", overall_trend) ~ "weak",
-      grepl("context", overall_trend) ~ "opposite"
-      ) %>% #as_factor() %>% 
-      fct_relevel(c("consistent", "weak", "opposite"))
-    ) %>%
   filter(passage_type == "exclude_passage", 
          vert_class != "amp", 
          # aoh_type == "max_abn_iucn"
          ) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
-  summarise(n_sp= n()) %>%
+  summarise(n_sp = n()) %>%
   arrange(vert_class, aoh_type) %>%
   # print(n = 30)
   
@@ -2620,15 +2679,18 @@ aoh_trends_by_sp %>%
                      ) + 
   theme(legend.position = "right",
             axis.text.x = element_text(angle = 340, vjust = 1, hjust = 0)) +
-  facet_grid(col=vars(vert_class),
-             rows = vars(aoh_type), 
+  facet_grid(col = vars(vert_class), rows = vars(aoh_type), 
              scales = "free")
 
 
+ggsave(TBD,
+       filename = paste0(p_output, "plots/aoh/", "sdf", aoh_run_date, "_", j,
+                         "_", mature_opt,
+                         "_", passage_opt,
+                         ".pdf"),
+       width = 6, height = 5, units = "in")
+
 aoh_trends_by_sp$trend_types %>% unique()
-
-
-# plot:
 ```
 
 
@@ -3867,8 +3929,9 @@ ggsave(gg_aoh_max_abn_trend_by_site,
 
 ```{r seff}
 # extract run codes:
-list.files("scripts/cluster/slurm_out") %>% grep("aoh_hab*", ., value = TRUE) %>%
-  str_extract(., "[0-9]{6,10}_[0-9]{1,2}") %>%
+list.files("scripts/cluster/slurm_out") %>% 
+  grep("aoh_hab*", ., value = TRUE) %>%
+  str_extract(., "[0-9]{6,10}_[0-9]{1,2}") %>% #unique()
   paste0("seff ", .) %>%
   paste(., collapse = "; ") %>%
   cat()
@@ -3913,14 +3976,17 @@ seff <- tibble(
     mem_given = str_extract(mem_given, "[0-9]{2,3}.[0-9][0-9] GB") %>% 
       gsub(" GB", "", .) %>% as.numeric(),
     
-    file = 
-      list.files("scripts/cluster/slurm_out") %>% 
-      grep("aoh_hab*", ., value = TRUE) %>% 
+    file =
+      list.files("scripts/cluster/slurm_out") %>%
+      grep("aoh_hab*", ., value = TRUE) %>%
       str_subset(array_id),
     label = str_replace(file,
                         paste0("_", array_id, ".txt"), "")
     ) %>%
-  select(label, everything())
+  select(
+    label,
+    everything()
+    )
 
 seff %>% arrange(array) %>% print(n = 30)
 seff %>% filter(grepl("COMPLETED", state)) %>% arrange(array) %>% print(n = 30)
@@ -3929,7 +3995,25 @@ seff %>% select(state) %>% unique()
 seff %>% select(label) %>% unique()
 
 seff %>%
-  filter(label == "aoh_hab8") %>% arrange(array) %>% print(n = 30)
+  filter(label == "aoh_hab10",
+         # !str_detect(state, "CANCELLED")
+         ) %>%
+  filter(!str_detect(state, "COMPLETED")) %>%
+  arrange(array) %>% print(n = 30)
+
+list.files("scripts/cluster/slurm_out") %>% 
+      grep("aoh_hab*", ., value = TRUE)
+
+species_list %>% 
+  filter(core_index == 1) %>%
+  tail( n = 30)
+
+species_list %>% 
+  filter(core_index == 1) %>%
+  .$binomial %>% grep("Emberiza", .)
+
+seff %>% 
+  filter(job_id == "40322150_1")
 
 seff %>% arrange(desc(time))
 
