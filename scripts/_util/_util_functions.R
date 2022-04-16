@@ -16,7 +16,7 @@ cc_AOH_data.table <-
            calc_lc = FALSE, # switch between area in "lc" (Yin et al.) vs. "map_code" (IUCN)
            include_time = TRUE, 
            major_importance_only = FALSE, # calc. area of only habitats coded as "majorImportance"
-           hab_dt = hab_dt,
+           habitat_dt = hab_dt,
            sp_ranges = species_ranges, 
            sp_list = species_list
   ) {
@@ -51,7 +51,7 @@ cc_AOH_data.table <-
     # 6. "major_importance_only"  -- a switch telling the function to only calculate AOH for 
     #                             -- only habitats coded as "majorImportance" by the IUCN.
     #                             -- FALSE is the default.
-    # 7. "hab_dt"                 -- the habitat map (e.g., Yin et al. 2020 lc maps, IUCN habitat
+    # 7. "habitat_dt"             -- the habitat map (e.g., Yin et al. 2020 lc maps, IUCN habitat
     #                             -- maps [either my interpolated one, or the original from 
     #                             -- Jung et al. 2021], or otherwise), loaded as a data.table. 
     #                             -- This must include a column with elevation (e.g., elevation_map, 
@@ -119,12 +119,12 @@ cc_AOH_data.table <-
     # a quick test to make sure the x and y columns match, to circumvent the need
     # to round x and y to get the data.table::merge() to work correctly.
     stopifnot(
-      all.equal(hab_dt$x, range_dt$x),
-      all.equal(hab_dt$y, range_dt$y)
+      all.equal(habitat_dt$x, range_dt$x),
+      all.equal(habitat_dt$y, range_dt$y)
     )
     
     # add range to the data.table as a column
-    hab_dt[, range := range_dt$layer]
+    habitat_dt[, range := range_dt$layer]
     
     # ------------------------------------------------------------------------- #
     ### Habitat Filter ###
@@ -165,7 +165,7 @@ cc_AOH_data.table <-
     # ------------------------------------------------------------------------- #
     
     # subset data.table to only pixels within both species range and elevation range, first:
-    hab_filtered_range_el <- hab_dt[!is.na(range) &
+    habitat_dt <- habitat_dt[!is.na(range) &
                                       elevation <= elevation_prefs_rcl$elevation_upper &
                                       elevation >= elevation_prefs_rcl$elevation_lower]
     
@@ -188,7 +188,7 @@ cc_AOH_data.table <-
     # filtering based on major importance at a later point.
     df_tmp <- lapply(year_index, function(i){
       tmp <-
-        hab_filtered_range_el[get(paste0("y", i)) %in% habitat_prefs_rcl, 
+        habitat_dt[get(paste0("y", i)) %in% habitat_prefs_rcl, 
                               sum(area_ha), 
                               by = c(paste0("y", i), "range")
         ][,"year" := i]
@@ -795,7 +795,8 @@ cc_AOH_terra <- function(index,
 
 
 # save SpatRaster to data.table
-cc_save_spatraster_as_dt <- function(input_raster_path) {
+cc_save_spatraster_as_dt <- function(input_raster_path,
+                                     output_file_ext = ".parquet") {
   
   # raster_path <- paste0(p_derived, "abn_lcc/", 
   #                       site_df$site[site_index], 
@@ -807,8 +808,16 @@ cc_save_spatraster_as_dt <- function(input_raster_path) {
   
   dt <- spatraster_to_dt(r_tmp) # convert SpatRaster to data.table
   
-  output_path <- gsub(".tif", ".csv", input_raster_path)
-  fwrite(dt, file = gsub(".tif", ".csv", output_path)) # write to file
+  output_path <- gsub(".tif", output_file_ext, input_raster_path)
+  
+  if (output_file_ext == ".csv") {
+    fwrite(dt, file = output_path) # write to file
+  }
+  
+  if (output_file_ext == ".parquet") {
+    write_parquet(x = dt, output_path) # write to file
+  }
+  
   cat(fill = TRUE, "Done! Wrote data.table to:", output_path)
   
   rm(dt, r_tmp)
