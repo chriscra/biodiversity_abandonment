@@ -72,6 +72,13 @@ lcc <- lapply(1:11, function(i) {
 })
 names(lcc) <- site_df$site
 
+lcc$volgograd %>% ncell
+lcv <- rast(paste0(p_dat_derived, "input_rasters/", site_df$site[10], ".tif"))
+lcv %>% ncell
+
+sapply(lcc, ncell)
+site_df <- site_df %>% mutate(ncell = sapply(lcc, ncell))
+write_csv(site_df, paste0(p_dat_derived, "site_df.csv"))
 
 # ----------------------------- load abandonment age rasters ---------------------------- #
 
@@ -322,6 +329,13 @@ site_area_ha <- lapply(1:11, function(i) {
   })
 names(site_area_ha) <- site_df$site
 
+# site_df %>% 
+#   mutate(area_ha = sapply(1:11, function(i) {
+#     terra::global(site_area_ha[[i]], fun = "sum", na.rm = FALSE)
+#   })) %>%
+#   select(site, area_ha)
+
+
 # ----------------------- #
 # --- pixel elevation (m) --- #
 # ----------------------- #
@@ -371,24 +385,32 @@ habitat_age_req_coded <- read_csv(paste0(p_derived, "habitat_age_req/", "habitat
 # ------------------------------------------------------------ # 
 
 aoh_type_df <- 
-  tibble(index = 1:8,
-         class_type = c("lc", "lc", "lc", "iucn", "iucn", "iucn", "iucn", "iucn"),
-         map_type = c("full", "abn", "max_abn", "full", "abn", "max_abn", "potential_abn", "max_potential_abn"),
-         start_year = case_when(map_type %in% c("full", "max_abn", "max_potential_abn") ~ 1987, 
-                                map_type %in% c("abn", "potential_abn") ~ 1992),
+  tibble(index = 1:10,
+         class_type = c("lc", "lc", "lc", "iucn", "iucn",
+                        "iucn", "iucn", "iucn", "iucn", "iucn"),
+         map_type = c("full", "abn", "max_abn", "full", "abn", 
+                      "max_abn", "potential_abn", "max_potential_abn", 
+                      "crop_abn", "crop_abn_potential"),
+         start_year = case_when(
+           map_type %in% c("full", "max_abn", "max_potential_abn",
+                           "crop_abn", "crop_abn_potential") ~ 1987, 
+           map_type %in% c("abn", "potential_abn") ~ 1992),
          label = paste0(map_type, "_", class_type),
          p1 = case_when(
            class_type == "lc" ~ "Yin land cover (proportional)", 
            class_type == "iucn" ~ "IUCN habitats (mapped directly to lc)"
          ),
+         # crop_abn ~
          
          p2 = case_when(
-           map_type == "full" ~ "entire landscape", 
-           map_type == "max_abn" ~ "max extent of abandonment, observed",
-           map_type == "max_potential_abn" ~ "max extent of abandonment, potential",
-           map_type == "abn" ~ "abandonment only",
-           map_type == "potential_abn" ~ "potential abandonment only"),
-         desc = paste0(p1, "; ", p2),
+           map_type == "full" ~ "entire landscape, 1987-2017", 
+           map_type == "max_abn" ~ "abandoned pixels only, 1987-2017",
+           map_type == "max_potential_abn" ~ "abandoned pixels only, 1987-2017, potential",
+           map_type == "crop_abn" ~ "abandoned pixels, cultivation through 2017",
+           map_type == "crop_abn_potential" ~ "abandoned pixels, cultivation through 2017, potential",
+           map_type == "abn" ~ "abandonment periods only",
+           map_type == "potential_abn" ~ "abandonment periods only, potential"
+           ),
          
          p3 = case_when(
            class_type == "lc" ~ "LC", 
@@ -401,8 +423,9 @@ aoh_type_df <-
            map_type == "abn" ~ "Abn only, obs.",
            map_type == "potential_abn" ~ "Abn only, pot."),
          
-         short_desc = paste0(p4, ", ", p3)
-  )
+         short_desc = paste0(p4, ", ", p3),
+         desc = paste0(p1, "; ", p2)  )
+
 
 aoh_type_labels <- aoh_type_df$label
 names(aoh_type_labels) <- aoh_type_df$short_desc
