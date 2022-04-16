@@ -32,7 +32,7 @@ Rscript ./aoh.R $SLURM_ARRAY_TASK_ID
 # cd /Users/christophercrawford/work/projects/biodiversity_abn/scripts/
 # scp ./cluster/aoh.* clc6@della:/home/clc6/biodiversity_abn/scripts/
 # scp ./cluster/aoh[1-7].* clc6@della:/home/clc6/biodiversity_abn/scripts/
-# scp ./_util/_util_functions.R clc6@della:/home/clc6/biodiversity_abn/scripts/_util/
+# scp /Users/christophercrawford/work/projects/biodiversity_abn/scripts/_util/_util_functions.R clc6@della:/home/clc6/biodiversity_abn/scripts/_util/
 # 
 # # send files
 # cd /Users/christophercrawford/work/projects/biodiversity_abn/derived/
