@@ -1,18 +1,14 @@
 ---
-title: "Implications of cropland abandonment and recultivation for biodiversity"
-author:
-  - Christopher L. Crawford$^1$^[Corresponding Author, ccrawford@princeton.edu, Robertson Hall, Princeton University, Princeton, NJ]
-  - He Yin$^2$
-  - Alex Wiebe$^{4}$
-  - Volker C. Radeloff$^3$
-  - David S. Wilcove$^{1,4}$
-date: 
-  $^1$Princeton School of Public and International Affairs, Princeton University, Princeton, NJ\newline
-  $^2$Department of Geography, Kent State University, Kent, OH\newline
-  $^3$SILVIS Lab, Department of Forest & Wildlife Ecology, University of Wisconsin - Madison, Madison, WI\newline
-  $^4$Department of Ecology & Evolutionary Biology, Princeton University, Princeton, NJ\newline
-  \newline
-  \today
+title: "Cropland abandonment provides habitat for most species, but rarely compensates for habitat loss"
+author: Christopher L. Crawford,$^a$$^*$, R. Alex Wiebe,$^{d}$ He Yin,$^b$ Volker C. Radeloff,$^c$ and David S. Wilcove$^{a, d}$
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+abstract: |
+  | $^a$Princeton School of Public and International Affairs, Princeton University, Princeton, NJ
+  | $^b$Department of Geography, Kent State University, Kent, OH
+  | $^c$SILVIS Lab, Department of Forest & Wildlife Ecology, University of Wisconsin - Madison, Madison, WI
+  | $^d$Department of Ecology & Evolutionary Biology, Princeton University, Princeton, NJ
+  |
+  | $^*$Corresponding Author, ccrawford@princeton.edu, Robertson Hall, Princeton University, Princeton, NJ
 output:
   bookdown::word_document2:
     reference_docx: /Users/christophercrawford/work/projects/writing/scripts/word_style_ref.docx
@@ -31,22 +27,52 @@ urlcolor: blue
 linkcolor: black
 citecolor: black
 ---
+```{r misc-notes, include = FALSE, eval = FALSE}
+# Authors and Affiliations, formatted to look nice in Word (i.e., nested within the abstract):
+# author: Christopher L. Crawford,$^a$$^*$ He Yin,$^b$ Volker C. Radeloff,$^c$ and David S. Wilcove$^{a, d}$
+# date: "`r format(Sys.time(), '%B %d, %Y')`"
+# abstract: |
+#   | $^a$Princeton School of Public and International Affairs, Princeton University, Princeton, NJ
+#   | $^b$Department of Geography, Kent State University, Kent, OH
+#   | $^c$SILVIS Lab, Department of Forest & Wildlife Ecology, University of Wisconsin - Madison, Madison, WI
+#   | $^d$Department of Ecology & Evolutionary Biology, Princeton University, Princeton, NJ
+#   |
+#   | $^*$Corresponding Author, ccrawford@princeton.edu, Robertson Hall, Princeton University, Princeton, NJ
+
+
+
+
+# formatted for LaTeX
+# author:
+#   - Christopher L. Crawford$^1$^[Corresponding Author, ccrawford@princeton.edu, Robertson Hall, Princeton University, Princeton, NJ]
+#   - He Yin$^2$
+#   - Alex Wiebe$^{4}$
+#   - Volker C. Radeloff$^3$
+#   - David S. Wilcove$^{1,4}$
+# date: 
+#   $^1$Princeton School of Public and International Affairs, Princeton University, Princeton, NJ\newline
+#   $^2$Department of Geography, Kent State University, Kent, OH\newline
+#   $^3$SILVIS Lab, Department of Forest & Wildlife Ecology, University of Wisconsin - Madison, Madison, WI\newline
+#   $^4$Department of Ecology & Evolutionary Biology, Princeton University, Princeton, NJ\newline
+#   \newline
+#   \today
+```
 
 ```{r load-packages-functions, eval = TRUE, echo = FALSE, include = FALSE}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
 ```
 
 ```{r preview-chapter, eval=FALSE, include = FALSE}
-rmarkdown::render("scripts/Crawford_abandonment_MS+SI.Rmd",
+rmarkdown::render("scripts/biodiv_abn_MS.Rmd",
                   output_file = 
-                    paste0(p_proj, "writing/previews/", "Crawford_biodiv_abn_MS_draft",
+                    paste0(p_proj, "writing/previews/", "Crawford_bd_abn_MS_draft",
                            format(Sys.Date(), ("_%Y_%m_%d")), ".docx"))
 
 # Save final PDF with SI for submission:
-rmarkdown::render("scripts/Crawford_biodiv_abn_MS+SI.Rmd",
-                  output_file = paste0(p_proj, "writing/", "Crawford_biodiv_abn_MS+SI",
-                           format(Sys.Date(), ("_%Y_%m_%d")), ".pdf"),
-                  output_format = "bookdown::pdf_document2")
+# rmarkdown::render("scripts/Crawford_biodiv_abn_MS+SI.Rmd",
+#                   output_file = paste0(p_proj, "writing/", "Crawford_biodiv_abn_MS+SI",
+#                            format(Sys.Date(), ("_%Y_%m_%d")), ".pdf"),
+#                   output_format = "bookdown::pdf_document2")
 
 # bookdown::preview_chapter(
 #   input = "abn_trajectories_ms.Rmd",
@@ -95,10 +121,11 @@ knitr::write_bib(x = c(needed_packages, github_packages), file = 'packages.bib')
 # )
 ```
 
-```{r load-files, include = FALSE}
+```{r load-files, include = FALSE, eval = FALSE}
 
 # set run:
-run_label <- "_2021_03_13"
+run_label
+aoh_run_date
 
 # Additional paths --------------------------------------------------- #
 p_plots <- "/Users/christophercrawford/work/projects/abandonment_trajectories/output/plots/"
@@ -174,18 +201,19 @@ future_df_l3 <- read_csv(file = paste0(p_derived2, "/future_df_l3", run_label, "
 
 ```
 
-Preparing manuscript for (*Conservation Letters*)[https://conbio.onlinelibrary.wiley.com/hub/journal/1755263x/homepage/forauthors.html]:  
+Preparing manuscript for [*Conservation Letters*](https://conbio.onlinelibrary.wiley.com/hub/journal/1755263x/homepage/forauthors.html):   
 - 3000 word limit
 - No more than 6 figures and tables
 - 40 References
 
-Structured as follows:
-(1) Introduction. The Introduction should summarize briefly the background and aims, and end with a brief statement of what has been achieved by the work.
-(2) Methods. This section should contain sufficient detail so that all procedures can be clearly understood by the reader. Further technical details can be given in Supporting Information, which should be detailed enough that all procedures can be repeated (in conjunction with cited references).
-(3) Results. The Results section should present the evidence that supports the conclusions to be drawn in the Discussion. The Results section should conform to a high standard of rigour. Extended lines of inference, arguments or speculations should not be placed in the Results.
-(4) Discussion. The Discussion section should be separate from the Results section. It allows authors to propose their interpretation of the results, and to suggest what they mean in a wider context. It should end with a clear statement of the main conclusions of the research, and a clear explanation of their importance for conservation policy or practice.
-(5) Acknowledgements and Data. Acknowledgements of financial or institutional support should be brief (100 words maximum). In this section, authors are also expected to disclose any potential conflicts of interest, financial or otherwise, that a reasonable person could construe as possibly influencing the objectivity of the report. The absence of any statement is presumed to mean that there is nothing to disclose. Authors must provide a data accessibility statement, including a link to the repository they have used to archive their data (see policy on Data Sharing and Accessibility). They should also (where relevant) provide a statement of the ethics review process that was adhered to in gathering the data.
-(6) References
+Structured as follows:  
+
+1. Introduction. The Introduction should summarize briefly the background and aims, and end with a brief statement of what has been achieved by the work.
+2. Methods. This section should contain sufficient detail so that all procedures can be clearly understood by the reader. Further technical details can be given in Supporting Information, which should be detailed enough that all procedures can be repeated (in conjunction with cited references).
+3. Results. The Results section should present the evidence that supports the conclusions to be drawn in the Discussion. The Results section should conform to a high standard of rigour. Extended lines of inference, arguments or speculations should not be placed in the Results.
+4. Discussion. The Discussion section should be separate from the Results section. It allows authors to propose their interpretation of the results, and to suggest what they mean in a wider context. It should end with a clear statement of the main conclusions of the research, and a clear explanation of their importance for conservation policy or practice.
+5. Acknowledgements and Data. Acknowledgements of financial or institutional support should be brief (100 words maximum). In this section, authors are also expected to disclose any potential conflicts of interest, financial or otherwise, that a reasonable person could construe as possibly influencing the objectivity of the report. The absence of any statement is presumed to mean that there is nothing to disclose. Authors must provide a data accessibility statement, including a link to the repository they have used to archive their data (see policy on Data Sharing and Accessibility). They should also (where relevant) provide a statement of the ethics review process that was adhered to in gathering the data.
+6. References
 
 
 # Outline
@@ -266,8 +294,63 @@ Link to figure showing crosswalk Jaccard similarities.
 Linear models
 
 
-
 # Results {.unnumbered}
+
+Outline:  
+1. Overall
+2. By site
+3. By IUCN threat status
+4. AOH types
+5. Observed vs. potential abandonment
+6. Mature forest obligates. 
+
+(ref:caption-abn-lc-2017) Land cover as of the year 2017, shown for all pixels that were abandoned at least once during the time series.
+
+```{r abn-lc-2017, fig.cap = '(ref:caption-abn-lc-2017)'}
+knitr::include_graphics(path = paste0(p_plots, "abn_land_cover_2017.pdf"))
+```
+
+
+(ref:caption-trend-overall-summary) TBD.
+
+```{r aoh-trend-overall-summary, fig.cap = '(ref:caption-trend-overall-summary)'}
+knitr::include_graphics(path = paste0(p_plots, "aoh/aoh_trend_by_vert_aoh_type", aoh_run_date,".pdf"))
+```
+
+
+(ref:caption-aoh-by-site-crop-abn) TBD.
+
+```{r aoh-by-site-crop-abn, fig.cap = '(ref:caption-aoh-by-site-crop-abn)'}
+knitr::include_graphics(path = paste0(p_plots, "aoh/trend_summary_by_site_crop_abn_iucn",
+                                      aoh_run_date,".pdf"))
+```
+
+
+(ref:caption-aoh-by-iucn) TBD.
+
+```{r aoh-by-iucn, fig.cap = '(ref:caption-aoh-by-iucn)'}
+knitr::include_graphics(path = paste0(p_plots, "aoh/trend_summary_by_IUCN_status_lumped",
+                                      aoh_run_date,".pdf"))
+```
+
+
+(ref:caption-aoh-trend-lines-crop-abn) Trend lines.
+
+```{r aoh-trend-lines-crop-abn, fig.cap = '(ref:caption-aoh-trend-lines-crop-abn)'}
+knitr::include_graphics(path = paste0(p_plots, "aoh/trend_lines_by_site_crop_abn_iucn",
+                                      aoh_run_date,".pdf"))
+```
+
+
+(ref:caption-aoh-obs-v-pot) Proportion of species that gain or lose AOH as a result of abandonment during our time series, for both observed abandonment and a scenario of potential abandonment, assuming no recultivation.
+
+```{r aoh-obs-v-pot, fig.cap = '(ref:caption-aoh-obs-v-pot)'}
+knitr::include_graphics(path = paste0(p_plots, "aoh/trend_summary_obs_v_pot_overall",
+                                      aoh_run_date,".pdf"))
+```
+
+
+
 
 # Discussion {.unnumbered}
 
@@ -314,6 +397,15 @@ Range maps downloaded on January 4th, 2022 (amp, mam, reptiles, from IUCN, and b
 # Extended Methods
 
 # Supplemental Figures
+
+(ref:caption-richness-by-site) Species richness at each site, or the count of species with some Area of Habitat (AOH) at each site. Richness is shown for threatened ("Vulnerable," "Endangered," or "Critically Endangered") or non-threatened ("Least Concern", "Near Threatened"), as assessed by the IUCN. Species classified as "Data Deficient" are excluded.
+
+```{r richness-by-site, fig.cap = '(ref:caption-richness-by-site)'}
+knitr::include_graphics(path = paste0(
+  p_plots, "richness_by_site_w_category_facet_color.pdf"))
+```
+
+
 
 # Supplemental Tables
 
