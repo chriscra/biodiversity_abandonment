@@ -1522,6 +1522,11 @@ habitat_age_req_AW %>% filter(!is.na(mature_forest_obl))
 
 ```{r add-final-codes-to-habitat-req}
 
+habitat_age_req_2022_04_05_CC$vert_class %>% unique()
+habitat_age_req$vert_class %>% unique()
+habitat_age_req %>% filter(vert_class != "amp")
+habitat_age_req_coded %>% filter(vert_class != "amp")
+
 habitat_age_req_coded <- 
   habitat_age_req %>% 
   select(vert_class, binomial, common_names, habitat, 
@@ -1554,6 +1559,10 @@ habitat_age_req_coded %>%
 
 # save
 write_csv(habitat_age_req_coded, file = paste0(p_derived, "habitat_age_req/", "habitat_age_req_coded.csv"))
+
+# habitat_age_req_coded <- habitat_age_req_coded %>%
+# # update Alces alces to make plotting for dissertation easier:
+#   mutate(mature_forest_obl = ifelse(binomial == "Alces alces", NA, mature_forest_obl))
 
 ```
 
