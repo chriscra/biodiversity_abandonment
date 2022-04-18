@@ -951,7 +951,7 @@ dev.off()
 
 ```{r plot-jung-one-site}
 i <- 9
-
+i
 mval <- 1.5
 plot(site_jung_l2_30[[i]], maxcell = 5000000,
      main = paste0("IUCN Habitat Types, Level 2: ", names(site_jung_l2_30[i])),
@@ -2315,7 +2315,6 @@ max_abn_lcc_freq <- lapply(1:11, function(i) {
 write_csv(max_abn_lcc_freq, file = paste0(p_derived, "freq/max_abn_lcc_freq.csv"))
 max_abn_lcc_freq <- read_csv(file = paste0(p_derived, "freq/max_abn_lcc_freq.csv"))
 
-
 # -------------------------- #
 max_abn_lcc_iucn_habitat_freq <- lapply(1:11, function(i) {
   
@@ -3412,6 +3411,82 @@ plot(lcc[[i]]$y2017, type = "classes",
 dev.off()
 ```
 
+```{r lc-abn}
+
+plot(abn_lcc[[9]][[31]])
+plot(max_abn_lcc[[9]][[31]])
+
+year_index <- 31
+i <- 9
+
+
+coltab(max_abn_lcc[[9]])
+# must give colors for values 0, 1, 2, 3, 4, etc.
+coltab(max_abn_lcc[[9]], layer = 31) <- lc_plot_cols$color[c(1, 1, 2, 3, 4)]
+plot(max_abn_lcc[[9]][[31]])
+
+# what colors do I need for the levels?
+max_abn_lcc_freq %>% 
+  # filter(year == 1987) %>% 
+  group_by(site, year) %>% 
+  summarise(n = n(), lc = str_c(unique(lc), collapse = ", ")) %>% 
+  # filter(n != 3) %>%
+  ungroup() %>% 
+  select(lc) %>% unique()
+
+# plot --------------------------------------------------- #
+lapply(
+  # c(1, 31),
+  c(1, 6, 11, 16, 21, 26, 31),
+       function(year_index) {
+  
+  pdf(file = paste0(p_plots, "abn_land_cover_", 1986 + year_index, ".pdf"), width = 7, height = 6)
+  mval <- 1.5
+  par(mfrow = c(3, 4), 
+        # mar=c(0,0,0,0), 
+        oma=c(1,1,0,0),
+        adj = 0,
+        cex.main = 1#,
+        # tcl = -0.2
+        )
+  
+  # if you use maxcell, the 0s start showing up, which messes up the color scale... beware!
+  for(i in 1:11) {
+    terra::plot(max_abn_lcc[[i]][[year_index]],
+                # site_jung_l2[[i]], # for testing
+                col = c("dark green", lc_plot_cols$color[3:4]),
+                levels = lc_plot_cols$name[2:4],
+                # breaks = c(0, 1, 2, 3, 4),
+                colNA = "gray95",
+                # mar = c(mval - 1, mval - 0.9, mval + 1.25, mval - 0.9), # bltr, for ppt
+                mar = c(1.5, 1, 2.2, 1), # bltr, for ms     
+
+                legend = FALSE,
+                #maxcell = 5000000,
+                cex = 1, # controls title sizes
+                type = "classes", main = new_titles[i]#"Land cover, 2015",
+       )
+  }
+  
+  
+  # pdf(file = paste0(p_output, "plots/jung_sites_colors_legend.pdf"), width = 7.5, height = 7.5)
+  plot.new()
+  plot(max_abn_lcc[[i]]$y2017, type = "classes",
+       col = c("dark green", lc_plot_cols$color[3:4]),
+       levels = c("Forest", "Cropland", "Grassland"), #lc_plot_cols$name[2:4],
+       legend = "left",
+       plg = list(cex = 1.5,
+                  title = paste0("Land cover, ", 1986 + year_index),
+                                  # text.width = 100,
+                  title.adj = 0#,
+                  # y.intersp	= 1.1
+                  # xjust = 0.5
+                  ),
+       legend.only = TRUE)
+  
+  dev.off()
+})
+```
 
 
 ## Plot sites with abandonment, lc, PNV, and habitat types
