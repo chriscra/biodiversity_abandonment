@@ -400,8 +400,6 @@ aoh_type_df <-
            class_type == "lc" ~ "Yin land cover (proportional)", 
            class_type == "iucn" ~ "IUCN habitats (mapped directly to lc)"
          ),
-         # crop_abn ~
-         
          p2 = case_when(
            map_type == "full" ~ "entire landscape, 1987-2017", 
            map_type == "max_abn" ~ "abandoned pixels only, 1987-2017",
@@ -417,18 +415,27 @@ aoh_type_df <-
            class_type == "iucn" ~ "IUCN"
          ),
          p4 = case_when(
-           map_type == "full" ~ "landscape", 
-           map_type == "max_abn" ~ "Abn, obs. (max ext.)",
-           map_type == "max_potential_abn" ~ "Abn, pot. (max ext.)",
-           map_type == "abn" ~ "Abn only, obs.",
-           map_type == "potential_abn" ~ "Abn only, pot."),
+           map_type == "full" ~ "Full Landscape\n(1987-2017)", 
+           map_type == "max_abn" ~ "Abandoned Pixels\n(1987-1917)",
+           map_type == "max_potential_abn" ~ "Abandoned Pixels\n(1987-1917, potential)",
+           map_type == "crop_abn" ~ "Cropland through\nabandonment",
+           map_type == "crop_abn_potential" ~ "Cropland through\nabandonment\n(potential)",
+           map_type == "abn" ~ "Abn periods only",
+           map_type == "potential_abn" ~ "Abn periods only (pot.)"),
          
-         short_desc = paste0(p4, ", ", p3),
-         desc = paste0(p1, "; ", p2)  )
+         short_desc = paste0(p4),
+         desc = paste0(p1, "; ", p2)
+         )
 
 
-aoh_type_labels <- aoh_type_df$label
-names(aoh_type_labels) <- aoh_type_df$short_desc
+aoh_type_labels <- c(aoh_type_df$short_desc, "Birds", "Mammals", "Amphibians")
+names(aoh_type_labels) <- c(aoh_type_df$label, "bird", "mam", "amp")
+
+aoh_type_labels <- c(aoh_type_labels, 
+  "TRUE" = "Mature Forest Obligates (Birds)",
+  "FALSE" = "Non-Mature Forest Obligates (Birds)",
+  "Range size <= global median" = "Range size <= global median",
+  "Range size > global median" = "Range size > global median")
 
 
 aoh_l <- read_parquet(paste0(p_derived, "aoh_l.parquet"))
@@ -438,6 +445,7 @@ aoh <- read_parquet(paste0(p_derived, "aoh.parquet"))
 aoh_lm <- read_parquet(paste0(p_derived, "aoh_lm.parquet"))
 aoh_trends <- read_parquet(paste0(p_derived, "aoh_trends.parquet"))
 aoh_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_trends_by_sp.parquet"))
+run_indices <- read_parquet(paste0(p_derived, "aoh_run_indices.parquet"))
 
 
 # ------------------------------------------------------------ # 

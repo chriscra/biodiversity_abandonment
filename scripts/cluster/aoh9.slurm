@@ -70,7 +70,8 @@ Rscript ./aoh.R $SLURM_ARRAY_TASK_ID 9
 # download results from della
 # replace [] with time_stamp
 # cd /Users/christophercrawford/work/projects/biodiversity_abn/derived/
-# scp clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/aoh/aoh_tmp*_2022_04_12_c* ./aoh/
+# scp clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/aoh/aoh_tmp*_2022_04_15_c* ./aoh/
+# scp clc6@della:/scratch/gpfs/clc6/biodiversity_abn/derived/aoh/aoh_tmp*_2022_04_16_c* ./aoh/
 
 
 # seff:
