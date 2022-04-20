@@ -1199,8 +1199,7 @@ test <- site_jung_l2_30_freq %>%
   unique() %>% 
   mutate(pnv_code = NA)
 
-test %>% 
-  mutate(pnv_code = if(grepl("1.4", test$IUCNLevel), "")))
+# test %>% mutate(pnv_code = if(grepl("1.4", test$IUCNLevel), "")))
 
 site_jung_l2_30_freq %>% 
   filter(Coarse_Name == unique(site_jung_l2_30_freq$Coarse_Name)[1]) %>%
@@ -1304,13 +1303,26 @@ site_jung_l2_30_rcl <-
     )
 toc()
 
-names(site_jung_l2_30_rcl) <- site_df$site
 
+# load back in site_jung_l2_30_rcl
+for (lc_type in c("lc", "lc2", "lc3", "lc4")) {}
+tt <- rast(paste0(p_derived, "site_jung/", site_df$site[9], "_jung_l2_rcl_", 
+                  c("lc", "lc2", "lc3", "lc4"), ".tif"))
+
+
+site_jung_l2_30_rcl <- 
+  lapply(1:11, function(i) {
+    rast(paste0(p_derived, "site_jung/", site_df$site[i], "_jung_l2_rcl_", 
+                  c("lc", "lc2", "lc3", "lc4"), ".tif"))
+    }
+    )
+
+names(site_jung_l2_30_rcl) <- site_df$site
 for(i in 1:11) {names(site_jung_l2_30_rcl[[i]]) <- c("lc", "lc2", "lc3", "lc4")}
 
 
 plot(site_jung_l2_30_rcl[[3]]$lc, col = lc_plot_cols$color)
-plot(lc[[3]]$y2015, col = lc_plot_cols$color)
+plot(lcc[[3]]$y2015, col = lc_plot_cols$color)
 
 # Comparing how well the crosswalks match:
 # Confusion Matrix
@@ -1318,17 +1330,20 @@ conf <- tmp_dt[, 1:2][, .N, by = c("y2015", "lc")][order(y2015, lc)]
 conf %>% pivot_wider(names_from = lc, values_from = N)
                        
 
+# --------------------------------------------------------------------- #
 # calculate the jaccard similarities between Yin's land cover maps (2015) and the IUCN habitat map (Jung 2020), following four different recoding schemes.
+# --------------------------------------------------------------------- #
 
 site <- 3
 crosswalk_jac0
 
 identical(crosswalk_jac, crosswalk_jac0)
+
 crosswalk_jac <- lapply(1:11, 
                         function(site) {
   tmp_t <- terra::rast(
     list(
-      lc[[site]]$y2015, # land cover in 2015
+      lcc[[site]]$y2015, # land cover in 2015
       site_jung_l2_30_rcl[[site]] # IUCN habitat types, reclassified
     )
     )
@@ -1356,34 +1371,42 @@ crosswalk_jac <- lapply(1:11,
   }) %>% 
   bind_rows()
 
+write_csv(crosswalk_jac, paste0(p_derived, "jung_crosswalk_jaccard.csv"))
+
 names(site_jung_l2_30_rcl) <- c("shrubs to forest, savanna to grass", 
                                 "shrubs to grass, savanna to grass",
                                 "shrubs to forest, savanna to forest", 
                                 "shrubs to grass, savanna to forest")
 
-gg_crosswalk_jac <- 
-  ggplot(data = crosswalk_jac, 
-         mapping = aes(x = as_factor(lc), y = jaccard, fill = as_factor(ver))) +
+# for (i in 1:24) {
+gg_crosswalk_jac <-
+  crosswalk_jac %>%
+  filter(lc %in% c(2, 4)) %>%
+  ggplot(mapping = aes(x = as_factor(lc), y = jaccard, fill = as_factor(ver))) +
     geom_col(size = 1, position = position_dodge2()) + 
     theme_classic() +
-  labs(fill = "Crosswalk", x = "Land Cover Class") +
+  labs(fill = "Crosswalk", x = "Land Cover Class", y = "Jaccard Similarity") +
   scale_x_discrete(labels = c("1" = "Non-veg",
                               "2" = "Forest",
                               "3" = "Cropland",
                               "4" = "Grassland")) +
-  scale_fill_manual(values = brewer.pal(n = 4, name = "Set1"), # gg_color_hue(4), #viridis(n = 4),
-                    labels = c("lc" = "shrubs to forest,\n savanna to grass", 
-                                "lc2" = "shrubs to grass,\n savanna to grass",
-                                "lc3" = "shrubs to forest,\n savanna to forest", 
-                                "lc4" = "shrubs to grass,\n savanna to forest")) +
-  facet_wrap(vars(site)) + 
-  theme(axis.text.x = element_text(angle = 330, vjust = 1, hjust = 0))
+  scale_fill_manual(values = met.brewer("Kandinsky", n = 4), #brewer.pal(n = 4, name = "Set1"), # gg_color_hue(4), #viridis(n = 4),
+                    labels = c("lc" = "Shrubs <-> forest,\n savanna <-> grass", 
+                                "lc2" = "Shrubs <-> grass,\n savanna <-> grass",
+                                "lc3" = "Shrubs <-> forest,\n savanna <-> forest", 
+                                "lc4" = "Shrubs <-> grass,\n savanna <-> forest")) +
+  facet_wrap(vars(site), #scales = "free", 
+             labeller = as_labeller(fancy_labels)) + 
+  theme(
+    # axis.text.x = element_text(angle = 30, vjust = 1, hjust = 1),
+    legend.background = element_blank(),
+    legend.position = c(0.875, 0.13))
 
 
 ggsave(plot = gg_crosswalk_jac,
        filename = paste0(p_plots, "crosswalk_jaccard.pdf"),
-       width = 9, height = 7, units = "in")  
-
+       width = 6.25, height = 5, units = "in")
+# }
 
 i <- 1 # belarus
 i <- 2 # bh
