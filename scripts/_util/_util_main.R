@@ -1,8 +1,8 @@
-# ---------------------------------------------------------------
+# --------------------------------------------------------------- #
 #
 # Main Util script: load all functions in other util scripts
 # 
-# ---------------------------------------------------------------
+# --------------------------------------------------------------- #
 
 run_label <- 
   "_2022_02_07"
@@ -12,7 +12,7 @@ run_label <-
 aoh_run_date <- "_2022_04_16" #"_2021_12_12" # "_2021_12_05"
 
 
-# pathnames
+# pathnames -----
 p_proj <- "/Users/christophercrawford/work/projects/biodiversity_abn/"
 p_derived <- paste0(p_proj, "derived/")
 p_scripts <- paste0(p_proj, "scripts/")
@@ -25,6 +25,7 @@ p_ee <- "/Volumes/GoogleDrive-107266184156135828486/My Drive/ee/"
 
 # from the original abandonment_trajectories directory
 p_dat_derived <- "/Users/christophercrawford/work/projects/abandonment_trajectories/data_derived/"
+p_derived2 <- paste0(p_dat_derived, run_label, "/derived_data/")
 
 
 

@@ -38,8 +38,22 @@ biomes2017_simple <- st_read(paste0(p_derived, "sf/biomes2017_simple.shp"))
 
 
 # ------------------------------------------------------------ # 
-# ------------------- Load Abandonment Rasters ---------------------  
+# ------------------- Derived Abandonment datasets ---------------------  
 # ------------------------------------------------------------ # 
+
+area_summary_df <- read_csv(file = paste0(p_derived2, "area_summary_df", run_label, ".csv")) %>%
+  left_join(site_labels)
+
+# area_summary_df %>% 
+#   select(site, total_site_area_ha_2017, area_abn_ha_2017, total_crop_extent_ha) %>%
+#   arrange(total_site_area_ha_2017)
+
+area_dat <- read_csv(file = paste0(p_derived2, "area_dat", run_label, ".csv"))
+
+abn_lc_area_2017 <- read_csv(file = paste0(p_derived2, "abn_lc_area_2017", run_label, ".csv")) %>%
+  left_join(site_labels)
+abn_prop_lc_2017 <- read_csv(file = paste0(p_derived2, "abn_prop_lc_2017", run_label, ".csv")) %>%
+  left_join(site_labels)
 
 # ------------------------------------------------------------ # 
 # -------------------- Raster data --------------------
@@ -329,11 +343,11 @@ site_area_ha <- lapply(1:11, function(i) {
   })
 names(site_area_ha) <- site_df$site
 
-# site_df %>% 
+# site_df %>%
 #   mutate(area_ha = sapply(1:11, function(i) {
 #     terra::global(site_area_ha[[i]], fun = "sum", na.rm = FALSE)
 #   })) %>%
-#   select(site, area_ha)
+#   select(site, area_ha) %>% arrange(area_ha)
 
 
 # ----------------------- #
@@ -416,10 +430,19 @@ aoh_type_df <-
          ),
          p4 = case_when(
            map_type == "full" ~ "Full Landscape\n(1987-2017)", 
-           map_type == "max_abn" ~ "Abandoned Pixels\n(1987-1917)",
-           map_type == "max_potential_abn" ~ "Abandoned Pixels\n(1987-1917, potential)",
-           map_type == "crop_abn" ~ "Cropland through\nabandonment",
-           map_type == "crop_abn_potential" ~ "Cropland through\nabandonment\n(potential)",
+           map_type == "max_abn" ~ "Abandonment\n(1987-2017)",
+           map_type == "max_potential_abn" ~ "Abandonment\n(1987-2017, potential)",
+           map_type == "crop_abn" ~ "Abandonment\n(cultivation-2017)",
+           map_type == "crop_abn_potential" ~ "Potential Abandonment\n(crop-2017)", #"Cropland through\nabandonment\n(potential)",
+           map_type == "abn" ~ "Abn periods only",
+           map_type == "potential_abn" ~ "Abn periods only (pot.)"),
+         
+         p5 = case_when(
+           map_type == "full" ~ "Full Landscape (1987-2017)", 
+           map_type == "max_abn" ~ "Abandonment (1987-2017)",
+           map_type == "max_potential_abn" ~ "Abandonment (1987-2017, potential)",
+           map_type == "crop_abn" ~ "Abandonment (cultivation-2017)",
+           map_type == "crop_abn_potential" ~ "Potential Abandonment (crop-2017)", #"Cropland through\nabandonment\n(potential)",
            map_type == "abn" ~ "Abn periods only",
            map_type == "potential_abn" ~ "Abn periods only (pot.)"),
          
@@ -432,8 +455,8 @@ aoh_type_labels <- c(aoh_type_df$short_desc, "Birds", "Mammals", "Amphibians")
 names(aoh_type_labels) <- c(aoh_type_df$label, "bird", "mam", "amp")
 
 aoh_type_labels <- c(aoh_type_labels, 
-  "TRUE" = "Mature Forest Obligates (Birds)",
-  "FALSE" = "Non-Mature Forest Obligates (Birds)",
+  "TRUE" = "Mature Forest Obligates",
+  "FALSE" = "Non-Mature Forest Obligates",
   "Range size <= global median" = "Range size <= global median",
   "Range size > global median" = "Range size > global median")
 
@@ -446,6 +469,8 @@ aoh_lm <- read_parquet(paste0(p_derived, "aoh_lm.parquet"))
 aoh_trends <- read_parquet(paste0(p_derived, "aoh_trends.parquet"))
 aoh_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_trends_by_sp.parquet"))
 run_indices <- read_parquet(paste0(p_derived, "aoh_run_indices.parquet"))
+aoh_change_df <- read_parquet(paste0(p_derived, "aoh_change_df.parquet"))
+
 
 
 # ------------------------------------------------------------ # 
