@@ -44,9 +44,10 @@ biomes2017_simple <- st_read(paste0(p_derived, "sf/biomes2017_simple.shp"))
 area_summary_df <- read_csv(file = paste0(p_derived2, "area_summary_df", run_label, ".csv")) %>%
   left_join(site_labels)
 
-# area_summary_df %>% 
-#   select(site, total_site_area_ha_2017, area_abn_ha_2017, total_crop_extent_ha) %>%
-#   arrange(total_site_area_ha_2017)
+area_summary_df %>%
+  select(site, total_site_area_ha_2017, area_abn_ha_2017, total_crop_extent_ha) %>%
+  arrange(total_site_area_ha_2017) %>%
+  mutate(total = round(total_site_area_ha_2017 / 10^6, digits = 2)) %>% .$total
 
 area_dat <- read_csv(file = paste0(p_derived2, "area_dat", run_label, ".csv"))
 
@@ -429,20 +430,20 @@ aoh_type_df <-
            class_type == "iucn" ~ "IUCN"
          ),
          p4 = case_when(
-           map_type == "full" ~ "Full Landscape\n(1987-2017)", 
+           map_type == "full" ~ "Entire Landscape\n(1987-2017)", 
            map_type == "max_abn" ~ "Abandonment\n(1987-2017)",
            map_type == "max_potential_abn" ~ "Abandonment\n(1987-2017, potential)",
            map_type == "crop_abn" ~ "Abandonment\n(cultivation-2017)",
-           map_type == "crop_abn_potential" ~ "Potential Abandonment\n(crop-2017)", #"Cropland through\nabandonment\n(potential)",
+           map_type == "crop_abn_potential" ~ "Potential Abandonment\n(cultivation-2017)", #"Cropland through\nabandonment\n(potential)",
            map_type == "abn" ~ "Abn periods only",
            map_type == "potential_abn" ~ "Abn periods only (pot.)"),
          
          p5 = case_when(
-           map_type == "full" ~ "Full Landscape (1987-2017)", 
+           map_type == "full" ~ "Entire Landscape (1987-2017)", 
            map_type == "max_abn" ~ "Abandonment (1987-2017)",
            map_type == "max_potential_abn" ~ "Abandonment (1987-2017, potential)",
            map_type == "crop_abn" ~ "Abandonment (cultivation-2017)",
-           map_type == "crop_abn_potential" ~ "Potential Abandonment (crop-2017)", #"Cropland through\nabandonment\n(potential)",
+           map_type == "crop_abn_potential" ~ "Potential Abandonment (cultivation-2017)", #"Cropland through\nabandonment\n(potential)",
            map_type == "abn" ~ "Abn periods only",
            map_type == "potential_abn" ~ "Abn periods only (pot.)"),
          
@@ -457,8 +458,11 @@ names(aoh_type_labels) <- c(aoh_type_df$label, "bird", "mam", "amp")
 aoh_type_labels <- c(aoh_type_labels, 
   "TRUE" = "Mature Forest Obligates",
   "FALSE" = "Non-Mature Forest Obligates",
+  "mature_forest_obligate" = "Mature Forest Obligates",
+  "not_obligate" = "All species but Mature Forest Obligates",
   "Range size <= global median" = "Range size <= global median",
-  "Range size > global median" = "Range size > global median")
+  "Range size > global median" = "Range size > global median",
+  "Threatened" = "Threatened", "Not Threatened" = "Not Threatened")
 
 
 aoh_l <- read_parquet(paste0(p_derived, "aoh_l.parquet"))
@@ -470,8 +474,10 @@ aoh_trends <- read_parquet(paste0(p_derived, "aoh_trends.parquet"))
 aoh_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_trends_by_sp.parquet"))
 run_indices <- read_parquet(paste0(p_derived, "aoh_run_indices.parquet"))
 aoh_change_df <- read_parquet(paste0(p_derived, "aoh_change_df.parquet"))
+aoh_p_change_obs_v_pot <- read_csv(paste0(p_derived, "aoh_p_change_obs_v_pot.csv"))
+aoh_p_change_obs_v_pot_summary <- read_csv(paste0(p_derived, "aoh_p_change_obs_v_pot_summary.csv"))
 
-
+i <- "crop_abn_iucn"
 
 # ------------------------------------------------------------ # 
 # ----------------------------- Basemaps --------------------- 

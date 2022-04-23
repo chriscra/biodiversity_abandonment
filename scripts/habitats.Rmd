@@ -3437,7 +3437,7 @@ dev.off()
 ```{r lc-abn}
 
 plot(abn_lcc[[9]][[31]])
-plot(max_abn_lcc[[9]][[31]])
+plot(max_abn_lcc[[9]][[1]])
 
 year_index <- 31
 i <- 9
@@ -3459,8 +3459,8 @@ max_abn_lcc_freq %>%
 
 # plot --------------------------------------------------- #
 lapply(
-  # c(1, 31),
-  c(1, 6, 11, 16, 21, 26, 31),
+  c(1),
+  # c(1, 6, 11, 16, 21, 26, 31),
        function(year_index) {
   
   pdf(file = paste0(p_plots, "abn_land_cover_", 1986 + year_index, ".pdf"), width = 7, height = 6)
