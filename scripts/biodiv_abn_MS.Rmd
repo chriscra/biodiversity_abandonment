@@ -664,7 +664,9 @@ knitr::include_graphics(path = paste0(p_plots, "aoh/aoh_obs_v_pot_by_site_combo"
 
 ## Abandonment in the context of broader land cover changes
 
-Finally, discuss cropland abandonment in the context of the full time series, and the full landscape. 
+
+
+Finally, discuss cropland abandonment in the context of the full time series, and the full landscape.
 
 Cropland abandonment *per se* compared with trends in abandoned pixels for 1987-2017, and compared to the full landscape (1987-2017).
 Our initial results on cropland abandonment *per se* tell us whether abandonment of cropland causes a gain or loss of habitat for each species. 
