@@ -92,7 +92,6 @@ if (!skip) {
 noncrop_precrop_mask <- 
   lapply(1:11, function(i) {
   terra::rast(paste0(p_input_rasters, 
-                     # site, 
                      site_df$site[i],
                      "_noncrop_precrop_mask", run_label,".tif"))
 })
@@ -101,7 +100,6 @@ noncrop_precrop_mask <-
 max_abn_lcc_iucn_habitat <-
   lapply(1:11, function(i) {
   terra::rast(paste0(p_derived, "lcc_iucn_habitat/",
-                     # site,
                      site_df$site[i],
                      "_max_abn_lcc_iucn_habitat", run_label, ".tif"))
 })
@@ -110,7 +108,6 @@ max_abn_lcc_iucn_habitat <-
 max_potential_abn_lcc_iucn_habitat <-
   lapply(1:11, function(i) {
   terra::rast(paste0(p_derived, "lcc_iucn_habitat/",
-                     # site, 
                      site_df$site[i],
                      "_max_potential_abn_lcc_iucn_habitat", run_label, ".tif"))
 })
@@ -122,15 +119,12 @@ max_potential_abn_lcc_iucn_habitat <-
 # ------------------------------------------------------------------ #
 
 tic("Mask the max_abn_lcc_iucn_habitat SpatRaster by noncrop_precrop_mask")
-lapply(c(1, 6, 7, 8, 10, 11), function(i) {
+lapply(1:11, function(i) {
 terra::mask(
   max_abn_lcc_iucn_habitat[[i]], noncrop_precrop_mask[[i]],
-  # max_abn_lcc_iucn_habitat, noncrop_precrop_mask,
   maskvalues = NA, inverse = TRUE,
-  names = names(max_abn_iucn_habitat[[i]]),
-  # names = names(max_abn_lcc_iucn_habitat),
+  names = names(max_abn_lcc_iucn_habitat[[i]]),
   filename = paste0(p_derived, "lcc_iucn_habitat/", 
-                    # site,
                     site_df$site[i],
                     "_crop_to_abn_iucn_observed", run_label, ".tif"),
   overwrite = TRUE
@@ -139,15 +133,12 @@ terra::mask(
 toc()
 
 tic("Mask the max_potential_abn_lcc_iucn_habitat SpatRaster by noncrop_precrop_mask")
-lapply(c(1, 6, 7, 8, 10, 11), function(i) {
+lapply(1:11, function(i) {
 terra::mask(
-  max_abn_lcc_iucn_habitat[[i]], noncrop_precrop_mask[[i]],
-  # max_potential_abn_lcc_iucn_habitat, noncrop_precrop_mask,
+  max_potential_abn_lcc_iucn_habitat[[i]], noncrop_precrop_mask[[i]],
   maskvalues = NA, inverse = TRUE,
-  names = names(max_abn_iucn_habitat[[i]]),
-  # names = names(max_potential_abn_lcc_iucn_habitat),
+  names = names(max_potential_abn_lcc_iucn_habitat[[i]]),
   filename = paste0(p_derived, "lcc_iucn_habitat/", 
-                    # site,
                     site_df$site[i],
                     "_crop_to_abn_iucn_potential", run_label, ".tif"),
   overwrite = TRUE
@@ -159,17 +150,15 @@ toc()
 # ------------------------------------------------------------------ #
 # Step 6, save rasters as csvs:
 # ------------------------------------------------------------------ #
-lapply(c(1, 6, 7, 8, 10, 11), function(i) {
+lapply(1:11, function(i) {
   cc_save_spatraster_as_dt(
     paste0(p_derived, "lcc_iucn_habitat/",
-           # site, 
            site_df$site[i],
            "_crop_to_abn_iucn_observed", run_label, ".tif")
   )
   
   cc_save_spatraster_as_dt(
     paste0(p_derived, "lcc_iucn_habitat/",
-           # site,
            site_df$site[i],
            "_crop_to_abn_iucn_potential", run_label, ".tif")
   )
