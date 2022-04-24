@@ -139,7 +139,7 @@ cc_AOH_data.table <-
     # extract the lc (or map_code) codes from habitat_prefs based on 
     # iucn_crosswalk, which correspond to the IUCN habitat codes
     habitat_prefs_rcl <- z1 %>%
-      select(codes = if(calc_lc) "lc" else "map_code") %>% # select lc class codes, or IUCN habitat map codes, depending on the "calc_lc" switch
+      dplyr::select(codes = if(calc_lc) "lc" else "map_code") %>% # select lc class codes, or IUCN habitat map codes, depending on the "calc_lc" switch
       arrange(codes) %>% unique() %>% .$codes
     
     
@@ -212,7 +212,7 @@ cc_AOH_data.table <-
     df_tmp <- df_tmp %>% 
       mutate(site = site_df$site[site_index],
              binomial = sp_name) %>%
-      select(site, binomial, year, everything())
+      dplyr::select(site, binomial, year, everything())
     
     if (calc_lc) {
       # adjust area by the proportion of land cover that is suitable
