@@ -2145,6 +2145,7 @@ iucn_crosswalk %>% print(n = 3000)
 s1
 s2
 
+
 # -----------------------------------------------------------------
 # Use cover() to combine potential_abn_lcc_iucn_habitat maps (created above)
 # with the max extent abn_lcc_iucn maps, to allow for a before and after
@@ -2186,6 +2187,51 @@ plot(is.na(max_potential_abn_lcc_iucn_habitat[[site_index]]$y1997))
 
 plot(is.na(max_age_mask[[site_index]]) - 
        is.na(max_potential_abn_lcc_iucn_habitat[[site_index]]$y1997))
+
+```
+
+```{r potential-lcc-full}
+# Goal: merge the potential abn layer with the land cover maps for the full landscape, to allow for a full lcc potential AOH run.
+
+# This works the same as for the max_abn potential creation - I'm just using this to fill NA cell values in the potential_abn_lcc_iucn_habitat layer (which has lcc_iucn codes for only abandonment periods).
+
+# this was run directly on Della, see script: "potential_full_iucn.R"
+
+# -----------------------------------------------------------------
+# Use cover() to combine potential_abn_lcc_iucn_habitat maps (created above)
+# with the max extent abn_lcc_iucn maps, to allow for a before and after
+# comparison of AOH in abandoned croplands, in a scenario without reculivation.
+# -----------------------------------------------------------------
+site_index <- 9
+
+
+tic()
+lapply(1:11, function(site_index) {
+  cat("Build potential habitat layer for full site extent using terra::cover(), for",
+      site_df$site[site_index], fill = TRUE)
+  lcc_iucn_habitat_potential <- 
+    cover(x = potential_abn_lcc_iucn_habitat[[site_index]], 
+          y = lcc_iucn_habitat[[site_index]][[paste0("y", 1987:2017)]], # selecting only 1987:2017 for Nebraska and Wisconsin.
+          filename = paste0(p_derived, "lcc_iucn_habitat/",
+                            site_df$site[site_index], 
+                            "_lcc_iucn_habitat_potential",
+                            run_label, ".tif"), 
+          overwrite = TRUE,
+          names = names(potential_abn_lcc_iucn_habitat[[site_index]]))
+  cat(site_df$site[site_index], "done!", fill = TRUE)
+})
+toc()
+
+plot(lcc_iucn_habitat_potential[[9]][[31]])
+plot(lcc_iucn_habitat[[9]][[31]])
+
+# load back in:
+lcc_iucn_habitat_potential <- lapply(1:11, function(i){
+  rast(paste0(p_derived, "lcc_iucn_habitat/",
+                    site_df$site[i], "_lcc_iucn_habitat_potential",
+                    run_label, ".tif"))
+})
+names(lcc_iucn_habitat_potential) <- site_df$site
 
 ```
 
