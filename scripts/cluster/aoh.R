@@ -26,7 +26,7 @@ source("/home/clc6/biodiversity_abn/scripts/_util/_util_functions.R")
 
 # set terra autosave options:
 terraOptions(tempdir = p_tmp)
-rasterOptions(tmpdir = p_tmp)
+# rasterOptions(tmpdir = p_tmp)
 
 # ------- load files -------- #
 site_df <- read.csv(file = paste0(p_dat, "site_df.csv"))
@@ -102,14 +102,16 @@ site_index <- grep(unique(species_list_tmp$site), site_df$site)
 # ------------ #
 
 aoh_type_df <- 
-  tibble(index = 1:10,
-         class_type = c("lc", "lc", "lc", "iucn", "iucn", "iucn", "iucn", "iucn", "iucn", "iucn"),
+  tibble(index = 1:11,
+         class_type = c("lc", "lc", "lc", "iucn", "iucn", "iucn", "iucn", "iucn", "iucn", "iucn", "iucn"),
          map_type = c("full", "abn", "max_abn", "full", "abn", 
                       "max_abn", "potential_abn", "max_potential_abn", 
-                      "crop_abn", "crop_abn_potential"),
+                      "crop_abn", "crop_abn_potential",
+                      "full_potential"),
          start_year = case_when(
            map_type %in% c("full", "max_abn", "max_potential_abn",
-                           "crop_abn", "crop_abn_potential") ~ 1987, 
+                           "crop_abn", "crop_abn_potential",
+                           "full_potential") ~ 1987, 
            map_type %in% c("abn", "potential_abn") ~ 1992),
          label = paste0(map_type, "_", class_type),
          path = c(
@@ -154,7 +156,11 @@ aoh_type_df <-
            
            # 10. IUCN habitat, potential abandonment, including only cropland -> forwards
            paste0(p_derived, "lcc_iucn_habitat/", site_df$site[site_index], 
-                  "_crop_to_abn_iucn_potential", run_label, ".parquet")
+                  "_crop_to_abn_iucn_potential", run_label, ".parquet"),
+           
+           # 11. IUCN habitat, potential abandonment, for full site extent
+           paste0(p_derived, "lcc_iucn_habitat/", site_df$site[site_index], 
+                  "_lcc_iucn_habitat_potential", run_label, ".parquet")
          )
          )
 

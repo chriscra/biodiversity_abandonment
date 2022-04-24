@@ -6,7 +6,7 @@
 # load libraries
 cluster_packages <- c("data.table", "tictoc", "raster", "terra",
                       "sf", "fasterize",
-                      "tidyverse", "rgdal")
+                      "tidyverse", "rgdal", "arrow")
 
 install_pkg <- lapply(cluster_packages, library, character.only = TRUE)
 
@@ -93,6 +93,12 @@ lapply(1:11, function(i) {
   #   paste0(p_derived, "lcc_iucn_habitat/",
   #          site_df$site[i], "_crop_to_abn_iucn_potential", run_label, ".tif")
   # )
+  
+  # 11. _full_iucn_habitat_potential (full landscape, potential abandonment)
+  cc_save_spatraster_as_dt(
+    paste0(p_derived, "lcc_iucn_habitat/",
+           site_df$site[i], "_lcc_iucn_habitat_potential",
+           run_label, ".tif"))
   
 })
 
