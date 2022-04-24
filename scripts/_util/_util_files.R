@@ -400,15 +400,17 @@ habitat_age_req_coded <- read_csv(paste0(p_derived, "habitat_age_req/", "habitat
 # ------------------------------------------------------------ # 
 
 aoh_type_df <- 
-  tibble(index = 1:10,
-         class_type = c("lc", "lc", "lc", "iucn", "iucn",
+  tibble(index = 1:11,
+         class_type = c("lc", "lc", "lc", "iucn", "iucn", "iucn", 
                         "iucn", "iucn", "iucn", "iucn", "iucn"),
          map_type = c("full", "abn", "max_abn", "full", "abn", 
                       "max_abn", "potential_abn", "max_potential_abn", 
-                      "crop_abn", "crop_abn_potential"),
+                      "crop_abn", "crop_abn_potential",
+                      "full_potential"),
          start_year = case_when(
            map_type %in% c("full", "max_abn", "max_potential_abn",
-                           "crop_abn", "crop_abn_potential") ~ 1987, 
+                           "crop_abn", "crop_abn_potential",
+                           "full_potential") ~ 1987, 
            map_type %in% c("abn", "potential_abn") ~ 1992),
          label = paste0(map_type, "_", class_type),
          p1 = case_when(
@@ -417,6 +419,7 @@ aoh_type_df <-
          ),
          p2 = case_when(
            map_type == "full" ~ "entire landscape, 1987-2017", 
+           map_type == "full_potential" ~ "entire landscape, 1987-2017 (potential)", 
            map_type == "max_abn" ~ "abandoned pixels only, 1987-2017",
            map_type == "max_potential_abn" ~ "abandoned pixels only, 1987-2017, potential",
            map_type == "crop_abn" ~ "abandoned pixels, cultivation through 2017",
@@ -431,8 +434,9 @@ aoh_type_df <-
          ),
          p4 = case_when(
            map_type == "full" ~ "Entire Landscape\n(1987-2017)", 
+           map_type == "full_potential" ~ "Entire Landscape\n(1987-2017, potential)", 
            map_type == "max_abn" ~ "Abandonment\n(1987-2017)",
-           map_type == "max_potential_abn" ~ "Abandonment\n(1987-2017, potential)",
+           map_type == "max_potential_abn" ~ "Potential Abandonment\n(1987-2017)",
            map_type == "crop_abn" ~ "Abandonment\n(cultivation-2017)",
            map_type == "crop_abn_potential" ~ "Potential Abandonment\n(cultivation-2017)", #"Cropland through\nabandonment\n(potential)",
            map_type == "abn" ~ "Abn periods only",
@@ -440,8 +444,9 @@ aoh_type_df <-
          
          p5 = case_when(
            map_type == "full" ~ "Entire Landscape (1987-2017)", 
+           map_type == "full_potential" ~ "Entire Landscape (1987-2017, potential)", 
            map_type == "max_abn" ~ "Abandonment (1987-2017)",
-           map_type == "max_potential_abn" ~ "Abandonment (1987-2017, potential)",
+           map_type == "max_potential_abn" ~ "Potential Abandonment (1987-2017)",
            map_type == "crop_abn" ~ "Abandonment (cultivation-2017)",
            map_type == "crop_abn_potential" ~ "Potential Abandonment (cultivation-2017)", #"Cropland through\nabandonment\n(potential)",
            map_type == "abn" ~ "Abn periods only",
