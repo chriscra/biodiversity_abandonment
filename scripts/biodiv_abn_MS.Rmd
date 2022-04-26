@@ -1,5 +1,5 @@
 ---
-title: "Cropland abandonment benefits more birds and mammals than it harms, but rarely compensates for habitat loss"
+title: "Cropland abandonment benefits a majority of birds and mammals, but rarely compensates for habitat loss and is limited by recultivation"
 author: Christopher L. Crawford,$^a$$^*$, R. Alex Wiebe,$^{d}$ He Yin,$^b$ Volker C. Radeloff,$^c$ and David S. Wilcove$^{a, d}$
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 abstract: |
@@ -892,49 +892,13 @@ aoh_stats_full <- list(
 
 # Abstract (150 word limit) {.unnumbered}
 
-Although agricultural expansion continues to be the dominant land use trend in many regions, driving habitat loss and endangering biodiversity, substantial areas of cropland have simultaneously been abandoned due to shifting demographics, sociopolitical upheaval, environmental changes, and globalization.
-These abandoned agricultural lands increasingly represent opportunities to restore ecosystems and contribute to biodiversity conservation goals.
-However, controversy over whether abandonment presents an opportunity, or a threat, to biodiversity remains unclear, due to spatial variation in species and their associated habitat requirements and a lack of detailed maps of abandonment and long-term land cover trajectories.
-Here, we use annual 30-m land cover maps to track changes in area of habitat (AOH) for 2023 bird and mammal species from 1987-2017 at eleven sites across four continents.
-We find that the majority of bird (`r abstract_stats$percent_winner_bird_obs`%) and mammal (`r abstract_stats$percent_winner_mam_obs`%) species experience statistically significant gains in area of habitat directly from cropland abandonment, amounting to `r aoh_stats_main$wl_prop_bird_site_sp` and `r aoh_stats_main$wl_prop_mam_site_sp` as many winners as losers, respectively, when considering each species trend at each site.
-However, these gains would have been greater (`r abstract_stats$percent_winner_bird_pot`% and `r abstract_stats$percent_winner_mam_pot`% respectively) if abandonment had been allowed to persist, and no recultivation had taken place.
-Though these gains are encouraging, yet we find that the majority of species had negative trends in habitat area overall when accounting for habitat loss that occurred prior to cultivation and abandonment or over the entire extent at each site, driven by a greater number of birds that declined (mammals had about equal numbers of winner and loser mammals in both scenarios).
-These results illuminate the opportunity that abandonment may present for biodiversity, but highlight the importance of limiting recultivation and continuing efforts to reduce habitat loss outside irrespective of abandonment.
-
-Pithy concluding statement.
-
-
-
-
-Our high-resolution time series allows us to track dynamic changes in habitat and determine whether species gain or lose habitat on average through time.
-
-We find that ...
-most species gain habitat as a direct result of abandonment.
-However, many species' habitat was constrained by the recultivation of abandoned croplands. 
-In a scenario in which no recultivation occurred, X more species (Y%) had a positive trend in area of habitat, largely due to gains at our relatively more speciose site in Mato Grosso, Brazil.
-There was significant variation in both species richness and the impact of abandonment across our sites, but all but one site showed at least double the number species that gain habitat than those that lose habitat. 
-
-Threatened species were even better off...
-
-However, when we calculated changes to AOH across a broader temporal and spatial scale, the balance of losses outweighed the number of gains. 
-By calculating trends in AOH in all pixels that were abandoned, but relative to the land cover in 1987, we found that the trend for most species was negative, despite the abandonment of cropland, largely due to insufficient time following abandonment for species to regain habitat originally lost to make way for cultivation.
-Similarly, gains from abandonment did not outweigh losses in habitat elsewhere at each site, leading to overall more losers than winners. 
-
-Concerningly, our analysis of changes to AOH show that many species do not gain habitat overall as a result of abandonment, likely because short-term abandonment lacks sufficient time for habitat to regenerate on abandoned croplands through secondary succession.
-About equal numbers of mammal species overall lost habitat as a result of abandonment as gained habitat, but 1.5 times as many bird species lost habitat as gained due to abandonment (though this was less dramatic for threatened bird species, at 1.2x).
-
-We then explore how habitat area changed as a result of cropland abandonment by delving into differences between groups of species, looking at IUCN threat status, habitat preferences, habitat age requirements (early successional vs. mature habitat only)
-
-We find that a significant portion of abandoned croplands are recultivated by the end of our time series, substantially curtailing the potential gains in AOH for different species.
-
-## Conclusions {-}
-
--	Abandonment *per se* benefitted the majority of bird and mammal species at our sites, though the degree to which this was the case varied across sites (Iraq was the lone exception).
--	Threatened species were even more likely to be winner species than non-threatened species.
--	When recultivation was not allowed to take place, these trends intensified, and the number of species without significant trends declined, leading to more winners and more losers. This effect was relatively muted at many places, though Mato Grosso saw a huge increase in winners.
--	Despite many species not changing trend direction, recultivation did result in less habitat for each species overall by the end of the time series The magnitude of area gained by winner species increased by 12% on average. However, losing species lost a relatively greater share of habitat, however, losing about 72% more habitat. 
--	Though abandonment overwhelmingly led to gains in habitat for the majority of species, these gains did not compensate for habitat loss that occurred prior to cultivation (and subsequent abandonment) or elsewhere in entire landscape at each site. The plurality of birds had significantly declining trends in habitat in both of these scenarios, and while mammals were less affected, they still saw more losers than winners when incorporating the entire landscape for each site.
--	Importantly, if recultivation was not allowed to take place, abandonment would again benefit more species than it harmed, even when factoring in habitat loss prior to cultivation. 
+Although agricultural expansion continues to drive habitat loss in many regions, substantial areas of cropland have been abandoned due to shifting demographics, sociopolitical upheaval, environmental changes, and globalization.
+Abandoned lands increasingly represent opportunities to restore ecosystems yet spatial variation in species and their required habitats, and a lack of detailed maps of abandonment and long-term land cover outcomes, have driven controversy over whether abandonment will benefit, or harm, biodiversity.
+Here, we use annual land cover maps to measure habitat area for 2023 bird and mammal species from 1987-2017 at eleven sites across four continents.
+We find that the majority of bird (`r abstract_stats$percent_winner_bird_obs`%) and mammal (`r abstract_stats$percent_winner_mam_obs`%) species experience statistically significant gains in area of habitat as a direct result of cropland abandonment.
+However, a greater share of species would have gained overall (`r abstract_stats$percent_winner_bird_pot`% and `r abstract_stats$percent_winner_mam_pot`% respectively) if no abandoned croplands were recultivated.
+Despite these encouraging gains, the majority of bird species had negative trends overall when accounting for habitat loss prior to cultivation or changes across the entire extent of each site (mammals had about equal winners and losers in both scenarios).
+Thus, while abandonment presents an opportunity for most species, limiting recultivation and reducing habitat loss irrespective of abandonment remain critical for the future of biodiversity.
 
 # Introduction {.unnumbered}
 
@@ -1189,7 +1153,14 @@ Other research has indicated that when possible, the environmental impacts of ag
 Our results provide evidence that, on a multi-decadal timescale, cropland abandonment can result in gains in habitat for a majority of species.
 Moreover, species than 
 
+## Conclusions {-}
 
+-	Abandonment *per se* benefitted the majority of bird and mammal species at our sites, though the degree to which this was the case varied across sites (Iraq was the lone exception).
+-	Threatened species were even more likely to be winner species than non-threatened species.
+-	When recultivation was not allowed to take place, these trends intensified, and the number of species without significant trends declined, leading to more winners and more losers. This effect was relatively muted at many places, though Mato Grosso saw a huge increase in winners.
+-	Despite many species not changing trend direction, recultivation did result in less habitat for each species overall by the end of the time series The magnitude of area gained by winner species increased by 12% on average. However, losing species lost a relatively greater share of habitat, however, losing about 72% more habitat. 
+-	Though abandonment overwhelmingly led to gains in habitat for the majority of species, these gains did not compensate for habitat loss that occurred prior to cultivation (and subsequent abandonment) or elsewhere in entire landscape at each site. The plurality of birds had significantly declining trends in habitat in both of these scenarios, and while mammals were less affected, they still saw more losers than winners when incorporating the entire landscape for each site.
+-	Importantly, if recultivation was not allowed to take place, abandonment would again benefit more species than it harmed, even when factoring in habitat loss prior to cultivation.
 
 # Acknowledgements (100 words maximum) {.unnumbered}
 
