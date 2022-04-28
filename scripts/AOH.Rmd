@@ -2335,13 +2335,14 @@ aoh %>%
 ```{r prelim-plots}
 sp_to_plot <- "Agamia agami"
 sp_to_plot <- "Certhia familiaris"
+sp_to_plot <- "Argya altirostris"
 
 aoh %>%
-  filter(binomial == sp_to_plot, aoh_type %in% aoh_type_df$label[c(6, 8)]) %>%
+  filter(binomial == sp_to_plot, aoh_type %in% aoh_type_df$label[c(9, 10)]) %>%
   ggplot(mapping = aes(x = year, y = aoh, 
                        col = aoh_type, group = aoh_type
                        )) +
-  geom_line() + 
+  geom_point(position = position_jitter()) + 
   labs(x = "Year", y = "AOH (ha)", caption = sp_to_plot) +
   facet_wrap(vars(site), scales = "free")
 
@@ -3030,7 +3031,9 @@ threat_statuses <- c("Threatened", "Not Threatened")
 
 gg_aoh_trend_by_vert_aoh_type <-
   aoh_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
+  filter(
+    # binomial %in% (filter(species_list, site != "mato_grosso") %>% .$binomial %>% unique()), # all species excluding those only found in Mato Grosso
+    passage_type == "exclude_passage",
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type),
@@ -3063,7 +3066,7 @@ gg_aoh_trend_by_vert_aoh_type <-
 ggsave(gg_aoh_trend_by_vert_aoh_type,
        filename = paste0(p_output, "plots/aoh/", "aoh_trend_by_vert_aoh_type", aoh_run_date,
                          ".pdf"),
-       width = 5.5, height = 5, units = "in")
+       width = 5.3, height = 4, units = "in")
 
 
 
@@ -4244,6 +4247,7 @@ aoh_types[c(6,3,1,7,5,8)]
 
 lapply(
   aoh_types[c(6,3,1,7,5,8)],
+  # "crop_abn_iucn",
   function(i) {
   gg_aoh_overall_tmp <-
     aoh_trends_by_sp %>%
@@ -4327,8 +4331,9 @@ lapply(
                    ),
          filename = paste0(p_output, "plots/aoh/", 
                            "aoh_overall_w_site_combo_",
-                           i,
-                           aoh_run_date, ".pdf"),
+                           i, aoh_run_date, 
+                           # "_no_lab",
+                           ".pdf"),
          width = 6, height = 6, units = "in")
 })
 
@@ -5079,9 +5084,11 @@ dff %>%  filter(site == "belarus", str_detect(binomial, "Acrocephalus scho"),
 # Now, including potential abandonment in these scenarios:
 # -------------------------------------------------------- #
 
-gg_aoh_trend_overall_by_aoh_type_w_pot <-
+# gg_aoh_trend_overall_by_aoh_type_w_pot <-
   aoh_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
+  filter(
+    binomial %in% (filter(species_list, site != "mato_grosso") %>% .$binomial %>% unique()), # all species excluding those only found in Mato Grosso
+    passage_type == "exclude_passage",
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn",
                           "potential_abn_iucn"
