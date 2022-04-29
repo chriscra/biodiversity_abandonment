@@ -42,42 +42,10 @@ citecolor: blue
 # - Cropland abandonment benefits more birds and mammals than it harms, but requires protection in order to compensate for habitat loss
 ```
 
-```{r misc-notes, include = FALSE, eval = FALSE}
-# Authors and Affiliations, formatted to look nice in Word (i.e., nested within the abstract):
-# author: Christopher L. Crawford,$^a$$^*$ He Yin,$^b$ Volker C. Radeloff,$^c$ and David S. Wilcove$^{a, d}$
-# date: "`r format(Sys.time(), '%B %d, %Y')`"
-# abstract: |
-#   | $^a$Princeton School of Public and International Affairs, Princeton University, Princeton, NJ
-#   | $^b$Department of Geography, Kent State University, Kent, OH
-#   | $^c$SILVIS Lab, Department of Forest & Wildlife Ecology, University of Wisconsin - Madison, Madison, WI
-#   | $^d$Department of Ecology & Evolutionary Biology, Princeton University, Princeton, NJ
-#   |
-#   | $^*$Corresponding Author, ccrawford@princeton.edu, Robertson Hall, Princeton University, Princeton, NJ
-
-
-
-
-# formatted for LaTeX
-# author:
-#   - Christopher L. Crawford$^1$^[Corresponding Author, ccrawford@princeton.edu, Robertson Hall, Princeton University, Princeton, NJ]
-#   - He Yin$^2$
-#   - Alex Wiebe$^{4}$
-#   - Volker C. Radeloff$^3$
-#   - David S. Wilcove$^{1,4}$
-# date: 
-#   $^1$Princeton School of Public and International Affairs, Princeton University, Princeton, NJ\newline
-#   $^2$Department of Geography, Kent State University, Kent, OH\newline
-#   $^3$SILVIS Lab, Department of Forest & Wildlife Ecology, University of Wisconsin - Madison, Madison, WI\newline
-#   $^4$Department of Ecology & Evolutionary Biology, Princeton University, Princeton, NJ\newline
-#   \newline
-#   \today
-```
-
 ```{r initialize, eval = TRUE, echo = FALSE, include = FALSE}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/_util/_util_files.R")
 # my_format <- "simple"
-
 ```
 
 ```{r preview-chapter, eval=FALSE, include = FALSE}
@@ -132,28 +100,6 @@ options(knitr.table.format = function() {
   if (knitr::is_latex_output())
     "latex" else "simple"
 })
-```
-
-```{r produce-package-bib, eval = FALSE, include = FALSE, echo = FALSE}
-# needed_packages
-# github_packages
-knitr::write_bib(x = c(needed_packages, github_packages), file = 'packages.bib')
-# knitr::write_bib(x = c("car"), file = 'extra.bib')
-
-# citation(package = needed_packages[1])
-
-# knitr::write_bib(x = c(needed_packages[c(14)]), file = 'packages_top.bib')
-# knitr::write_bib(x = c(needed_packages[3]), file = 'terra.bib')
-
-# 
-# needed_packages[1]
-# packageDescription(needed_packages[1])
-# 
-# tinytex::tlmgr_install(
-#   # pkgs = "ragged2e"
-#   # pkgs = "standalone"
-#   pkgs = "preview"
-# )
 ```
 
 ```{r abstract-stats, include = FALSE}
@@ -241,7 +187,6 @@ aoh_trends_by_sp %>%
   # print(n = 50)
 
 ```
-
 ```{r get-stats-aoh-stats-main, include = FALSE}
 # number of small-ranged birds and mammals
 aoh_trends_by_sp %>% 
@@ -891,14 +836,14 @@ aoh_stats_full <- list(
 )
 ```
 
-# Abstract (150 word limit)^[Preparing manuscript for [*Conservation Letters*](https://conbio.onlinelibrary.wiley.com/hub/journal/1755263x/homepage/forauthors.html), with 3000 word limit, no more than 6 figures and tables, and 40 References.] {.unnumbered}
+# Abstract^[Preparing manuscript as a Letter for for [*Conservation Letters*](https://conbio.onlinelibrary.wiley.com/hub/journal/1755263x/homepage/forauthors.html), with 3000 word limit (excluding references), 150 word abstract, no more than 6 figures and tables, and 40 references. This current version is clearly much too long.] {.unnumbered}
 
 Although agricultural expansion continues to drive habitat loss in many regions, substantial areas of cropland have been abandoned due to demographic shifts, socioeconomic and technological changes, and globalization.
 Abandoned lands increasingly represent opportunities to restore ecosystems yet spatial variation in the distribution of species and their habitats, along with a lack of detailed maps of abandonment, have resulted in uncertainty and controversy over whether abandonment will benefit, or harm, biodiversity.
 Here, we use annual land cover maps to measure habitat area for 2023 bird and mammal species from 1987-2017 at eleven sites across four continents.
 We find that the majority of bird (`r abstract_stats$percent_winner_bird_obs`%) and mammal (`r abstract_stats$percent_winner_mam_obs`%) species experience statistically significant gains in area of habitat as a direct result of cropland abandonment.
 However, a greater share of species would have gained overall (`r abstract_stats$percent_winner_bird_pot`% and `r abstract_stats$percent_winner_mam_pot`% respectively) if no abandoned croplands had been recultivated.
-Despite these encouraging gains, the majority of bird species had negative trends overall when accounting for a) habitat loss prior to cultivation or b) changes across the entire extent of each site (mammals had about equal winners and losers in both scenarios).
+Despite these encouraging gains, the majority of bird species had negative trends overall when accounting for (i) habitat loss prior to cultivation or (ii) changes across the entire extent of each site (mammals had about equal winners and losers in both scenarios).
 Thus, while abandonment presents an opportunity for most species, limiting recultivation and reducing habitat loss irrespective of abandonment remains critical for the future of biodiversity.
 
 <!-- Structured as follows:   -->
@@ -929,9 +874,9 @@ When viewed from the perspective of what could be lost, abandonment is sometimes
 Variety within the natural world is one of the primary factors motivating conservation, and it should come as no surprise that different species may respond differently to land use change [@Sirami2008; @Finch2019].
 But in order to better incorporate biodiversity into policy responses to abandonment, conservationists need a more nuanced understanding of which species benefit, which do not, and how these patterns balance out across whole landscapes.
 
-Despite a large number of studies investigating the recovery of biodiversity in abandoned agricultural land over time [e.g., @Sirami2008, @Uchida2014, @Plieninger2014, @Isbell2019, @Bowen2007, @Regos2016], few studies have attempted to combine spatially-explicit maps of abandonment with biodiversity data in order to investigate patterns in how abandonment affects biodiversity at the landscape scale.
+Despite a large number of studies investigating the recovery of biodiversity in abandoned agricultural land over time [e.g., @Bowen2007, @Sirami2008, @Uchida2014, @Plieninger2014, @Regos2016, @Isbell2019], few studies have attempted to combine spatially-explicit maps of abandonment with biodiversity data in order to investigate patterns in how abandonment affects biodiversity at the landscape scale.
 Critically, these few studies have done so only coarsely, whether using distance to protected areas as a proxy for biodiversity value [@Meyfroidt2016], expert-designated regional priorities, coarse measures of species richness [@Henry2019], or a restricted subset of species [@VanderZanden2017].
-Others have used individual species data to prioritize locations for restoration based on estimated reductions in extinction risk (e.g., @Crouzeilles2020; @Strassburg2019), but these approaches have not been linked to observed changes in land cover through time nor explored the nuances of which species benefit.
+Others have used individual species data to prioritize locations for restoration based on estimated reductions in extinction risk [e.g., @Crouzeilles2020, @Strassburg2019], but these approaches have not been linked to observed changes in land cover through time nor explored the nuances of which species benefit.
 Moreover, the abandonment maps used in these analyses have historically been limited in spatial and temporal resolution, lacking the detail required to track abandonment dynamics through time.
 
 Recent efforts to improve how abandonment is mapped from satellite imagery have produced new annual maps of cropland abandonment with higher spatial resolution (30-m resolution) and temporal coverage (1987-2017) than previous maps [@Yin2020]. 
@@ -939,9 +884,9 @@ These time series data have allowed for more detailed analysis of the long-term 
 
 Here, we combine these new annual land cover time series for 11 sites [@Yin2020] with range maps and habitat preferences for 2023 species of birds and mammals to calculate changes in area of habitat [AOH, @Brooks2019] resulting from cropland abandonment between 1987 and 2017.
 We address three questions: 
-1) To what extent did cropland abandonment result in gains or losses of habitat for each of the bird and mammal species that occur at one of our sites, and how does the balance of winners and losers vary across sites and by IUCN threat status?
-2) How did frequent recultivation constrain the habitat implications of abandonment, when comparing observed abandonment and recultivation with a scenario of potential abandonment in which recultivation was not allowed to occur? 
-3) Finally, how do the changes resulting directly from abandonment compare to broader habitat trends that occurred during our time series, specifically when incorporating changes that occurred a) prior to cultivation and subsequent abandonment, or b) outside of abandonment, through the entire landscape at each site?
+(i) To what extent did cropland abandonment result in gains or losses of habitat for each of the bird and mammal species that occur at one of our sites, and how does the balance of winners and losers vary across sites and by IUCN threat status?
+(ii) How did frequent recultivation constrain the habitat implications of abandonment, when comparing observed abandonment and recultivation with a scenario of potential abandonment in which recultivation was not allowed to occur? 
+(iii) Finally, how do the changes resulting directly from abandonment compare to broader habitat trends that occurred during our time series, specifically when incorporating changes that occurred a) prior to cultivation and subsequent abandonment, or b) outside of abandonment, through the entire landscape at each site?
 
 By exploring the impact of abandonment on habitat availability for every bird and mammal species that occurred at our sites, we provide a nuanced and detailed examination of how cropland abandonment affected biodiversity across a broad range of sites that have recently experienced abandonment and at multiple spatial and temporal scales.
 Our analysis demonstrates that cropland abandonment holds the potential to increase habitat area for a majority of bird and mammal species, yet that these gains rarely compensate for habitat loss that took place prior to cultivation and abandonment or elsewhere at each site, in part due to the recultivation of abandoned croplands.
@@ -956,10 +901,10 @@ These sites, each between `r round(min(area_summary_df$total_site_area_ha_2017/1
 [We excluded three sites from those originally mapped by @Yin2020 that had low classification accuracy, following @Crawford2022.]
 This time series mapped four land cover classes at high accuracy (average overall accuracy of $85\pm4$%): (i) cropland, (ii) herbaceous vegetation (e.g., grassland), (iii) woody vegetation (e.g., forests), and (iv) non-vegetation (e.g., water, urban, or barren land).
 Previous work [@Crawford2022] mapped abandoned croplands by identifying periods of non-cropland (grassland or woody vegetation) that followed periods of cultivation and remained non-cropland for five or more consecutive years, following a commonly used five-year abandonment definition designed to exclude short-term fallow cycles [@FAO2016].
-We used these abandonment maps to identify all pixels that were abandoned at least once during the time series (the maximum extent of abandonment, which we refer to as "abandoned pixels;" Figs. \@ref(fig:abn-lc-1987)) and \@ref(fig:abn-lc-2017)).
+We used these abandonment maps to identify all pixels that were abandoned at least once during the time series (the maximum extent of abandonment, which we refer to as "abandoned pixels;" Figs. \@ref(fig:abn-lc-1987) and \@ref(fig:abn-lc-2017)).
 
 @Crawford2022 showed that while substantial abandonment occurred at our eleven study sites (8.76 Mha of croplands were abandoned one or more times from 1987-2017), this abandonment was relatively short-lived and subject to high rates of recultivation (only 6.06 Mha of croplands remained abandoned as of 2017).
-In order to assess the implications of recultivation on the impact of abandonment on biodiversity, we also use a simple scenario of "potential abandonment" developed by [@Crawford2022] that assumed that no recultivation took place during the time series. 
+In order to assess the implications of recultivation on the impact of abandonment on biodiversity, we also use a simple scenario of "potential abandonment" [developed by @Crawford2022] that assumed that no recultivation took place during the time series. 
 In this scenario, abandoned croplands were left abandoned from the year of initial abandonment through the end of the time series.
 
 ## Translating from land cover to IUCN habitat types {.unnumbered}
@@ -1035,7 +980,7 @@ knitr::include_graphics(path = paste0(
 ## Changes in habitat area resulting from cropland abandonment {.unnumbered}
 
 Overall, we found that a majority of bird and mammal species gained habitat as a result of abandonment: `r aoh_stats_main$n_gain_bird` bird and `r aoh_stats_main$n_gain_mam` mammal species showed statistically significant and positive trends in AOH over time everywhere they occurred, compared to `r aoh_stats_main$n_loss_bird` bird and `r aoh_stats_main$n_loss_mam` mammal species that lost habitat (Fig. \@ref(fig:aoh-by-site-crop-abn)).
-When considering each species' trend at each site, `r aoh_stats_main$wl_prop_bird_site_sp` times as many birds and `r aoh_stats_main$wl_prop_mam_site_sp` times as many mammals gained habitat, on average, than lost habitat.^[*Note:* when looking at overall trends for each species, the proportion of winners to losers actually increases (to `r aoh_stats_main$wl_prop_bird_sp`x and `r aoh_stats_main$wl_prop_mam_sp`x for birds and mammals respectively for consistent winners and losers, and `r aoh_stats_main$wl_prop_bird_sp_w_weak` and `r aoh_stats_main$wl_prop_mam_sp_w_weak` when including "weak" trends.]
+When considering each species' trend at each site, `r aoh_stats_main$wl_prop_bird_site_sp` times as many birds and `r aoh_stats_main$wl_prop_mam_site_sp` times as many mammals gained habitat, on average, than lost habitat.^[*Note:* when looking at overall trends for each species (rather than each species' trend *at each  site*), the ratio of winners to losers actually increases (to `r aoh_stats_main$wl_prop_bird_sp` and `r aoh_stats_main$wl_prop_mam_sp` for birds and mammals, respectively, for consistent winners and losers; and to `r aoh_stats_main$wl_prop_bird_sp_w_weak` and `r aoh_stats_main$wl_prop_mam_sp_w_weak` when including both consistent and "weak" trends.]
 This pattern varied across sites, but was generally consistent, ranging from `r aoh_stats_main$wl_prop_site_min` to `r aoh_stats_main$wl_prop_site_max` times as many winners as losers at different sites. 
 The lone exception were birds in Iraq (our site with the lowest species richness; Fig. \@ref(fig:richness-by-site)), where only `r aoh_stats_main$wl_iraq` times as many birds gained habitat on average.
 Though bird and mammals species were each much more likely to gain habitat than to lose habitat due to abandonment, in general, a relatively greater share of bird species lost habitat than mammal species, both overall (Fig. \@ref(fig:aoh-overall-stacked)) and at individual sites (Fig. \@ref(fig:aoh-by-site-stacked)).
@@ -1109,35 +1054,29 @@ knitr::include_graphics(path = paste0(p_plots, "aoh/aoh_trend_by_vert_aoh_type",
 
 The growing trend of cropland abandonment has reshaped agricultural landscapes around the world.
 In the process, our results indicate that cropland abandonment directly increased habitat availability for the majority of bird and mammal species that occur at our 11 sites (Fig \@ref(fig:aoh-by-site-crop-abn)).
-But these results also illuminate strong differences between sites, between vertebrate classes, and between groups of species.
-Encouragingly, species of conservation concern seemed more likely to show statistically significant gains in habitat through time, including threatened species (Fig. \@ref(fig:aoh-iucn-by-site-crop-abn)) and globally small-ranged species (Fig. \@ref(fig:aoh-by-range)).
+These results also illuminate strong differences between sites, between vertebrate classes, and between groups of species, but encouragingly, species of conservation concern seemed more likely to show statistically significant gains in habitat through time, including threatened species (Fig. \@ref(fig:aoh-iucn-by-site-crop-abn)) and globally small-ranged species (Fig. \@ref(fig:aoh-by-range)).
 
-Despite these promising signs, our results also indicate that the short-term nature of most abandonment at our sites placed some key limits on biodiversity gains, by (i) reducing the number of species with statistically significant gains (Fig. \@ref(fig:aoh-obs-v-pot-by-site)) and (ii) reducing the overall amount of habitat gained, on average, by each species during our study period (Figs. \@ref(fig:aoh-p-change-obs-v-pot-bird) and \@ref(fig:aoh-p-change-obs-v-pot-mam)). 
-Moreover, while abandonment led to gains in habitat for the majority of species, we observed that these gains did not compensate for habitat loss that occurred prior abandonment or elsewhere in the entire landscape at each site.
+Yet despite these promising signs, our results also indicate that the short-term nature of most abandonment at our sites placed some key limits on biodiversity gains, by (i) reducing the number of species with statistically significant gains (Fig. \@ref(fig:aoh-obs-v-pot-by-site)) and (ii) reducing the overall amount of habitat gained, on average, by each species during our study period (Figs. \@ref(fig:aoh-p-change-obs-v-pot-bird) and \@ref(fig:aoh-p-change-obs-v-pot-mam)).
+In other words, though abandonment benefited the majority of species we considered, it would benefit these species to a greater degree if recultivation were reduced. 
+Concerningly, we also observed that these gains did not compensate for habitat loss that occurred prior abandonment or elsewhere in the entire landscape at each site.
 When considering the broader context at each site, the number of species with overall declines in habitat area increased: a plurality of birds showed significantly declining trends in habitat, and while mammals were less affected, they still saw more losers than winners when incorporating the entire landscape for each site.
 Though abandonment clearly has the potential to contribute substantial amounts of habitat, many species had have declining trends in habitat due to external habitat loss.
 As a result, expectations for abandonment to drive overall gains in habitat for species across landscapes should be tempered accordingly. 
 
-## Interpretations {-}
-
 A few specific results merit a closer examination.
-  - On the whole, bird species were more sensitive to habitat losses resulting from abandonment than mammals. In part, this means that a relatively greater share of bird species can find meaningful habitat in croplands, but it cannot be attributed to habitat generalist species alone, because these species that occur equally well in cropland as grassland or forest would not see declines in area as a result of the replacement of cropland with grasslands or regenerating forests. However, 
-  - What is causing differences between sites? a) Differences between species habitat preferences, sensitivity vs. generalism, (i.e., the composition of species communities) but also b) the distribution of habitats at those sites. 
-  - Bioclimatic differences between sites likely explain some of the differences between sites. Species-rich tropical regions may have the largest overall benefits from abandonment (but also correspondingly large risks due to habitat loss), in part due to high species richness, but also due to high sensitivity to habitat modification - a smaller share of these species are likely to persist in artificial habitats. However, arid regions, insofar as they are represented by Iraq, may not have as much to gain from abandonment.
-  
-  - Why would trends be so different at Iraq?  Though a greater number of bird species in Iraq had significant losses than gains in habitat as a result of abandonment, this difference was relatively small (40 species gained, 43 species lost). Despite this, the number of species with losing trends at Iraq very large relative to other sites. These results indicate that the species at this site merit close attention, and concerted conservation actions in order to prevent net losses from abandonment, even while many species gain. However, when considering trends across the entire landscape of the site, the majority of bird species (82 out of 122 total) did not have a significant trend. This could be either due to countervailing forces providing new habitat for those species that lost when looking exclusively at abandonment (Scenario 1), or it could be a function of the size of abandonment relative to other habitat at the site.
+On the whole, bird species were more sensitive to habitat losses resulting from abandonment than mammals.
+In part, this means that a relatively greater share of bird species can find meaningful habitat in croplands, but it cannot be attributed to habitat generalist species alone, because species that occur equally well in cropland as grassland or forest would not see declines in area as a result of the replacement of cropland with grasslands or regenerating forests. 
+In turn, differences between sites are likely a combination of differences in overall species richness and the distributions of habitats and therefore habitat suitabilities. 
+Bioclimatic differences between sites surely explain some of these differences.
+Species-rich tropical regions may have the largest overall benefits from abandonment (but also correspondingly large risks due to habitat loss), in part due to high species richness, but also due to high sensitivity to habitat modification - a smaller share of these species are likely to persist in artificial habitats. 
+However, we note that Mato Grosso had the least amount of abandonment of all our sites, and therefore the magnitude of gains at this site were relatively small (e.g., on the scale of $10^4$ ha, compared to $10^5$ or $10^6$ ha at other sites; Fig. \@ref(fig:aoh-sp-obs-crop-abn)).
+Though the degree to which species trends improved at Mato Grosso after abandonment is a testament to the power of secondary habitat regeneration at this site, and the potential increases in gains by reducing recultivation, and our results there should be interpreted with caution. 
 
-  - Mato Grosso: Our comparison of observed and potential abandonment indicated that a large number of species at Mato Grosso stood to benefit from the reduction of recultivation, as evidenced by the transition of 82 bird species from no trend or losing trends to statistically significant gains. Though Mato Grosso showed strong trends in the number of winners and losers, we emphasize that this site experienced the least abandonment overall, and these patterns should be placed in appropriate context relative to other sites, where species gained (or lost) much greater amounts of habitat as a result of abandonment. Cautioning against putting too much stock in Mato Grosso, given the relatively little abandonment that took place there. However, the degree to which species trends improved it is a testament to the power of secondary habitat regeneration at this site,  which was particularly strongly affected by recultivation, and subsequently saw a huge increase in winners in the potential abandonment scenario.
-  - Losing species: Some strange results about area differences in the magnitude of area changes. The magnitude of area gained by winner species increased by 12% on average. However, losing species lost a relatively greater share of habitat, however, losing about 72% more habitat. If our results hold, it may indicate that even if a greater proportion of species benefit from abandonment, those species that lose habitat may require special action to address the steep declines of habitat resulting from abandonment. This is particularly the case for the development of any programs to reduce recultivation.
-  - Finally, discuss cropland abandonment in the context of the full time series, and the full landscape. Our initial results on cropland abandonment *per se* tell us whether abandonment of cropland causes a gain or loss of habitat for each species. By looking at the trend for those same abandoned pixels, but starting from the beginning of our time series (1987), puts gains from abandonment in the context of any habitat loss that occurred prior to cultivation. Taking this one step further, by assessing trends of AOH for the full site area across the full time series, we put our results in context of broader trends taking place at each site. 
-  
-(Maybe a separate point, or moved to a later section about the different scales of AOH.)
-This pattern is reversed for birds, however, when considering the full time series, even when only considering abandoned pixels.
-This is likely because many species might lose habitat during conversion to cropland, but not gain it entirely back as a result of abandonment, whether due to recultivation or a lack of time for succession. 
-
-Even when excluding these species, the balance of winners to losers still shows more losers than winners for both abandonment (1987-2017) and the full landscape (1987-2017).
-
-## 2. Results in context of previous studies. {-}
+Interestingly, Iraq showed the most unfavorable response to abandonment: 43 bird species showed significant losses in AOH, compared to 40 species with significant gains (Fig. \@ref(fig:aoh-by-site-crop-abn)).
+As the birth place of agriculture ["the fertile crescent"; @Balter2007, @Arranz-Otaegui2016], this might be readily explained much like abandonment-driven losses in the European context: a result of a very long history of human cultivation [@Batary2015].
+In the presence of agriculture of this region, with a long history of irrigation [@Balter2007], species may have adapted to utilize these artificial habitats (particularly if the environment is generally more resource constrained).
+However, when considering trends across the entire extent of our site in Iraq, the majority of bird species (82 out of 122 total) did not have a significant trend. 
+This could be either due to countervailing forces providing new habitat for species with losing trends in Scenario 1, or it could be a function of the size of abandonment relative to other habitat at the site.
 
 In comparison to previous studies, our finding of positive effects for birds and mammals overall contrasts with much of the previous literature on biodiversity and abandonment. 
 A literature review of past studies [@Queiroz2014] reported that most articles indicate that abandonment is negative for biodiversity and emphasized the importance of the framing of each study (whether focused on pre-abandonment species losses or post-abandonment species gains) and the overall agricultural context for understanding the outcomes of abandonment.
@@ -1147,12 +1086,11 @@ Though our study lacks sites in Western or central Europe, our sites in Eastern 
 Therefore, when abandonment does have overall negative effect on biodiversity (e.g., our site in Iraq, and reportedly parts of Europe), this may be regionally restricted.
 
 However, the number of species that we find to have experienced statistically significant losses in habitat (`r aoh_stats_main$n_loss_bird + aoh_stats_main$n_loss_mam` species across sites) should not be written off, particularly in places with overall negative trends - even if these species are unlikely to be species of conservation concern.
+This is especially important given that these species can show particularly steep declines: when recultivation was assumed not to occur (in Scenario 1P), species with losing trends lost 72% more habitat in our observed Scenario 1. 
 When necessary, these species should be incorporated into conservation planning efforts to ameliorate habitat losses, with particular attention given to the maintenance of high-biodiversity open habitats. 
-Such conservation efforts, whether to retain habitats for species losing habitat due to abandonment, or fostering habitat regeneration in abandoned croplands for those species that do benefit, are most likely to be successfull when they are developed in collaboration with local communities. 
+Such conservation efforts, whether to retain habitats for species losing habitat due to abandonment, or fostering habitat regeneration in abandoned croplands for those species that do benefit, are most likely to be successful when they are developed in collaboration with local communities. 
 The socioeconomic and cultural challenges that abandonment can sometimes presents to rural communities is difficult to separate from perceptions of the impact of abandonment on biodiversity, and the resulting controversy must also be understood in the context of social factors, including local economic interests, cultural preferences, and existing power dynamics [@Beilin2014, @VanderZanden2017, @Barnaud2021].
-The nuances of our site-by-site results make clear that each region should be considered separately, and conservation approaches that factor in distinct communities of species with varying responses to abandonment species [@Finch2020] may hold the most promise for making the most of abandonment, rather than fighting against it.
-
-## 3. Study limitations, caveats {-}
+The nuances of our site-by-site results make clear that each region should be considered separately, and conservation approaches that factor in distinct communities of species with varying responses to abandonment species [@Finch2020] may hold the most promise for making the most of abandonment.
 
 A few limitations of our work must be considered. 
 First and foremost, our analysis is based on remotely sensed land cover interpolated to specific IUCN habitat types, but this does not provide a reliable proxy for habitat quality, particularly when it relates to regeneration time. 
@@ -1166,45 +1104,23 @@ For these reasons, regenerating habitats on abandoned croplands must be protecte
 Aside from succession time, a few other factors are likely to influence the value of habitat provided through abandonment. 
 Additional local and regional factors also influence the speed and success of natural regeneration [@Chazdon2016], including remaining legacies of cultivation (e.g., residual pesticides, invasive plants, etc.), a lack of nearby source populations, and a lack of natural disturbance regimes, and these factors can sometimes combine to result in "novel ecosystems" [@Hobbs2009].
 These factors may be particularly challenging for grassland and other open habitat types, which are frequently maintained through grazing or fire; when these disturbances are absent, as is common following abandonment, some open habitat specialists may be harmed if such habitats are replaced by woody regrowth [@ReyBenayas2007, @Nerlekar2020; @VanderZanden2017].
-
-These, and other limitations, point towards fruitful areas of future study. 
 Agricultural landscapes are typically highly fragmented, with associated negative effects on many species [@Haddad2015].
 In principle, abandonment seems likely to reduce landscape fragmentation, but this should be incorporated into future work.
+
 While birds and mammals are often used as general indicators for biodiversity [@Westgate2017], the patterns we find may not hold for other taxonomic groups, particularly when it comes to the abandonment of specific types of agriculture.
 For example, the abandonment of rice paddy agriculture can cause the decline of multiple types of biodiversity such as fish, amphibians, and plants, but less so for birds and mammals [@Koshida2018].
 We excluded amphibians and reptiles from our study due to a relative lack of information about their distributions, habitat requirements, and threat status.
 However, as recent efforts to comprehensively assess reptiles reach their conclusion [@Cox2022], conservation scientists should be better equipped to incorporate these species into future analyses. 
 Third, our study sites were restricted in area, and were therefore unlikely to contain the full range of any species. 
-As a result, we were unable to assess how habitat gains or losses affected extinction risk for species, without an idea of changes taking place elsewhere in each species' range. 
+As a result, we were unable to assess how habitat gains or losses affected overall habitat availability, which would be necessary for estimating changes in extinction risk for species (as would estimates of changes in population trends over time).
+These, and other limitations, point towards fruitful areas of future study. 
 
-Locations
-- Despite our positive results, concerns about the potential for abandonment to negatively impact species of conservation concern in some locations merit thoughtful consideration of how abandonment is likely to affect biodiversity in different sites. 
-
-Perhaps looking at population trends over time.
-
-
-
-
-  
-  
-## Conclusions {-}
-
-[This must include a statement of the key conclusions of the work, and implications for conservation policy and practice.]
-
-[Statement of what makes our study novel. However, at least, out study is the first to assess habitat available for each present species over larger landscapes, through time.]
-
-Ours is the first analysis to connect a time series of cropland abandonment with species specific distribution and habitat data to assess the impact of abandonment on biodiversity.
-
-Other research has indicated that when possible, the environmental impacts of agriculture (in terms of rarity-weighted species richness, carbon stocks, and water use) could be lessened through relocation and regeneration [@Beyer2022].
-Our results provide evidence that, on a multi-decadal timescale, cropland abandonment can result in gains in habitat for a majority of individual species.
-Considering each species individually is critical from a conservation perspective, in order to account for differences in species responses. 
-However, our results indicate that concerns of abandonment overwhelmingly harming species of conservation concern seem not to hold at our sites.
-
-Yet despite how encouraging these results are, our additional analyses emphasize that there is significantly more that can and should be done to maximize the conservation potential held by abandoned agricultural lands, particularly by providing incentives to reduce the recultivation of abandoned croplands. 
-Our results also demonstrate that even in regions with high levels of documented abandonment, where one could expect abandonment to have the greatest potential to benefit biodiversity (if those benefits are realized), we see that too often, these gains do not outweigh losses that took place either prior to or outside of abandonment.
-Reducing habitat loss remains a critical tool for conservation, even while simultaneously working to maximize the returns from broad changes taking place in agricultural landscapes. 
-
-
+In the first analysis to connect a high-resolution time series of cropland abandonment with species-specific distribution and habitat data, we provide evidence that cropland abandonment produced statistically significant gains in habitat for a majority of individual species on a multi-decadal timescale.
+Considering each species individually is critical from a conservation perspective in order to account for differences in species responses, and our results indicate that broad concerns that abandonment overwhelmingly harms species of conservation concern seem not to hold at the majority of our sites.
+Yet despite how encouraging these results are, our additional analyses of abandonment in the context of broader land cover changes at our sites emphasize that there is significantly more that must be done to maximize the conservation potential of abandoned agricultural lands, particularly by providing incentives to reduce the recultivation of abandoned croplands.
+However, our results also demonstrate that even in regions with high levels of documented abandonment (as represented by our sites), where one could expect abandonment to have the greatest potential to benefit biodiversity, these gains often do not outweigh habitat losses that took place either prior to or outside of abandonment.
+Therefore, while abandonment holds the potential to contribute meaningful amounts of habitat to these landscapes, reducing habitat loss remains a critical first step for conservation, even while simultaneously working to maximize the returns from cropland abandonment. 
+Only then can the broad changes reshaping agricultural landscapes begin to bend the curve of biodiversity loss.
 
 # Acknowledgements (100 words maximum) {.unnumbered}
 
