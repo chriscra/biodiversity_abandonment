@@ -562,6 +562,24 @@ jung_freq <- read_csv(paste0(p_proj, "resources/jung_freq_table.csv"))
 # crop with a buffer, to deal with NA issues: use this going forward
 # ---------------------------------------------- #
 
+# --------- no buff: --------- #
+site_jung_l1_no_buff <- lapply(1:11, function(i) {
+  terra::crop(jung_l1, ext(lcc[[i]]),
+              filename = paste0(p_derived, "site_jung/", 
+                                names(lcc[i]), "_jung_l1.tif"),
+              overwrite = TRUE
+              )})
+
+site_jung_l2_no_buff <- lapply(1:11, function(i) {
+  terra::crop(jung_l2, ext(lcc[[i]]),
+              filename = paste0(p_derived, "site_jung/", 
+                                names(lcc[i]), "_jung_l2.tif"),
+              overwrite = TRUE
+              )})
+
+
+
+# now, with a buffer, for resampling
 site_jung_l1 <- lapply(1:11, function(i) {
   terra::crop(jung_l1, ext(lc[[i]]) + rep(0.1, 4), # with a bit of buffer
               filename = paste0(p_derived, "site_jung/", 
@@ -644,24 +662,52 @@ names(site_jung_l2_30) <- site_df$site
 ```{r jung-freq}
 # ----------------------------- #
 # freq in each class
+site_jung_l1_freq_no_buff <- lapply(1:11, function(i) {
+  freq(site_jung_l1_no_buff[[i]]) %>% as_tibble() %>% mutate(site = site_df$site[i])
+  }) %>% bind_rows() %>% 
+  select("map_code" = "value", count, site) %>%
+  left_join(select(jung_table, map_code, Coarse_Name, IUCNLevel))
+
+site_jung_l1_freq_no_buff <- site_jung_l1_freq_no_buff %>% 
+  left_join(., 
+            site_jung_l1_freq_no_buff %>% 
+              group_by(site) %>%
+              summarise(total_px = sum(count))) %>%
+  mutate(hab_percent = 100*count/total_px) %>% 
+  ungroup() %>%
+  select(map_code, site, hab_percent, Coarse_Name, IUCNLevel, count, total_px)
+
+write_csv(site_jung_l1_freq_no_buff, file = paste0(p_derived, "site_jung_l1_freq_no_buff.csv"))
+
+site_jung_l2_freq_no_buff <- lapply(1:11, function(i) {
+  freq(site_jung_l2_no_buff[[i]]) %>% as_tibble() %>% mutate(site = site_df$site[i])
+  }) %>% bind_rows() %>% 
+  select("map_code" = "value", count, site) %>%
+  left_join(select(jung_table, map_code, Coarse_Name, IUCNLevel))
+
+site_jung_l2_freq_no_buff <- site_jung_l2_freq_no_buff %>% 
+  left_join(., 
+            site_jung_l2_freq_no_buff %>% 
+              group_by(site) %>%
+              summarise(total_px = sum(count))) %>%
+  mutate(hab_percent = 100*count/total_px) %>% 
+  ungroup() %>%
+  select(map_code, site, hab_percent, Coarse_Name, IUCNLevel, count, total_px)
+
+# write to file
+write_csv(site_jung_l2_freq_no_buff, file = paste0(p_derived, "site_jung_l2_freq_no_buff.csv"))
+
+
+
+
+# Frequency, at 30 m resolution:
+# ----------------------------- #
+# freq in each class
 site_jung_l1_30_freq <- lapply(1:11, function(i) {
   freq(site_jung_l1_30[[i]]) %>% as_tibble() %>% mutate(site = site_df$site[i])
   }) %>% bind_rows() %>% 
   select("map_code" = "value", count, site) %>%
   left_join(select(jung_table, map_code, Coarse_Name, IUCNLevel))
-
-site_jung_l2_30_freq <- lapply(1:11, function(i) {
-  freq(site_jung_l2_30[[i]]) %>% as_tibble() %>% mutate(site = site_df$site[i])
-  }) %>% bind_rows() %>% 
-  select("map_code" = "value", count, site) %>%
-  left_join(select(jung_table, map_code, Coarse_Name, IUCNLevel))
-
-site_jung_l2_30_freq %>% 
-  select(map_code, Coarse_Name, IUCNLevel) %>%
-  unique() %>% arrange(map_code) %>% print (n=37)
-
-# percent of each site in each habitat type:
-# what proportion of the abandoned land at each site ends up in forest vs. grassland?
 
 site_jung_l1_30_freq <- site_jung_l1_30_freq %>% 
   left_join(., 
@@ -671,7 +717,16 @@ site_jung_l1_30_freq <- site_jung_l1_30_freq %>%
   mutate(hab_percent = 100*count/total_px) %>% 
   ungroup() %>%
   select(map_code, site, hab_percent, Coarse_Name, IUCNLevel, count, total_px)
-  
+
+# write to file
+write_csv(site_jung_l1_30_freq, file = paste0(p_derived, "site_jung_l1_30_freq.csv"))
+
+
+site_jung_l2_30_freq <- lapply(1:11, function(i) {
+  freq(site_jung_l2_30[[i]]) %>% as_tibble() %>% mutate(site = site_df$site[i])
+  }) %>% bind_rows() %>% 
+  select("map_code" = "value", count, site) %>%
+  left_join(select(jung_table, map_code, Coarse_Name, IUCNLevel))
 
 site_jung_l2_30_freq <- site_jung_l2_30_freq %>% 
   left_join(., 
@@ -682,6 +737,16 @@ site_jung_l2_30_freq <- site_jung_l2_30_freq %>%
   ungroup() %>%
   select(map_code, site, hab_percent, Coarse_Name, IUCNLevel, count, total_px)
 
+# write to file
+write_csv(site_jung_l2_30_freq, file = paste0(p_derived, "site_jung_l2_30_freq.csv"))
+
+
+site_jung_l2_30_freq %>% 
+  select(map_code, Coarse_Name, IUCNLevel) %>%
+  unique() %>% arrange(map_code) %>% print (n=37)
+
+# percent of each site in each habitat type:
+# what proportion of the abandoned land at each site ends up in forest vs. grassland?
 
 site_jung_l2_30_freq %>% 
   filter(#hab_percent > 1,
@@ -732,16 +797,9 @@ site_jung_l1_30_freq %>%
 
 
 
-# write to file
-site_jung_l1_30_freq %>%
-  write_csv(file = paste0(p_derived, "site_jung_l1_30_freq.csv"))
 
 
-# write to file
-site_jung_l2_30_freq %>%
-  write_csv(file = paste0(p_derived, "site_jung_l2_30_freq.csv"))
-
-
+site_jung_l1_30_freq <- read_csv(file = paste0(p_derived, "site_jung_l1_30_freq.csv"))
 site_jung_l2_30_freq <- read_csv(file = paste0(p_derived, "site_jung_l2_30_freq.csv"))
 
 
@@ -839,7 +897,9 @@ jung_table
 
 # ------------------ Level 1 ---------------------- # 
 
-pdf(file = paste0(p_output, "plots/jung_l1_sites_colors.pdf"), width = 10, height = 7.5)
+# redoing this without a buffer:
+{
+  pdf(file = paste0(p_output, "plots/habitats/jung_l1_sites_colors_no_buff.pdf"), width = 10, height = 7.5)
 mval <- 1.5
 par(mfrow = c(3, 4), 
       # mar=c(0,0,0,0), 
@@ -850,18 +910,26 @@ par(mfrow = c(3, 4),
       )
     
 # i <- 3
+# plot(site_jung_l1[[i]], maxcell = 5000000,
+#        main = names(site_jung_l1[i]),
+#        mar = c(mval+0.5, mval, mval + 1.2, mval + 2), # bltr     
+#        type = "classes", #legend = FALSE,
+#        # col = tmp_table$cols,
+#        # levels = tmp_table$map_code,
+# )
 
 for(i in 1:11) {
   
   tmp_table <- #jung_table %>%
     jung_l1_table_clr %>%
     arrange(map_code) %>% 
-    filter(map_code %in% filter(site_jung_l1_30_freq,
+    filter(map_code %in% filter(site_jung_l1_freq_no_buff,
                                 site == site_df$site[i])$map_code
            )
   
-  plot(site_jung_l1[[i]], maxcell = 5000000,
-       main = names(site_jung_l1[i]),
+  plot(site_jung_l1_no_buff[[i]], maxcell = 5000000,
+       # main = names(site_jung_l1[i]),
+       colNA = "gray95", main = new_titles[i],
        mar = c(mval+0.5, mval, mval + 1.2, mval + 2), # bltr     
        type = "classes", #legend = FALSE,
        col = tmp_table$cols,
@@ -871,9 +939,9 @@ for(i in 1:11) {
 
 # pdf(file = paste0(p_output, "plots/jung_sites_colors_legend.pdf"), width = 7.5, height = 7.5)
 plot.new()
-plot(site_jung_l1[[i]], type = "classes",
+plot(site_jung_l1_no_buff[[i]], type = "classes",
      legend = "left",
-     plg = list(cex = 1,
+     plg = list(cex = 1.5,
                 title = "IUCN Habitat Types\n(Level 1)",
                                 # text.width = 100,
                 title.adj = 0#,
@@ -883,19 +951,24 @@ plot(site_jung_l1[[i]], type = "classes",
      legend.only = TRUE,
      levels =
        # str_wrap(
-         filter(arrange(jung_l1_table_clr, map_code),
-                    map_code %in% c(site_jung_l1_30_freq$map_code %>% unique() %>% sort()))$label,
+       jung_l1_table_clr %>% 
+       mutate(label = case_when(
+         map_code == 1400 ~ "1400: Artificial",
+         map_code == 500 ~ "500: Wetlands",
+         TRUE ~ label)) %>%
+       arrange(map_code) %>% 
+       filter(map_code %in% c(site_jung_l1_freq_no_buff$map_code %>% unique() %>% sort())) %>% .$label,
                 # width = 40, exdent = 5),
      col = filter(arrange(jung_l1_table_clr, map_code),
-                    map_code %in% c(site_jung_l1_30_freq$map_code %>% unique() %>% sort()))$cols
+                    map_code %in% c(site_jung_l1_freq_no_buff$map_code %>% unique() %>% sort()))$cols
      )
 
 dev.off()
-
+}
 
 # ------------------ Level 2 ---------------------- # 
 
-pdf(file = paste0(p_output, "plots/jung_l2_sites_colors.pdf"), width = 10, height = 7.5)
+{pdf(file = paste0(p_output, "plots/habitats/jung_l2_sites_colors_no_buff.pdf"), width = 10, height = 7.5)
 mval <- 1.5
 par(mfrow = c(3, 4), 
       # mar=c(0,0,0,0), 
@@ -905,18 +978,19 @@ par(mfrow = c(3, 4),
       # tcl = -0.2
       )
     
-# i <- 5
+# i <- 2
 
 for(i in 1:11) {
   
   tmp_table <- jung_table %>% 
     arrange(map_code) %>% 
-    filter(map_code %in% filter(site_jung_l2_freq,
+    filter(map_code %in% filter(site_jung_l2_freq_no_buff,
                                 site == site_df$site[i])$map_code
            )
   
-  plot(site_jung_l2[[i]], maxcell = 5000000,
-       main = names(site_jung_l2[i]),
+  plot(site_jung_l2_no_buff[[i]], maxcell = 5000000,
+       # main = names(site_jung_l2[i]),
+       colNA = "gray95", main = new_titles[i],
        mar = c(mval+0.5, mval, mval + 1.2, mval + 2), # bltr     
        type = "classes", #legend = FALSE,
        col = tmp_table$cols,
@@ -925,27 +999,51 @@ for(i in 1:11) {
   }
 
 # pdf(file = paste0(p_output, "plots/jung_sites_colors_legend.pdf"), width = 7.5, height = 7.5)
-plot.new()
-plot(site_jung_l2[[i]], type = "classes",
-     legend = "left",
-     plg = list(cex = 0.47,
-                title = "IUCN Habitat Types",
-                                # text.width = 100,
-                title.adj = 0#,
-                # y.intersp	= 1.1
-                # xjust = 0.5
-                ),
-     legend.only = TRUE,
-     levels =
-       # str_wrap(
-         filter(arrange(jung_table, map_code),
-                    map_code %in% c(site_jung_l2_freq$map_code %>% unique() %>% sort()))$label,
-                # width = 40, exdent = 5),
-     col = filter(arrange(jung_table, map_code),
-                    map_code %in% c(site_jung_l2_freq$map_code %>% unique() %>% sort()))$cols
-     )
+# plot.new()
+# plot(site_jung_l2[[i]], type = "classes",
+#      legend = "left",
+#      plg = list(cex = 0.47,
+#                 title = "IUCN Habitat Types",
+#                                 # text.width = 100,
+#                 title.adj = 0#,
+#                 # y.intersp	= 1.1
+#                 # xjust = 0.5
+#                 ),
+#      legend.only = TRUE,
+#      levels =
+#        # str_wrap(
+#          filter(arrange(jung_table, map_code),
+#                     map_code %in% c(site_jung_l2_freq$map_code %>% unique() %>% sort()))$label,
+#                 # width = 40, exdent = 5),
+#      col = filter(arrange(jung_table, map_code),
+#                     map_code %in% c(site_jung_l2_freq$map_code %>% unique() %>% sort()))$cols
+#      )
 
 dev.off()
+}
+
+
+
+# legend via ggplot:
+ggpubr::get_legend(
+  ggplot(data = data.frame(speed = 1:34, dist = 1:34),
+       mapping = aes(x = speed, y = dist, fill = as_factor(speed))) + 
+  geom_col(col = "black") + 
+  scale_fill_manual(
+    name = "IUCN Habitat Types",
+    labels =
+       # str_wrap(
+         filter(arrange(jung_table, map_code),
+                    map_code %in% c(site_jung_l2_freq_no_buff$map_code %>% unique() %>% sort()))$label %>% str_wrap(., width = 30),
+                # width = 40, exdent = 5),
+     values = filter(arrange(jung_table, map_code),
+                    map_code %in% c(site_jung_l2_freq_no_buff$map_code %>% unique() %>% sort()))$cols) + 
+  theme(legend.position = "bottom",
+        legend.spacing = unit(-4, units = "mm")) + 
+  guides(fill = guide_legend(ncol = 3, title.position = "top"))
+  ) %>%
+ggsave(filename = paste0(p_plots, "habitats/jung_l2_legend_gg.pdf"), 
+    width = 6.5, height = 5, units = "in")
 
 ```
 
@@ -3406,7 +3504,8 @@ fancy_labels
 
 year_index <- 1
 
-lapply(c(1, 6, 11, 16, 21, 26, 31),
+lapply(c(1, 6, 11, 16, 21, 26, 31
+         ),
        function(year_index) {
   
   pdf(file = paste0(p_plots, "land_cover_", 1986 + year_index, ".pdf"), width = 7, height = 6)
@@ -3470,6 +3569,23 @@ plot(lcc[[i]]$y2017, type = "classes",
      legend = "left",
      plg = list(cex = 1.8,
                 title = "Land cover classes",
+                                # text.width = 100,
+                title.adj = 0#,
+                # y.intersp	= 1.1
+                # xjust = 0.5
+                ),
+     legend.only = TRUE)
+
+dev.off()
+
+pdf(file = paste0(p_output, "plots/lc_legend_simple.pdf"), width = 3, height = 3)
+plot.new()
+plot(lcc[[i]]$y2017, type = "classes",
+     col = lc_plot_cols$color, 
+     levels = lc_plot_cols$name,
+     legend = "left",
+     plg = list(cex = 1.8,
+                title = "Land cover",
                                 # text.width = 100,
                 title.adj = 0#,
                 # y.intersp	= 1.1
