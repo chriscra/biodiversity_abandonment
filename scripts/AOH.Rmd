@@ -1998,12 +1998,55 @@ aoh %>%
     aoh_type,
            vert_class, passage_type) %>%
   summarise(n_sp = length(unique(binomial))) %>% # 1688
-  group_by(aoh_type, passage_type) %>% summarise(total_mammals_and_birds = sum(n_sp))
-  
+  ungroup() %>% group_by(aoh_type, passage_type) %>%
+  mutate(total_mammals_and_birds = sum(n_sp)) %>%
+  ungroup() %>% group_by(aoh_type) %>% mutate(N = sum(n_sp))
 
-aoh_trends_by_sp %>% names()
+
+# missing one species in the second totaling:
+spl_tmp1 <- aoh %>% 
+  filter(aoh_type == "full_iucn", aoh > 0,
+         vert_class != "amp", passage_type == "exclude_passage") %>%
+  select(binomial) %>% unique()
+spl_tmp2 <- aoh_trends_by_sp %>% 
+  filter(aoh_type == "full_iucn",
+         vert_class != "amp", passage_type == "exclude_passage") %>%
+  select(binomial) %>% unique()
+
+spl_tmp1 %>%
+  filter(!binomial %in% spl_tmp2$binomial)
+
+aoh %>% filter(binomial == "Phoenicurus erythrogastrus")
+habitat_prefs %>% filter(binomial == "Phoenicurus erythrogastrus") %>%
+  select(binomial, season, IUCNLevel, map_code)
+jung_hab_type_area_df %>% filter(site == "shaanxi", habitat_type %in% c(306, 404, 600))
+
+species_ranges %>% filter(binomial == "Phoenicurus erythrogastrus") %>% st_geometry() %>%
+  plot(border = "red", add = TRUE)
+site_sf %>% filter(site == "shaanxi") %>% st_geometry() %>% plot()
+
+# ------------
+# mature forest obligates
+aoh_trends_by_sp %>% 
+  filter(passage_type == "exclude_passage",
+         vert_class != "amp", 
+         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
+         !grepl("potential", aoh_type),
+         # aoh_type == "crop_abn_iucn",
+         # !(vert_class == "bird" & mature_forest_obl > 0.5)
+         ) %>%
+  group_by(aoh_type, vert_class, passage_type, 
+           mature = case_when(
+             mature_forest_obl <= 0.5 ~ 0,
+             mature_forest_obl > 0.5 ~ 1),
+           # overall_trend, trend_direction, trend_consistency
+           ) %>%
+  summarise(n_sp = n()) %>% 
+  ungroup() %>% group_by(aoh_type, vert_class) %>% mutate(vN = sum(n_sp)) %>%
+  ungroup() %>% group_by(aoh_type) %>% mutate(N = sum(n_sp))
+
 aoh_trends_by_sp %>%
-  select(binomial )
+  filter(vert_class == "mam" & mature_forest_obl < 0.5)
 
 # small-ranged species
 aoh_trends_by_sp %>% 
@@ -2936,8 +2979,72 @@ lapply(seq_along(gg_aoh_sp_obs_by_site), function(j) {
 })
 
 
-ggplotly(gg_aoh_trend_lines_by_site$crop_abn_iucn)
+ggplotly(gg_aoh_sp_obs_by_site$crop_abn_iucn)
 ```
+
+```{r compare-case-one-site}
+aoh_types[c(6, 3, 1)]
+gg_compare_cases_one_site <-
+  aoh %>%
+    filter(site == "shaanxi",
+           vert_class == "bird",
+           aoh_type %in% aoh_types[c(6, 3, 1)],
+           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           passage_type == "exclude_passage"
+           ) %>%
+    mutate(aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 3, 1)])) %>%
+    left_join(aoh_trends) %>%
+    ggplot(aes(x = year, y = aoh/10^6, col = trend,
+               group = binomial
+               )) +
+    geom_line(alpha = 0.15) + 
+    theme_classic() + 
+    scale_color_manual(labels = palette_labels[c(1, 3, 6)],
+                       values = palette_du_jour[c(1, 3, 6)]) +
+    scale_fill_manual(labels = palette_labels[c(1, 3, 6)],
+                      values = palette_du_jour[c(1, 3, 6)]) +
+    labs(y = expression("AOH (10"^{6}*" ha)"),
+         x = "Year", col = "Trend", fill = "Mean Trend",
+         caption = paste0(filter(aoh_type_df, label == i)$p5)) + 
+    guides(color = guide_legend(override.aes = list(alpha = 1, size = 1.5, order = 1))) +
+    theme(
+      # legend.position = c(0.9, 0.125),
+      legend.position = "bottom",
+      legend.background = element_blank(),
+      # legend.spacing = unit(-4, units = "mm")
+      ) +
+    facet_grid(cols = vars(aoh_type), scales = "free_y", 
+               labeller = as_labeller(c(fancy_labels, aoh_type_labels)))
+  
+
+ggplotly(gg_compare_cases_one_site + theme(legend.position = "none"))
+
+
+
+# find a bird species that gains in one, loses in another
+aoh_trends %>%
+  filter(
+    # site == "wisconsin",
+         vert_class == "bird",
+         aoh_type %in% aoh_types[c(6, 3, 1)],
+         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         passage_type == "exclude_passage"
+         ) %>%
+  mutate(aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 3, 1)])) %>%
+  pivot_wider(id_cols = c("vert_class", "site", "binomial", 
+                          "common_names", "redlistCategory"),
+              names_from = "aoh_type", values_from = "trend") %>%
+  filter(crop_abn_iucn == "gain",
+         max_abn_iucn == "loss",
+         ) %>%
+  arrange(desc(redlistCategory)) %>%
+  head(n = 20) %>%
+  print(n = 100)
+
+
+```
+
+
 
 
 # Figures 
@@ -3676,6 +3783,8 @@ gg_aoh_iucn_overall_tmp <-
                     values = palette_du_jour) + 
       scale_x_discrete(labels = c("Threatened" = "Overall",
                                   "Not Threatened" = "Overall")) +
+      scale_y_continuous(n.breaks = 8) +
+
   theme(legend.position = "none", axis.ticks.x = element_blank(),
         plot.background = element_blank()) +
       # theme(strip.text.y.right = element_blank()) +
@@ -4271,7 +4380,8 @@ lapply(
          )) +
   geom_col(position = position_stack(reverse = TRUE), color = "black", size = .25) +
   theme_classic() +
-  scale_x_discrete(labels = aoh_type_labels) +
+  scale_x_discrete(labels = aoh_type_labels) + 
+    scale_y_continuous(breaks = seq(from = 0, to = 1000, by = 100)) +
   labs(x = NULL, y = "Number of Species") +
   scale_fill_manual(name = "Trend", 
                     labels = palette_labels,
@@ -4814,7 +4924,6 @@ j <- 1
 threat_statuses
 
 
-  
 gg_aoh_obs_v_pot_overall_tmp <-
   # lapply(c("crop_abn_iucn", "crop_abn_potential_iucn"), function(i) {
   aoh_trends_by_sp %>%
@@ -4849,6 +4958,8 @@ gg_aoh_obs_v_pot_overall_tmp <-
     labels = c("crop_abn_potential_iucn" = "Pot.",
                "crop_abn_iucn" = "Obs.")
     ) +
+  scale_y_continuous(breaks = seq(from = 0, to = 1000, by = 100)) +
+
   theme(legend.position = "none", axis.ticks.x = element_blank(),
         plot.background = element_blank()) +
       # theme(strip.text.y.right = element_blank()) +
@@ -5238,6 +5349,502 @@ ggsave(aoh_all_types_by_site_tmp,
        width = 7, height = 7.5, units = "in")
 })
 ```
+
+## Methods figure
+
+
+```{r plot-trajectory-per-pixel}
+bs <- brick(paste0(p_dat, "Abandonment/belarus_small.tif"))
+names(bs) <- gsub("smolensk", "y", names(bs))
+bs_dt <- as.data.table.raster(bs)
+
+
+# subset the data.table, for plotting
+sub <- bs_dt[1:10, -c(1,2)]
+sub[, pixel := c(1:10)]
+
+sub_melt <- melt(sub, id.vars = "pixel", 
+                 variable.name = "year", 
+                 value.name = "land_use", na.rm = TRUE)
+
+sub_melt$year <- gsub("y", "", sub_melt$year)
+
+str(sub_melt)
+
+# set colors for plotting
+show_col(terrain.colors(9))
+
+
+# this plot shows the land-use trajectories of 10 individual pixels.
+# gg_10_px_traj <- 
+  ggplot(data = sub_melt, 
+         mapping = aes(x = year, y = land_use, group = pixel)) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
+  geom_line(mapping = aes(color = factor(land_use)), size = 2) +
+  facet_grid(rows = vars(pixel), scales = "free_x", switch = "x") + 
+  ylim(1, 4) + 
+  scale_color_manual(name = "Land Cover",
+                     labels = c("1" = "1. Non-veg",
+                                "2" = "2. Woody veg",
+                                "3" = "3. Crop",
+                                "4" = "4. Grassland"),
+                     values = c("1" = "gray80",
+                                "2" = terrain.colors(9)[1], # dark green
+                                "3" = terrain.colors(9)[5], # gold
+                                "4" = terrain.colors(9)[3] # light green
+                                )
+                     ) 
+
+  sub_melt %>% filter(pixel == 6) %>% arrange(pixel, year)
+  
+gg_10_px_traj
+#       1. Non-vegetated area (e.g. water, urban, barren land)
+#       2. Woody vegetation
+#       3. Cropland 
+#       4. Herbaceous land (e.g. grassland)
+
+# manual:
+
+rep(1:3, each = 31)
+
+gg_sample_trajectory <-
+  tibble(
+    year = rep(1987:2017, 3),
+    land_cover = c(
+      rep(NA, 6), rep(1, 12), rep(2, 13),
+      rep(3, 6), rep(1, 12), rep(2, 13),
+      rep(3, 6), rep(1, 12), rep(2, 13)),
+    pixel = rep(1:3, each = 31),
+    label = "sample"
+  ) %>%
+  ggplot(mapping = aes(x = year, y = land_cover, group = pixel)) +
+  theme_classic() + 
+  geom_line(mapping = aes(color = factor(land_cover)), size = 2,
+            show.legend = TRUE) +
+  facet_grid(rows = vars(pixel), cols = vars(label),
+             scales = "free_x", #switch = "x",
+             labeller = as_labeller(c("1" = "Case 1", "2" = "Case 2", "3" = "Case 3",
+                                      "sample" = "Individual Pixel"))
+             ) +
+    geom_vline(xintercept = 1987+6, linetype = 2) +
+    # annotate("text", label = "--> Scale 1", x = 1993, y = 3.1, hjust = 0, size = 4) +
+
+    labs(x = "Year", y = "Land Cover") + 
+    scale_y_continuous(breaks = c(1, 2, 3), 
+                       labels = c("1" = "Crop",
+                                  "2" = "Grass.",
+                                  "3" = "For.")) + 
+    scale_x_continuous(n.breaks = 6) +
+  scale_color_manual(name = "Land Cover",
+                     labels = c("1" = "Cropland",
+                                "2" = "Grassland",
+                                "3" = "Forest",
+                                "4" = "Non-veg."),
+                     values = c("1" = terrain.colors(9)[5], # gold
+                                "2" = terrain.colors(9)[3], # light green
+                                "3" = terrain.colors(9)[1], # dark green
+                                "4" = "gray80"
+                                )
+                     ) +
+    theme(#legend.position = "bottom",
+          axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
+  guides(col = guide_legend(override.aes= list(size = 6)))
+
+
+
+ggsave(gg_sample_trajectory + theme(legend.position = "none",
+                                    strip.text.y = element_blank()),
+       filename = paste0(p_plots, "methods/", "sample_trajectories_v3.pdf"),
+       width = 2.1, height = 4.5, units = "in")
+
+
+# just the legend
+ggsave(ggpubr::get_legend(gg_sample_trajectory),
+       filename = paste0(p_plots, "methods/", "sample_trajectories_legend.pdf"),
+       width = 4.4, height = .3, units = "in")
+
+lc_plot_cols
+
+# map top label:
+ggsave(tibble(
+    year = rep(1987:2017, 3),
+    land_cover = c(
+      rep(NA, 6), rep(1, 12), rep(2, 13),
+      rep(3, 6), rep(1, 12), rep(2, 13),
+      rep(3, 6), rep(1, 12), rep(2, 13)),
+    pixel = rep(1:3, each = 31),
+    label = "sample"
+  ) %>%
+  ggplot(mapping = aes(x = year, y = land_cover, group = pixel)) +
+  theme_classic() + 
+  geom_line(mapping = aes(color = factor(land_cover)), size = 2,
+            show.legend = TRUE) +
+  facet_grid(rows = vars(pixel), cols = vars(label),
+             scales = "free_x", #switch = "x",
+             labeller = as_labeller(c("1" = "Case 1", "2" = "Case 2", "3" = "Case 3",
+                                      "sample" = "Spatial Scope"))) + 
+    theme(legend.position = "none",
+          strip.text.y = element_blank()),
+  filename = paste0(p_plots, "methods/", "map_label.pdf"),
+       width = 1.6, height = 4.5, units = "in")
+```
+
+```{r sample-traj-final}
+sample_traj_df <- tibble(
+    year = rep(rep(1987:2017, 10), 3),
+    land_cover = rep(c(
+      rep(2, 8), rep(3, 10), rep(4, 13),
+      rep(2, 4), rep(3, 10), rep(4, 8), rep(2, 9),
+      rep(3, 15), rep(4, 8), rep(2, 3), rep(4, 5),
+      rep(4, 7), rep(3, 8), rep(4, 8), rep(2, 8),
+      rep(3, 10), rep(4, 6), rep(2, 10), rep(3, 5),
+      rep(4, 10), rep(3, 10), rep(4, 11),
+      
+      rep(2, 15), rep(3, 16), 
+      rep(3, 31),
+      rep(4, 20), rep(2, 11),
+      rep(2, 31)
+      ), 3),
+    include = c(c(
+                rep(0, 8), rep(1, 23),
+                rep(0, 4), rep(1, 27),
+                rep(1, 15), rep(1, 16),
+                rep(0, 7), rep(1, 24),
+                rep(1, 10), rep(1, 21),
+                rep(0, 10), rep(1, 21),
+                rep(0, 15), rep(0, 16), 
+                rep(0, 31),
+                rep(0, 20), rep(0, 11),
+                rep(0, 31)
+                ),
+                c( 
+                rep(1, 6), rep(1, 25),
+                rep(1, 4), rep(1, 27),
+                rep(1, 15), rep(1, 16),
+                rep(1, 7), rep(1, 24),
+                rep(1, 10), rep(1, 21),
+                rep(1, 10), rep(1, 21),
+                rep(0, 15), rep(0, 16),
+                rep(0, 31),
+                rep(0, 20), rep(0, 11),
+                rep(0, 31)
+                ),
+                rep(1, 31*10)
+                ),
+    pixel = as_factor(rep(rep(1:10, each = 31), 3)),
+    label = rep(1:3, each = 31*10),
+    type = "sample"
+  ) %>%
+  mutate(abandoned_pixels = case_when(
+    pixel %in% 1:6 ~ "yes",
+    pixel %in% 7:10 ~ "no"
+  )) %>%
+  mutate(abandoned_pixels = fct_relevel(abandoned_pixels, c("yes", "no")))
+
+
+# ----------------------------- #
+# horizontal
+
+excl_rows <- sample_traj_df %>% 
+  filter(include == 0) %>%
+  bind_rows(
+  tibble(
+    year = c(1995, 1991, 1994, 1997),
+    land_cover = c(2, 2, 4, 4),
+    include = rep(0, 4),
+    pixel = as_factor(c(1, 2, 4, 6)),
+    label = 1,
+    type = "sample",
+    abandoned_pixels = "yes"
+    )) %>%   mutate(abandoned_pixels = fct_relevel(abandoned_pixels, c("yes", "no")))
+
+
+gg_sample_trajectory_horiz <-
+   sample_traj_df %>%
+  ggplot(mapping = aes(x = year, 
+                       y = fct_reorder(pixel, desc(pixel)), 
+                       alpha = as_factor(include),
+                       color = factor(land_cover),
+                       # fill = factor(land_cover),
+                       group = pixel)) +
+  theme_classic() + 
+  geom_line(size = 3) +
+  geom_line(data = excl_rows,
+            mapping = aes(x = year, y = fct_reorder(pixel, desc(pixel)), group = pixel),
+            inherit.aes = FALSE, linetype = 3, lineend = "butt",
+            # size = 2
+            ) +
+     
+  facet_grid(rows = vars(abandoned_pixels), cols = vars(label), scales = "free", space = "free",
+               labeller = as_labeller(c("1" = "Calculation 1", "2" = "Calculation 2",
+                                      "3" = "Calculation 3", "yes" = "Abandoned", "no" = "Not abn.",
+                                      "sample" = "Land Cover Trajectories"))) +
+    labs(x = "Year", y = "Individual Example Pixels") + 
+  scale_alpha_manual(values = c(0.3, 1)) +
+  scale_color_manual(name = "Land Cover",
+                     labels = c("2" = "Forest", "3" = "Cropland", "4" = "Grassland"),
+                     values = c("2" = terrain.colors(9)[1], # dark green
+                                "3" = terrain.colors(9)[5], # gold
+                                "4" = terrain.colors(9)[3] # light green
+                                )) +
+    theme(legend.position = c(0.53, -0.3),
+          plot.margin = unit(c(2,2,6,2), units = "mm"),
+          # axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0),
+          legend.box.margin = unit(c(0,0,0,0), units = "mm"),
+          legend.margin = margin(0,0,0,0, unit = "mm"),
+          legend.background = element_blank(),
+          legend.spacing = unit(0, units = "mm")
+          ) +
+  guides(col = guide_legend(override.aes= list(size = 6), nrow = 1, title.position = "left"),
+         alpha = "none")
+
+# save
+ggsave(gg_sample_trajectory_horiz,
+       filename = paste0(p_plots, "methods/", "sample_trajectories_horiz.pdf"),
+       height = 2.5, width = 5.5, units = "in")
+
+# ----------------------------- #
+# vertical
+
+gg_sample_trajectory_vert <-
+   sample_traj_df %>%
+  ggplot(mapping = aes(x = year, y = pixel, col = land_cover, 
+                       alpha = as_factor(include),
+                       group = pixel)) +
+  theme_classic() + 
+  geom_line(mapping = aes(color = factor(land_cover)), size = 3,
+            show.legend = TRUE) +
+  facet_nested(label + abandoned_pixels ~ type, scales = "free", space = "free",
+               labeller = as_labeller(c("1" = "Calculation 1",
+                                      "2" = "Calculation 2",
+                                      "3" = "Calculation 3",
+                                      "yes" = "Abandoned", "no" = "Not abn.",
+                                      "sample" = "Land Cover Trajectories"))) +
+    labs(x = "Year", y = "Individual Example Pixels") + 
+    scale_x_continuous(n.breaks = 6) +
+  scale_alpha_manual(values = c(0.2, 1)) +
+  scale_color_manual(name = "Land\nCover",
+                     labels = c("2" = "Forest",
+                                "3" = "Cropland", "4" = "Grassland"
+                                # "1" = "Non-veg."
+                                ),
+                     values = c(
+                                "2" = terrain.colors(9)[1], # dark green
+                                "3" = terrain.colors(9)[5], # gold
+                                "4" = terrain.colors(9)[3] # light green
+                                # "1" = "gray80"
+                                )
+                     ) +
+    theme(legend.position = c(0.53, -0.15),
+          plot.margin = unit(c(2,2,13,2), units = "mm"),
+          axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0),
+          legend.box.margin = unit(c(0,0,0,0), units = "mm"),
+          legend.margin = margin(0,0,0,0, unit = "mm"),
+          legend.background = element_blank(),
+          legend.spacing = unit(0, units = "mm")
+          ) +
+  guides(col = guide_legend(override.aes= list(size = 4), nrow = 2, title.position = "left"),
+         alpha = "none")
+
+# save
+ggsave(gg_sample_trajectory_vert,
+       filename = paste0(p_plots, "methods/", "sample_trajectories_vert.pdf"),
+       width = 2.5, height = 6.5, units = "in")
+```
+
+
+
+
+```{r indiv-sp-trend}
+sp_name <- "Oenanthe oenanthe"
+sp_name <- "Turdus iliacus"
+site_index <- 2
+
+gg_aoh_example_sp <-
+  aoh %>%
+    filter(
+      site %in% site_df$site[site_index],
+      binomial == sp_name,
+      vert_class == "bird",
+      aoh_type %in% aoh_types[c(6, 3, 1)],
+      !(vert_class == "bird" & mature_forest_obl > 0.5),
+      passage_type == "exclude_passage"
+      ) %>%
+  mutate(aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 3, 1)])) %>% 
+    
+  ggplot(mapping = aes(x = year, y = aoh/10^6, 
+                       # col = aoh_type, group = aoh_type
+                       )) + 
+      theme_classic() + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = 0.95) +
+  labs(x = "Year", y = expression("AOH (10"^{6}*" ha)"), 
+       # title = sp_name
+       ) +
+  scale_x_continuous(n.breaks = 6) +
+
+  facet_grid(
+    rows = vars(aoh_type), cols = vars(site), scales = "free",
+    # labeller = as_labeller(c(aoh_type_labels, cap_labels))
+     labeller = as_labeller(c("crop_abn_iucn" = "Case 1", 
+                              "max_abn_iucn" = "Case 2", 
+                              "full_iucn" = "Case 3", 
+                              cap_labels))) +
+
+    theme(legend.position = "bottom",
+          axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0))
+  
+    # save plot
+ggsave(plot = gg_aoh_example_sp,
+       filename = paste0(p_output, "plots/methods/", "aoh_example_sp_", 
+                         sp_name, ".pdf"),
+       width = 2.5, height = 4.5, units = "in")
+
+```
+
+```{r sample-maps}
+site_index <- 2
+
+lc_cols_dark <- data.frame(
+  color = c("gray80", # gray, 1. Non-veg
+            "dark green", # woody veg dark
+            # terrain.colors(9)[1], # "#00A600" # dark green, 2. Woody veg
+            terrain.colors(9)[5], # "#E8C32E" # gold, 3. Crop
+            terrain.colors(9)[3]  # "#8BD000" # light green, 4. Grassland
+  ),
+  name = c("Non-veg.", 
+           "Forest", 
+           "Cropland", 
+           "Grassland"),
+  breaks = c(1, 2, 3, 4))
+
+i <- 9
+# full extent
+
+s_lcc <- ratify(raster(lcc[[i]]$y2017))
+lcc_levels <- levels(s_lcc)
+lcc_levels$landcover <- lc_plot_cols$name
+lcc_levels$class <- c('A1', 'B2', 'C3', 'D4')
+
+levels(s_lcc) <- lcc_levels
+levelplot(s_lcc, col.regions = lc_plot_cols$color)
+
+plot(s_lcc)
+
+
+# p_entire_extent <-
+  levelplot(
+        lcc[[i]]$y2017,
+        main = site_sf$lab_desc[i],
+        colorkey = FALSE,
+        col.regions = lc_plot_cols$color,
+        xlab = NULL, ylab = NULL,
+        margin = FALSE,
+        # maxpixels = 1e7
+        )
+
+levelplot(max_abn_lcc[[i]]$y2017,
+          xlab = NULL, ylab = NULL,
+          margin = FALSE)
+
+levelplot(
+        max_abn_lcc[[i]]$y2017,
+        main = site_sf$lab_desc[i],
+        # maxpixels = 1e6,
+        colorkey = TRUE,
+        col.regions = lc_plot_cols$color[2:4],
+        xlab = NULL, ylab = NULL,
+        margin = FALSE
+        )
+
+
+# terra plots
+
+# full extent:
+# terra_plot_full <- 
+lapply(1:11, function(i) {
+  pdf(file = paste0(p_plots, "methods/maps/full_extent_", site_df$site[i], "_2017.pdf"),
+      width = 2, height = 2)
+par(bg=NA, mar=c(0,0,0,0), oma=c(0,0,0,0))
+terra::plot(
+  lcc[[i]]$y2017, type = "classes",
+  col = lc_plot_cols$color, 
+  levels = lc_plot_cols$name,
+  mar = c(1.2,1.2,0.5,0.5), legend = F)
+dev.off()
+})
+
+
+lapply(1:11, function(i) {
+  pdf(file = paste0(p_plots, "methods/maps/full_extent_", site_df$site[i], "_1987.pdf"),
+      width = 2, height = 2)
+par(bg=NA, mar=c(0,0,0,0), oma=c(0,0,0,0))
+terra::plot(
+  lcc[[i]]$y1987, type = "classes",
+  col = lc_plot_cols$color, 
+  levels = lc_plot_cols$name,
+  mar = c(1.2,1.2,0.5,0.5), legend = F)
+dev.off()
+})
+
+
+lapply(1:11, function(i) {
+  pdf(file = paste0(p_plots, "methods/maps/full_extent_", site_df$site[i], "_2000.pdf"),
+      width = 2, height = 2)
+par(bg=NA, mar=c(0,0,0,0), oma=c(0,0,0,0))
+terra::plot(
+  lcc[[i]]$y2000, type = "classes",
+  col = lc_plot_cols$color, 
+  levels = lc_plot_cols$name,
+  mar = c(1.2,1.2,0.5,0.5), legend = F)
+dev.off()
+})
+
+# abandoned pixels only:
+lapply(1:11, function(i) {
+  pdf(file = paste0(p_plots, "methods/maps/abn_", site_df$site[i], "_2017.pdf"),
+      width = 2, height = 2)
+par(bg=NA, mar=c(0,0,0,0), oma=c(0,0,0,0))
+terra::plot(
+  max_abn_lcc[[i]]$y2017, type = "classes",
+    col = lc_plot_cols$color[2:4], 
+    levels = lc_plot_cols$name[2:4],
+  mar = c(1.2,1.2,0.5,0.5), legend = F)
+dev.off()
+})
+
+lapply(1:11, function(i) {
+  pdf(file = paste0(p_plots, "methods/maps/abn_", site_df$site[i], "_1987.pdf"),
+      width = 2, height = 2)
+par(bg=NA, mar=c(0,0,0,0), oma=c(0,0,0,0))
+terra::plot(
+  max_abn_lcc[[i]]$y1987, type = "classes",
+    col = lc_plot_cols$color[2:4], 
+    levels = lc_plot_cols$name[2:4],
+  mar = c(1.2,1.2,0.5,0.5), legend = F)
+dev.off()
+})
+
+# terra_plot_abn <- 
+  raster::plot(
+    max_abn_lcc[[i]]$y2007, type = "classes",
+    col = lc_plot_cols$color[2:4], 
+    levels = lc_plot_cols$name[2:4]
+    )
+
+
+install.packages("gridGraphics")
+library(gridGraphics)
+
+plot_grid(gg_sample_trajectory,
+          terra_plot_abn,
+          # as_ggplot(terra_plot_abn),
+          ncol = 2)
+
+
+```
+
 
 
 ## Old Plots
