@@ -300,10 +300,30 @@ names(site_pnv_30) <- site_df$site
 # ----------------------- #
 # -------- Jung IUCN Habitat Types ---------- #
 # ----------------------- #
+
+# level 1, at ~ 100m resolution (i.e., not resampled to 30m), no buffer
+site_jung_l1_no_buff <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "site_jung/", site_df$site[i], "_jung_l1.tif"))
+})
+names(site_jung_l1_no_buff) <- site_df$site
+
+# level 2, at ~ 100m resolution (i.e., not resampled to 30m), no buffer
+site_jung_l2_no_buff <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "site_jung/", site_df$site[i], "_jung_l2.tif"))
+})
+names(site_jung_l2_no_buff) <- site_df$site
+
+
+# level 1, at ~ 100m resolution (i.e., not resampled to 30m)
+site_jung_l1 <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "site_jung/", site_df$site[i], "_jung_l1_buff.tif"))
+})
+names(site_jung_l1) <- site_df$site
+
 # level 2, at ~ 100m resolution (i.e., not resampled to 30m)
 site_jung_l2 <- lapply(1:11, function(i) {
   rast(paste0(p_derived, "site_jung/", site_df$site[i], "_jung_l2_buff.tif"))
-  })
+})
 names(site_jung_l2) <- site_df$site
 
 # resampled to ~30 m resolution
@@ -319,6 +339,7 @@ site_jung_l2_30 <- lapply(1:11, function(i) {
   })
 names(site_jung_l2_30) <- site_df$site
 
+site_jung_l2_freq <- read_csv(file = paste0(p_derived, "site_jung_l2_30_freq.csv"))
 
 # distribution of habitat types at each site, for adjusting area of habitat estimates
 jung_hab_type_area_df <- read_csv(file = paste0(p_derived, "jung_hab_type_area_df.csv")) %>%

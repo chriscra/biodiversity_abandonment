@@ -87,10 +87,10 @@ lc_plot_cols <- data.frame(
             terrain.colors(9)[5], # "#E8C32E" # gold, 3. Crop
             terrain.colors(9)[3]  # "#8BD000" # light green, 4. Grassland
   ),
-  name = c("1 Non veg.", 
-           "2 Forest", 
-           "3 Crop", 
-           "4 Grassland"),
+  name = c("Non-veg.", 
+           "Forest", 
+           "Cropland", 
+           "Grassland"),
   breaks = c(1, 2, 3, 4))
 
 

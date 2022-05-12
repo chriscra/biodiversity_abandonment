@@ -39,7 +39,8 @@ needed_packages <- c(
   "ggnewscale", # for adding multiple color or fill scales
   "patchwork", "cowplot", # for combining multiple plots
   "ggridges",
-  "ggpubr", # for extracting legends
+  "ggpubr", # for extracting legends,
+  "ggh4x", # for nested facet labels, among other things
   "animation", "magick", "ggrepel",
   "plotly", # plotly makes interactive graphics!
   
