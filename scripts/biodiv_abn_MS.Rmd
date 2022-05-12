@@ -1683,6 +1683,25 @@ knitr::include_graphics(path = paste0(p_plots, "land_cover_1987.pdf"))
 knitr::include_graphics(path = paste0(p_plots, "land_cover_2017.pdf"))
 ```
 
+(ref:caption-jung-l1) IUCN Habitat types (Level 1), derived from @Jung2020a, for each of our 11 sites from @Yin2020.
+
+```{r jung-l1, fig.cap = '(ref:caption-jung-l1)'}
+knitr::include_graphics(path = paste0(p_plots, "habitats/jung_l1_sites_colors_no_buff.pdf"))
+```
+
+(ref:caption-jung-l2) IUCN Habitat types (Level 2), derived from @Jung2020a, for each of our 11 sites from @Yin2020. See associated caption in Fig \@ref(fig:jung-l2-legend).
+
+```{r jung-l2, fig.cap = '(ref:caption-jung-l2)'}
+knitr::include_graphics(path = paste0(p_plots, "habitats/jung_l2_sites_colors_no_buff.pdf"))
+```
+
+(ref:caption-jung-l2-legend) Legend for IUCN Habitat types (Level 2) shown in Fig. \@ref(fig:jung-l2), derived from @Jung2020a.
+
+```{r jung-l2-legend, fig.cap = '(ref:caption-jung-l2-legend)'}
+knitr::include_graphics(path = paste0(p_plots, "habitats/jung_l2_legend_gg.pdf"))
+```
+
+
 (ref:caption-aoh-sp-obs-crop-abn) Observed AOH for all bird and mammals species at each site. AOH is calculated for only pixels that were abandoned at least once, from the year of first cultivation through 2017 (Calculation 1). Each individual species' trend is visualized with transparency, so that darker trend lines indicate many species with overlapping trends.
 
 ```{r aoh-sp-obs-crop-abn, fig.cap = '(ref:caption-aoh-sp-obs-crop-abn)'}
@@ -1904,13 +1923,6 @@ knitr::include_graphics(path = paste0(p_plots, "aoh/trend_summary_by_range_side"
 ```
 
 ## Future Figures (TBD)
-
-Maps, including:
-
-1. Habitat types of abandonment at each site in five-year periods
-2. Habitat maps for 2015, directly from @Jung2020a.
-3. Land cover of abandonment (perhaps for each five-year period)
-4. Land cover of whole landscape (for five-year periods)
 
 Area line charts, including two types of area:
 
