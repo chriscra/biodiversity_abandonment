@@ -1045,6 +1045,31 @@ ggpubr::get_legend(
 ggsave(filename = paste0(p_plots, "habitats/jung_l2_legend_gg.pdf"), 
     width = 6.5, height = 5, units = "in")
 
+
+
+# just shaanxi's legend via ggplot:
+freq_tmp <- site_jung_l2_freq_no_buff %>% filter(site == "shaanxi")
+
+ggpubr::get_legend(
+  ggplot(data = data.frame(speed = 1:17, dist = 1:17),
+       mapping = aes(x = speed, y = dist, fill = as_factor(speed))) + 
+  geom_col(col = "black") + 
+  scale_fill_manual(
+    name = "IUCN Habitat Types",
+    labels =
+       # str_wrap(
+         filter(arrange(jung_table, map_code),
+                    map_code %in% c(freq_tmp$map_code %>% unique() %>% sort()))$label %>% str_wrap(., width = 30),
+                # width = 40, exdent = 5),
+     values = filter(arrange(jung_table, map_code),
+                    map_code %in% c(freq_tmp$map_code %>% unique() %>% sort()))$cols) + 
+  theme(legend.position = "bottom",
+        legend.spacing = unit(-4, units = "mm")) + 
+  guides(fill = guide_legend(ncol = 2, title.position = "top"))
+  ) %>%
+ggsave(filename = paste0(p_plots, "habitats/jung_l2_legend_gg_shaanxi2.pdf"), 
+    width = 4.5, height = 3.5, units = "in")
+
 ```
 
 ```{r plot-jung-one-site}
@@ -3554,9 +3579,33 @@ lapply(c(1, 6, 11, 16, 21, 26, 31
 gif_files <-
   list.files(paste0(p_plots), full.names = TRUE) %>% 
     grep("land_cover_[0-9]{4}.pdf", ., value = TRUE)
+lc_gif <- image_animate(image_read(paste0(p_plots, "land_cover_test_gif.gif")), fps = 2)
+image_write(lc_gif, paste0(p_plots, "land_cover_gif.gif"))
+
+
+# turn this into a gif:
+
+lapply(1:11, function(site_index) {
+  file_out_tmp <- paste0(p_plots, "animations/", "abn_age",
+                       site_df$label[site_index], ".gif")
+  saveGIF(
+    terra::animate(age_t[[site_index]][[c(2,2:31)]], 
+                   # levels = rcl_df$labels %>% unique() %>% .[-1],
+                   col = viridis(n = 25, direction = -1),
+                   main = paste0(inset_map_titles[site_index], ", Abandonment Age, ", 1987:2017),
+                   type = "continuous",
+                   range = c(5, 30),
+                   maxcell = 500000,
+                   colNA = "gray95",
+                   # legend = FALSE,
+                   mar = c(mval+0.5, mval, mval + 0.7, mval+1.5),
+                   n = 1),
+    movie.name = file_out_tmp)
   
-gif <- image_animate(image_read(gif_files), fps = 2)
-image_write(gif, paste0(p_plots, "lc_gif.pdf"))
+  # Reload:
+  tmp_gif <- image_animate(image_read(file_out_tmp), fps = 4)
+  image_write(tmp_gif, file_out_tmp)
+})
 ```
 
 ```{r lc-legend}
@@ -3578,13 +3627,20 @@ plot(lcc[[i]]$y2017, type = "classes",
 
 dev.off()
 
-pdf(file = paste0(p_output, "plots/lc_legend_simple.pdf"), width = 3, height = 3)
+pdf(file = paste0(p_output, "plots/lc_legend_simple.pdf"), width = 3, height = 2.5)
 plot.new()
-plot(lcc[[i]]$y2017, type = "classes",
+par(mfrow = c(1, 1), 
+        # mar=c(0,0,0,0), 
+        oma=c(0.2,0.2,0.2,0.2),
+        adj = 0,
+        cex.main = 1#,
+        # tcl = -0.2
+        )
+terra::plot(lcc[[9]]$y2017, type = "classes",
      col = lc_plot_cols$color, 
      levels = lc_plot_cols$name,
      legend = "left",
-     plg = list(cex = 1.8,
+     plg = list(cex = 1.7,
                 title = "Land cover",
                                 # text.width = 100,
                 title.adj = 0#,

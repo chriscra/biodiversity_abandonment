@@ -949,22 +949,28 @@ cc_plot_aoh_sp_site <- function(binomial, site_index,
 
 cc_plot_aoh_trend_sp_site <- function(binomial, site_index, 
                                       passage_opt = "exclude_passage",
-                                      aoh_type = "aoh_max_abn_iucn") {
+                                      aoh_type = "crop_abn_iucn") {
   sp_name <- binomial
   lapply(binomial, function(sp_name) {
     gg_aoh_example_tmp <-
       aoh %>%
-      filter(site %in% site_df$site[site_index], binomial == sp_name) %>% #print(n = 124)
+      filter(
+        aoh_type %in% aoh_types_sub,
+        site %in% site_df$site[site_index], binomial == sp_name) %>% #print(n = 124)
       pivot_wider(
         id_cols = c("vert_class", "site", "binomial", "common_names",
                     "redlistCategory", "year", "mature_forest_obl", "passage_type"),
         names_from = aoh_type, values_from = aoh, names_pref = "aoh_") %>%
-      mutate(diff_obs = aoh_full_iucn - aoh_max_abn_iucn, 
-             diff_pot = aoh_full_iucn - aoh_max_potential_abn_iucn) %>%
-      pivot_longer(cols = c("aoh_full_iucn", "aoh_max_abn_iucn", 
-                            "aoh_max_potential_abn_iucn", 
-                            "diff_obs", "diff_pot"),
-                   names_to = "type", values_to = "aoh") %>%
+      # mutate(diff_obs = aoh_full_iucn - aoh_max_abn_iucn, 
+             # diff_pot = aoh_full_iucn - aoh_max_potential_abn_iucn
+             # ) %>%
+      pivot_longer(cols = c("aoh_full_iucn", "aoh_max_abn_iucn", "aoh_crop_abn_iucn",
+                            # "aoh_max_potential_abn_iucn", 
+                            # "diff_obs",
+                            # "diff_pot"
+                            ),
+                   names_to = "type", values_to = "aoh") %>% 
+      mutate(type = gsub("aoh_", "", type)) %>%
       filter(passage_type %in% passage_opt,
              type == aoh_type) %>%
       
@@ -980,9 +986,9 @@ cc_plot_aoh_trend_sp_site <- function(binomial, site_index,
       ) +
       scale_color_manual(
         name = "Type",
-        labels = c("aoh_full_iucn" = "Landscape",
-                   "aoh_max_abn_iucn" = "Abn, observed", 
-                   "aoh_max_potential_abn_iucn" = "Abn, potential", 
+        labels = c("full_iucn" = "Landscape",
+                   "max_abn_iucn" = "Abn, observed", 
+                   "max_potential_abn_iucn" = "Abn, potential", 
                    "diff_obs" = "Diff., observed", 
                    "diff_pot" = "Diff., potential"),
         values = gg_color_hue(5)
