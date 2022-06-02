@@ -226,39 +226,84 @@ aoh_overall_tmp <-
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
   summarise(n_sp = n()) %>%
-  arrange(vert_class, aoh_type) %>% ungroup() #%>% select(aoh_type) %>% unique()
+  arrange(vert_class, aoh_type) %>% ungroup() %>% #select(aoh_type) %>% unique()
+  group_by(aoh_type, vert_class, passage_type) %>%
+  mutate(N = sum(n_sp), 
+         percent = prettyNum(round(100*n_sp/N, digits = 2), nsmall = 2)) %>% ungroup()
+
+aoh_overall_tmp %>% group_by(aoh_type, vert_class, passage_type, trend_direction) %>%
+  # select(-c(passage_type, trend_consistency)) %>%
+  mutate(n_weak = sum(n_sp), 
+         p_weak = prettyNum(round(100*n_weak/N, digits = 2), nsmall = 2)) %>% ungroup() %>%
+  filter(
+    aoh_type == "crop_abn_iucn",
+    # !str_detect(aoh_type, "potential"),
+    # trend_consistency == "consistent",
+    # trend_direction == "gain",
+    # overall_trend == "loss"
+    ) 
 
 aoh_stats_main <- list(
   n_gain_bird = filter(aoh_overall_tmp, 
                        aoh_type == "crop_abn_iucn", overall_trend == "gain",
                        vert_class == "bird")$n_sp,
+  n_gain_bird_percent = filter(aoh_overall_tmp, 
+                       aoh_type == "crop_abn_iucn", overall_trend == "gain",
+                       vert_class == "bird")$percent,
   n_gain_mam = filter(aoh_overall_tmp, 
                        aoh_type == "crop_abn_iucn", overall_trend == "gain",
                        vert_class == "mam")$n_sp,
+  n_gain_mam_percent = filter(aoh_overall_tmp, 
+                       aoh_type == "crop_abn_iucn", overall_trend == "gain",
+                       vert_class == "mam")$percent,
   n_loss_bird = filter(aoh_overall_tmp, 
                        aoh_type == "crop_abn_iucn", overall_trend == "loss",
                        vert_class == "bird")$n_sp,
+  n_loss_bird_percent = filter(aoh_overall_tmp, 
+                       aoh_type == "crop_abn_iucn", overall_trend == "loss",
+                       vert_class == "bird")$percent,
   n_loss_mam = filter(aoh_overall_tmp, 
                        aoh_type == "crop_abn_iucn", overall_trend == "loss",
                        vert_class == "mam")$n_sp,
+  n_loss_mam_percent = filter(aoh_overall_tmp, 
+                       aoh_type == "crop_abn_iucn", overall_trend == "loss",
+                       vert_class == "mam")$percent,
   n_w_gain_bird = filter(aoh_overall_tmp, 
                        aoh_type == "crop_abn_iucn", overall_trend == "weak gain",
                        vert_class == "bird")$n_sp,
+  n_w_gain_bird_percent = filter(aoh_overall_tmp, 
+                       aoh_type == "crop_abn_iucn", overall_trend == "weak gain",
+                       vert_class == "bird")$percent,
   n_w_gain_mam = filter(aoh_overall_tmp, 
                        aoh_type == "crop_abn_iucn", overall_trend == "weak gain",
                        vert_class == "mam")$n_sp,
+  n_w_gain_mam_percent = filter(aoh_overall_tmp, 
+                       aoh_type == "crop_abn_iucn", overall_trend == "weak gain",
+                       vert_class == "mam")$percent,
   n_w_loss_bird = filter(aoh_overall_tmp, 
                        aoh_type == "crop_abn_iucn", overall_trend == "weak loss",
                        vert_class == "bird")$n_sp,
+  n_w_loss_bird_percent = filter(aoh_overall_tmp, 
+                       aoh_type == "crop_abn_iucn", overall_trend == "weak loss",
+                       vert_class == "bird")$percent,
   n_w_loss_mam = filter(aoh_overall_tmp, 
                        aoh_type == "crop_abn_iucn", overall_trend == "weak loss",
                        vert_class == "mam")$n_sp,
+  n_w_loss_mam_percent = filter(aoh_overall_tmp, 
+                       aoh_type == "crop_abn_iucn", overall_trend == "weak loss",
+                       vert_class == "mam")$percent,
   n_opposite_bird = filter(aoh_overall_tmp, 
                        aoh_type == "crop_abn_iucn", overall_trend == "context dependent",
                        vert_class == "bird")$n_sp,
+  n_opposite_bird_percent = filter(aoh_overall_tmp, 
+                       aoh_type == "crop_abn_iucn", overall_trend == "context dependent",
+                       vert_class == "bird")$percent,
   n_opposite_mam = filter(aoh_overall_tmp, 
                        aoh_type == "crop_abn_iucn", overall_trend == "context dependent",
                        vert_class == "mam")$n_sp,
+  n_opposite_mam_percent = filter(aoh_overall_tmp, 
+                       aoh_type == "crop_abn_iucn", overall_trend == "context dependent",
+                       vert_class == "mam")$percent,
   
   
   wl_prop_bird_site_sp = aoh_trends %>%
@@ -344,6 +389,7 @@ aoh_stats_main <- list(
   wl_iraq = round(aoh_stat_tmp_by_site_crop %>% filter(site == "iraq", vert_class == "bird") %>%
     .$prop_wl, digits = 2)
 )
+
 
 # get specific stats for certain sites:
 aoh_trends %>%
@@ -512,7 +558,6 @@ p_test_iucn_mam_incl_weak <-
 
 ```
 
-
 ```{r get-stats-obs-v-pot, include = FALSE}
 # relevant files
 aoh_p_change_obs_v_pot # and
@@ -580,12 +625,20 @@ obs_v_pot_stats <- list(
  
   n_gain_bird_pot = filter(aoh_overall_tmp, aoh_type == "crop_abn_potential_iucn",
                        overall_trend == "gain", vert_class == "bird")$n_sp,
+  n_gain_bird_pot_percent = filter(aoh_overall_tmp, aoh_type == "crop_abn_potential_iucn",
+                       overall_trend == "gain", vert_class == "bird")$percent,
   n_gain_mam_pot = filter(aoh_overall_tmp, aoh_type == "crop_abn_potential_iucn",
                       overall_trend == "gain", vert_class == "mam")$n_sp,
+  n_gain_mam_pot_percent = filter(aoh_overall_tmp, aoh_type == "crop_abn_potential_iucn",
+                      overall_trend == "gain", vert_class == "mam")$percent,
   n_loss_bird_pot = filter(aoh_overall_tmp, aoh_type == "crop_abn_potential_iucn", 
                        overall_trend == "loss", vert_class == "bird")$n_sp,
+  n_loss_bird_pot_percent = filter(aoh_overall_tmp, aoh_type == "crop_abn_potential_iucn", 
+                       overall_trend == "loss", vert_class == "bird")$percent,
   n_loss_mam_pot = filter(aoh_overall_tmp, aoh_type == "crop_abn_potential_iucn", 
                       overall_trend == "loss", vert_class == "mam")$n_sp,
+  n_loss_mam_pot_percent = filter(aoh_overall_tmp, aoh_type == "crop_abn_potential_iucn", 
+                      overall_trend == "loss", vert_class == "mam")$percent,
   
   perc_inc_gain_bird_min = aoh_n_by_site_obs_v_pot %>%
   filter(site != "mato_grosso", trend == "gain", vert_class == "bird") %>% 
@@ -1323,9 +1376,9 @@ knitr::include_graphics(path = paste0(
 
 ## Changes in habitat area resulting from cropland abandonment {.unnumbered}
 
-Overall, we found that a majority of bird and mammal species gained habitat as a result of abandonment: `r aoh_stats_main$n_gain_bird` bird and `r aoh_stats_main$n_gain_mam` mammal species showed statistically significant and positive trends in AOH over time everywhere they occurred, compared to `r aoh_stats_main$n_loss_bird` bird and `r aoh_stats_main$n_loss_mam` mammal species that showed statistically significant losses in habitat everywhere they occurred (Fig. \@ref(fig:aoh-by-site-crop-abn)).
-An additional `r aoh_stats_main$n_w_gain_bird` birds and `r aoh_stats_main$n_w_gain_mam` mammals had “weak” gains in AOH, while `r aoh_stats_main$n_w_loss_bird` birds and `r aoh_stats_main$n_w_loss_mam` mammals showed “weak” losses in AOH (i.e., significant gains or losses, respectively, at some sites, but no significant trend at other sites).
-`r aoh_stats_main$n_opposite_bird` birds and `r aoh_stats_main$n_opposite_mam` mammals showed significant gains at some sites, and significant losses elsewhere (“Opposites”). 
+Overall, we found that a majority of bird and mammal species gained habitat as a result of abandonment: `r aoh_stats_main$n_gain_bird` (`r aoh_stats_main$n_gain_bird_percent`%) bird and `r aoh_stats_main$n_gain_mam` (`r aoh_stats_main$n_gain_mam_percent`%) mammal species showed statistically significant and positive trends in AOH over time everywhere they occurred, compared to `r aoh_stats_main$n_loss_bird` (`r aoh_stats_main$n_loss_bird_percent`%) bird and `r aoh_stats_main$n_loss_mam` (`r aoh_stats_main$n_loss_mam_percent`%) mammal species that showed statistically significant losses in habitat everywhere they occurred (Fig. \@ref(fig:aoh-by-site-crop-abn)).
+An additional `r aoh_stats_main$n_w_gain_bird` (`r aoh_stats_main$n_w_gain_bird_percent`%) birds and `r aoh_stats_main$n_w_gain_mam` (`r aoh_stats_main$n_w_gain_mam_percent`%) mammals had “weak” gains in AOH, while `r aoh_stats_main$n_w_loss_bird` (`r aoh_stats_main$n_w_loss_bird_percent`%) birds and `r aoh_stats_main$n_w_loss_mam` (`r aoh_stats_main$n_w_loss_mam_percent`%) mammals showed “weak” losses in AOH (i.e., significant gains or losses, respectively, at some sites, but no significant trend at other sites).
+`r aoh_stats_main$n_opposite_bird` (`r aoh_stats_main$n_opposite_bird_percent`%) birds and `r aoh_stats_main$n_opposite_mam` (`r aoh_stats_main$n_opposite_mam_percent`%) mammals showed significant gains at some sites, and significant losses elsewhere (“Opposites”). 
 Excluding these opposite trend species, there were `r aoh_stats_main$wl_prop_bird_sp` times as many birds and `r aoh_stats_main$wl_prop_mam_sp` as many mammals that showed significant gains in habitat everywhere they occurred. 
 When including “weak” winners and losers, the ratio of winners to losers were `r aoh_stats_main$wl_prop_bird_sp_w_weak` for birds and `r aoh_stats_main$wl_prop_mam_sp_w_weak` for mammals.
 
@@ -1348,10 +1401,10 @@ knitr::include_graphics(path = paste0(
 
 ## Effects of recultivation on habitat area {.unnumbered}
 
-Had abandoned croplands not been recultivated during our time series (as assumed in our scenario of "potential abandonment," Calculation 1P), the number of species that gained habitat everywhere they occurred would have increased overall, `r paste0("from ", aoh_stats_main$n_gain_bird, " (", obs_v_pot_stats$bird_gain_p_test$estimate[1] %>% round(2), "%) to ", obs_v_pot_stats$n_gain_bird_pot, " (",obs_v_pot_stats$bird_gain_p_test$estimate[2] %>% round(2), "%) for birds, and ", aoh_stats_main$n_gain_mam, " (", obs_v_pot_stats$mam_gain_p_test$estimate[1] %>% round(2), "%) to ", obs_v_pot_stats$n_gain_mam_pot, " (",obs_v_pot_stats$mam_gain_p_test$estimate[2] %>% round(2), "%) for mammals")` (see Fig. \@ref(fig:aoh-obs-v-pot-by-site)).
+Had abandoned croplands not been recultivated during our time series (as assumed in our scenario of "potential abandonment," Calculation 1P), the number of species that gained habitat everywhere they occurred would have increased overall, `r paste0("from ", aoh_stats_main$n_gain_bird, " (", aoh_stats_main$n_gain_bird_percent, "%) to ", obs_v_pot_stats$n_gain_bird_pot, " (", obs_v_pot_stats$n_gain_bird_pot_percent, "%) for birds, and ", aoh_stats_main$n_gain_mam, " (", aoh_stats_main$n_gain_mam_percent, "%) to ", obs_v_pot_stats$n_gain_mam_pot, " (", obs_v_pot_stats$n_gain_mam_pot_percent, "%) for mammals")` (see Fig. \@ref(fig:aoh-obs-v-pot-by-site)).
 Moreover, these increases were statistically significant for both birds [two-sample proportion test: $X^2$ (df = `r obs_v_pot_stats$bird_gain_p_test$parameter`, *N* = `r aoh_overall_obs_v_pot_tmp %>% filter(vert_class == "bird", overall_trend == "gain") %>% .$N %>% sum()`) = `r round(obs_v_pot_stats$bird_gain_p_test$statistic, digits = 2)`, *p* `r ifelse(obs_v_pot_stats$bird_gain_p_test$p.value < 0.01,"< 0.01", paste0("= ", round(obs_v_pot_stats$bird_gain_p_test$p.value, digits = 2)))`] and mammals [$X^2$ (df = `r obs_v_pot_stats$mam_gain_p_test$parameter`, *N* = `r aoh_overall_obs_v_pot_tmp %>% filter(vert_class == "mam", overall_trend == "gain") %>% .$N %>% sum()`) = `r round(obs_v_pot_stats$mam_gain_p_test$statistic, digits = 2)`, *p* `r ifelse(obs_v_pot_stats$mam_gain_p_test$p.value < 0.01, "< 0.01", paste0("= ", round(obs_v_pot_stats$mam_gain_p_test$p.value, digits = 2)))`].
 Many species with no statistically significant trend or a "Weak Gain" trend for observed abandonment (Calculation 1) instead would have experienced consistent gains across sites under this potential abandonment scenario (Calculation 1P).
-Yet while the number of winning species increased, so too did the number of losing species: the number of species with statistically significant losses of habitat in the scenario of potential abandonment increased from `r aoh_stats_main$n_loss_bird` to `r obs_v_pot_stats$n_loss_bird_pot` for birds and `r aoh_stats_main$n_loss_mam` to `r obs_v_pot_stats$n_loss_mam_pot` for mammals.
+Yet while the number of winning species increased, so too did the number of losing species: the number of species with statistically significant losses of habitat in the scenario of potential abandonment increased from `r paste0(aoh_stats_main$n_loss_bird, " (", aoh_stats_main$n_loss_bird_percent, "%) to ", obs_v_pot_stats$n_loss_bird_pot, " (", obs_v_pot_stats$n_loss_bird_pot_percent, "%)")` for birds and `r aoh_stats_main$n_loss_mam` (`r aoh_stats_main$n_loss_mam_percent`%) to `r obs_v_pot_stats$n_loss_mam_pot` (`r obs_v_pot_stats$n_loss_mam_pot_percent`%) for mammals.
 
 However, the species that changed trends were not evenly distributed across our sites. 
 Most sites did not see substantial differences in the numbers of winners and losers between observed and potential abandonment: the number of winner or loser species increased by 4 or fewer at all but two sites, Mato Grosso and Chongqing (Fig. \@ref(fig:aoh-obs-v-pot-by-site)).
@@ -1575,12 +1628,6 @@ As a result, we conservatively consider shrubland habitats to be a subset of for
 
 <!-- 3. The four remaining sites - Nebraska, Orenburg, Shaanxi, and Volgograd - are all in grassland/steppe biomes, where the majority of the site is classified as grassland. At these places, the similarity is higher when shrubland is classified as forest (shown by the green and gray bars being higher). These increases are pretty small, however, and there is relatively little shrubland at any of these sites (max. 1.4% at Nebraska) -->
 
-(ref:caption-jung-crosswalk-jac) Jaccard similarity between the 2015 @Yin2020 land cover maps and the 2015 @Jung2020a habitat maps when reclassifying savanna and shrubland habitats as either forest or grassland.
-
-```{r jung-crosswalk-jac, fig.cap = '(ref:caption-jung-crosswalk-jac)'}
-knitr::include_graphics(path = paste0(p_plots, "crosswalk_jaccard.pdf"))
-```
-
 <!-- # Extended Results -->
 
 ## Results of statistical tests comparing proportion of winners and losers by species group {#si-prop-test-results}
@@ -1701,6 +1748,11 @@ knitr::include_graphics(path = paste0(p_plots, "habitats/jung_l2_sites_colors_no
 knitr::include_graphics(path = paste0(p_plots, "habitats/jung_l2_legend_gg.pdf"))
 ```
 
+(ref:caption-jung-crosswalk-jac) Jaccard similarity between the 2015 @Yin2020 land cover maps and the 2015 @Jung2020a habitat maps when reclassifying savanna and shrubland habitats as either forest or grassland.
+
+```{r jung-crosswalk-jac, fig.cap = '(ref:caption-jung-crosswalk-jac)'}
+knitr::include_graphics(path = paste0(p_plots, "crosswalk_jaccard.pdf"))
+```
 
 (ref:caption-aoh-sp-obs-crop-abn) Observed AOH for all bird and mammals species at each site. AOH is calculated for only pixels that were abandoned at least once, from the year of first cultivation through 2017 (Calculation 1). Each individual species' trend is visualized with transparency, so that darker trend lines indicate many species with overlapping trends.
 
