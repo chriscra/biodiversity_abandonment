@@ -1223,7 +1223,7 @@ habitat_age_req_2022_04_04_CC <- read_csv(
     TRUE ~ coder # otherwise, keep it the same. 
     ))
 
-# latest:
+# 04/05
 habitat_age_req_2022_04_05_CC <- read_csv(
   paste0(p_derived, "habitat_age_req/", "habitat_age_req_partial_2022_04_05_CC.csv")) %>%
   mutate(coder = case_when(
@@ -1255,6 +1255,19 @@ habitat_age_req_2022_04_05_CC %>% filter(coder == "CLC") %>% tail()
 habitat_age_req_2022_04_05_CC %>% filter(coder == "AW") %>% tail()
 habitat_age_req_AW %>% filter(coder == "AW") #%>% tail()
 filter(habitat_age_req_AW, !is.na(mature_forest_obl))
+
+
+# -------------------------------------------------------- #
+# Adding Mammals:
+habitat_age_req_2022_06_17_CC <- read_csv(
+  paste0(p_derived, "habitat_age_req/", "habitat_age_req_partial_2022_06_17_CC.csv")) %>%
+  mutate(coder = case_when(
+    is.na(coder) & !is.na(mature_forest_obl) ~ "CLC", # if it doesn't already have a coder associated with it, and it has a code recorded for "mature_forest_obl", code it as "CLC",
+    TRUE ~ coder # otherwise, keep it the same. 
+    ))
+
+habitat_age_req_2022_06_17_CC %>% filter(is.na(coder))
+
 ```
 
 
@@ -1564,6 +1577,19 @@ write_csv(habitat_age_req_coded, file = paste0(p_derived, "habitat_age_req/", "h
 # # update Alces alces to make plotting for dissertation easier:
 #   mutate(mature_forest_obl = ifelse(binomial == "Alces alces", NA, mature_forest_obl))
 
+```
+
+```{r update-coded-w-mammals}
+habitat_age_req_2022_06_17_CC$mature_forest_obl %>% unique() %>% sort()
+habitat_age_req_2022_06_17_CC %>%
+  filter(is.na(mature_forest_obl))
+# habitat_age_req_coded_final <- 
+#   read_csv(file = paste0(p_derived, "habitat_age_req/", "habitat_age_req_coded.csv"))
+
+
+# save
+habitat_age_req_2022_06_17_CC %>%
+  write_csv(file = paste0(p_derived, "habitat_age_req/", "habitat_age_req_coded_final.csv"))
 ```
 
 
