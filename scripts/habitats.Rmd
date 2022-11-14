@@ -2723,6 +2723,106 @@ lapply(1:11, function(i) {
 
 ```
 
+## Habitat age profile
+
+```{r habitat-age-profile}
+ggplot(data = persistence_dat) + 
+    theme_classic() +
+    labs(y = expression("Area abandoned (10"^{3}*" ha)") , 
+         x = "Year",
+         fill = "Age (years)") +
+    geom_col(mapping = aes(x = year, y = area_ha / 10^3, 
+                           fill = fct_reorder(bins, age)),
+             position = position_stack(reverse = FALSE)) +
+    theme(legend.title = element_text(size = 10)) +
+    scale_fill_brewer(palette = "Greens", direction = 1) +
+      facet_wrap(vars(site), scales = "free_y")
+
+
+age_profile_df <- 
+  persistence_dat %>% 
+  select(site, year, year_abn, age, area_ha) %>%
+  arrange(desc(age)) %>%
+  group_by(site, year) %>% 
+  mutate(total_in_year = sum(area_ha),
+         cumsum_in_year = cumsum(area_ha),
+         p_hab = cumsum_in_year/total_in_year) %>% ungroup() %>%
+  rbind(
+    cbind(
+      tibble(site = rep(site_df$site, each = 25)),
+      lapply(1:1, function(i) {
+        tibble(year = 2017:1993,
+               year_abn = 1987,
+               age = 31:7,
+               area_ha = NA,
+               total_in_year = NA,
+               cumsum_in_year = NA,
+               p_hab = 0)
+        }) %>% bind_rows())) %>% 
+  arrange(site, desc(year), desc(age)) %>%
+  
+  left_join(age_profile_df %>% 
+              filter(year == 2017, age == 20) %>%
+              select(site, p_20 = p_hab)) %>%
+  mutate(age = as_integer(age))
+
+age_profile_df %>% filter(!is.na(p_20))
+
+
+gg_hab_age_profile <-
+  age_profile_df %>%
+  filter(year == 2017) %>%
+  ggplot(mapping = aes(x = age, y = p_hab, 
+                       col = fct_reorder(site, desc(p_20)))) +
+  theme_classic() +
+  geom_line(size = 1) + 
+  scale_x_continuous(breaks = c(5, 10, 15, 20, 25, 30)) +
+  scale_color_discrete(labels = fancy_labels) +
+  labs(x = "Habitat Age Requirement (years)", 
+       y = "Proportion of Abandonment that is Suitable Habitat",
+       subtitle = "Year: 2017",
+       color = "Site") 
+
+# save 
+ggsave(gg_hab_age_profile,
+       filename = paste0(p_plots, "habitat_age_profile.pdf"), 
+       width = 5.5, height = 4, units = "in"
+)
+
+
+
+
+# animation:
+library(gganimate)
+library(transformr)
+
+
+gg_hab_age_profile_animate <-
+  age_profile_df %>%
+  # filter(year %in% seq(from = 1987, to = 2017, by = 5)) %>%
+    # filter(year < 1995) %>%
+  ggplot(mapping = aes(x = age, y = p_hab, 
+                       # group = interaction(site, year), 
+                       col = fct_reorder(site, desc(p_20)))) +
+  theme_classic() +
+  geom_line(size = 1) + 
+  scale_x_continuous(breaks = c(5, 10, 15, 20, 25, 30)) +
+  scale_color_discrete(labels = fancy_labels) +
+  labs(x = "Habitat Age Requirement (years)", 
+       y = "Proportion of Abandonment that is Suitable Habitat",
+       color = "Site",
+       subtitle = "Year: {round(frame_time, 0)}"
+       ) + 
+  transition_time(year)
+
+anim_save(gg_hab_age_profile_animate,
+       filename = paste0(p_plots, "habitat_age_profile_animated.gif"), 
+       width = 550, height = 400, units = "px", 
+)
+
+
+```
+
 
 ## [Old, Development] Assigning via nearest neighbor
 
