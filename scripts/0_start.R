@@ -16,12 +16,10 @@ needed_packages <- c(
   "ncdf4", # for opening NetCDF spatial files
   "arrow", # for reading and writing parquet files
   
+  # tidyverse includes ggplot2, dplyr, tidyr, readr, purrr, tibble, stringr, and forcats
   "tidyverse", "lobstr", #"pryr", 
   "reshape2", "rlang",
-  # tidyverse includes ggplot2, dplyr, tidyr, readr, purrr, tibble, stringr, and forcats
-  
-  "rticles",
-  "XML",
+
   
   # modeling:
   "tidymodels", # metapackage including: rsample, parsnip, recipes, workflows, tune, yardstick, broom, & dials
@@ -31,6 +29,12 @@ needed_packages <- c(
   "equatiomatic",
   "olsrr", # for model diagnostics
   "car", "multcomp", # recommended by Oscar Torres-Reyna for stats diagnostics
+  "fixest", # recommended by Tom Bearpark, as a very fast alternative implementation of lm()
+  
+  # time series analysis
+  "tsibble", "fable", "feasts",
+  "lmtest", # for implementing the Durbin-Watson test for autocorrelation, via lmtest::dwtest()
+  
   
   # visualization:
   "rasterVis", "RColorBrewer", "viridis", "scales", "colorspace",
@@ -42,7 +46,8 @@ needed_packages <- c(
   "ggpubr", # for extracting legends,
   "ggh4x", # for nested facet labels, among other things
   "animation", "magick", "ggrepel",
-  "plotly", # plotly makes interactive graphics!
+  "plotly", # plotly makes very cool interactive graphics!
+  "gridGraphics",
   
   # development
   "tictoc",  "magrittr", "parallel", "knitr", 
@@ -54,7 +59,9 @@ needed_packages <- c(
   "landscapemetrics", "landscapetools",
   
   # rmarkdown
-  "rmarkdown", "bookdown", "knitr", "kableExtra"
+  "rmarkdown", "bookdown", "knitr", "kableExtra", 
+  "rticles",
+  "XML"
   )
 
 extra_packages <- c("")
@@ -87,7 +94,7 @@ install_missing_packages(needed_packages)
 
 
 
-#install.packages(needed_packages) # old method
+# install.packages(needed_packages) # old method
 # install <- lapply(needed_packages, library, character.only = TRUE) # load them
 
 

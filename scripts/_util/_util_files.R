@@ -490,6 +490,12 @@ aoh_type_labels <- c(aoh_type_labels,
   "Range size > global median" = "Range size > global median",
   "Threatened" = "Threatened", "Not Threatened" = "Not Threatened")
 
+aoh_type_labels <- c(
+  aoh_type_labels, 
+  "gain" = "Gain", 
+  "loss" = "Loss",
+  "no trend" = "No Trend")
+
 
 aoh_l <- read_parquet(paste0(p_derived, "aoh_l.parquet"))
 aoh_species_list <- read_parquet(paste0(p_derived, "aoh_species_list.parquet"))
