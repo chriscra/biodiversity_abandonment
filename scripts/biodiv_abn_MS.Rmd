@@ -1510,7 +1510,12 @@ The biodiversity value of a pixel of woody vegetation that is 5 years old is und
 However, our IUCN assessment data do not allow for a systematic assessment of habitat preferences as a function of age of habitat or stage of succession.
 While we manually excluded species that are known to require habitat older than 30 years (by definition, such species could not have gained any suitable habitat during our study period), we emphasize that not all habitat created through abandonment is likely to be equally suitable for species, even for those that do not explicitly require mature habitats. 
 Regeneration on former agricultural land can yield valuable habitat, but it can require a long time (in many cases > 50 years) to recover to levels of species richness of intact ecosystems, and even longer to recover to similar community compositions [@Acevedo-Charry2019; @Isbell2019; @Nerlekar2020]. 
-Thus, the gains we report should be interpreted as optimistic, and require on-the-ground conservation action to fully realize. 
+
+(*Added at David's suggestion, 10/13/22.*)
+We also note that if regenerating habitats are protected from recultivation, the composition of species present in these habitats will change through time.
+For example, even within a given habitat, early successional species will gradually filter out of these habitats, and mature habitat specialists will gradually filter in.
+Even though we filtered mature forest species from our results, it's likely that it will take time for even non-mature forest species to return to these habitats as they regenerate.
+Thus, the gains we report should be interpreted as optimistic, and require on-the-ground conservation action to fully realize.
 
 This is especially the case when interpreting the habitat gains from abandonment (Calculation 1) in the context of habitat loss that occurred prior to cultivation (Calculation 2). 
 Because we only considered habitat loss that occurred during our time series (i.e., our baseline was the start of our time series), these results are undoubtedly conservative. 
