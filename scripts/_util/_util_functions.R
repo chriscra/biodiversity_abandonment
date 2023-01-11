@@ -1007,6 +1007,59 @@ cc_plot_aoh_trend_sp_site <- function(binomial, site_index,
   })
 }
 
+
+
+
+# --------------------------------------------------------------- #
+#
+# Miscellaneous ----
+# 
+# --------------------------------------------------------------- #
+
+cc_save_model_table <- function(input_model, table_title, filename_) {
+  input_model %>%
+    tidy(conf.int = TRUE) %>%
+    mutate(p.value = case_when(p.value < 0.001 ~ "<0.001",
+                               TRUE ~ as.character(round(p.value, digits = 3)))) %>%
+    gt() %>%
+    tab_header(title = table_title) %>%
+    tab_options(heading.align = "left") %>%
+    fmt_number(columns = c(estimate:statistic, conf.low, conf.high), #rows = c(1:3, 6:14), 
+               decimals = 2,
+               # n_sigfig = 3
+               ) %>%
+    # fmt_number(columns = c(conf.low:conf.high), 
+    #            decimals = 2,
+    #            
+    #            n_sigfig = 4) %>%
+    
+    cols_label() %>%
+    cols_align(align = "left", columns = everything()) %>%
+    tab_row_group(label = "Trophic Level", rows = 1:3) %>%
+    tab_row_group(label = "Habitat occurrence", rows = 6:11) %>%
+    
+    tab_style(
+      style = list(cell_text(color = palette_du_jour[1])),
+      locations = cells_body(columns = c(term, estimate), 
+                             rows = estimate > 0 & p.value < 0.05)
+    ) %>%
+    tab_style(style = list(cell_text(color = "red")),
+              locations = cells_body(columns = c(term, estimate), 
+                                     rows = estimate < 0 & p.value < 0.05)) %>%
+    tab_style(style = list(cell_text(weight = "bolder")),
+              locations = cells_body(columns = c(term, estimate), 
+                                     rows = p.value < 0.05)) %>%
+    tab_style(style = list(cell_text(weight = "normal")),
+              locations = cells_body(columns = c(term, estimate), 
+                                     rows = p.value > 0.05)) %>%
+    tab_style(style = list(cell_text(weight = "bolder")),
+              locations = cells_body(columns = c(p.value), 
+                                     rows = p.value < 0.05)) %>%
+    
+    opt_row_striping() %>%
+    gtsave(filename = filename_)
+}
+
 # --------------------------------------------------------------- #
 #
 # Miscellaneous ----
