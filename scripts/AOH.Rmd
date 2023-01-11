@@ -24,15 +24,8 @@ os %>%
 os
 os %>% print(n = 30)
 
-site_pnv_30
-rm(list = os$object[c(1:2)])
-gg_aoh_sp_obs_by_site$crop_abn_iucn
+# rm(list = os$object[c(1:8)])
 
-rm(list = os$object[c(2)])
-# rm(list = os$object[c(3:18)])
-get(os$object[c(30)])
-
-i
 get(os$object[16])
 
 # terra and raster temp files
@@ -50,1367 +43,11 @@ raster::showTmpFiles()
 raster::removeTmpFiles()
 
 warnings()
-
-
-```
-
-# AOH 
-
-
-
-## {terra} AOH dev (based on Yiwen's script)
-
-```{r load-map-files-AOH}
-#### -------- load habitat map ---------- ####
-
-### Loading suitable habitats from IUCN/IIASA #####
-# iucnHabitatClass <- raster("~/Dropbox/PostDoc4_Princeton/Species Traits/iucn_habitatclassification_composite_lvl2_ver003_resampled.tif")
-
-# jung_l2 <- rast(paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_composite_lvl2_ver004.tif"))
-
-
-# if Jung map:
-habitat_map <- rast(paste0(p_derived, "site_jung/", site_df$site[site_index], "_jung_l2_30.tif"))
-
-# if Yin et al. 2020 LC maps
-habitat_map <- lc[[site_index]][[yr_index]]
-plot(habitat_map)
-
-# load elevation raster list
-
-elevation_map <- lapply(1:11, function(i) {
-  rast(paste0(p_derived, "elevation/", 
-              site_df$site[i], "_srtm_crop.tif")
-       )
-  })
-
-site_area_ha <- lapply(
-  list.files(paste0(p_derived, "site_area_ha"), full.names = TRUE), 
-  function(i) rast(i)
-)
-names(site_area_ha) <- site_df$site
-
-```
-
-```{r aoh-dev}
-# create an empty data.frame to store results from the for loop:
-species_list[, "binomial"]
-species_list[, 3]
-aoh_df <- tibble(species = species_list[, "binomial"],
-                  IUCN_AOO = NA,
-                  IUCN_AOH = NA)
-
-
-
-i <- 1
-for(i in seq_along(species_list$binomial)) {
-  # ------------------------------------------------------------------------- #
-  ### starts here ###
-  # ------------------------------------------------------------------------- #
-  
-  # ---- extract species range polygons at the site ---- #
-  
-x1 <- species_ranges[species_ranges$binomial == paste0(species_list[i, "binomial"]),] # select a subset of species range polygons based on binomial
-species_name <- "Lithobates palustris"
-
-x1 <- vert_sites[vert_sites$binomial == "Lithobates palustris", ] %>% 
-  st_cast() # update all features to multipolygon, for 
-
-
-# ---- crop the land cover map in question to the extent of the range map ---- #
-tic()
-y1 <- terra::crop(#iucnHabitatClass,
-  habitat_map[[11]], # site_jung_l2_30[[11]],
-  x1) #%>% raster()
-toc()
-
-site_area_ha[[site_index]]
-
-
-
-# ---- turn the species range polygons (sf) into a raster ---- #
-# this involves creating a template raster to match the dimensions of the IUCN Habitat map, 
-# and then using fasterize().
-# if using this method, must first convert all sf objects to the same type (i.e., multipolygon)
-# I can also do this using terra::rasterize(), but it's slightly slower. (~ 1 second for Wisconsin)
-
-tic()
-template_raster1 <- raster::raster(
-  resolution = terra::res(site_area_ha[[site_index]]),
-  ext = raster::extent(terra::ext(site_area_ha[[site_index]])[1:4]),
-  ncols = terra::ncol(site_area_ha[[site_index]]),
-  nrows = terra::nrow(site_area_ha[[site_index]]))
-
-
-template_raster <- raster::raster(
-  resolution = terra::res(y1),
-  ext = raster::extent(terra::ext(y1)[1:4]),
-  ncols = terra::ncol(y1),
-  nrows = terra::nrow(y1))
-
-x2 <- fasterize(x1, 
-                template_raster# 
-                # raster(y1)
-                ) %>% rast()
-
-x21 <- fasterize(x1,
-                template_raster1# 
-                # raster(y1)
-                ) %>% rast()
-
-toc()
-
-plot(x2)
-ext(x2)
-ext(lc$wisconsin$y2017)
-
-# writeRaster(x2,
-            # filename = paste0(p_tmp, "random_tmp.tif"), 
-            # overwrite=TRUE)
-# x2 <- rast(paste0(p_tmp, "random_tmp.tif"))
-
-
-# fasterize is faster than terra::rasterize(), but the step of writing the raster to file, then reloading as SpatRaster takes much longer.
-# tic()
-# x2t <- terra::rasterize(vect(x1), y1, # must convert sf to spatvector:
-#                         #field="", 
-#                         #fun = length#, sum = FALSE, 
-#                         # filename = paste0(p_derived, "aoh/tmp/rasterize_tmp.tif"), overwrite=TRUE
-#           )
-# toc()
-# 
-# plot(x2t)
-
-
- # ---- update cell values to mask ---- #
-
-# tic()
-# x3 <- calc(x2_r, function(x) {x[!is.na(x)] <- 0; return(x)}) # passes a function setting all of the cell values that are not NAs to 0
-# toc()
-
-tic()
-x3 <- subst(x2, 1, 0) # change cell value from 1 to 0.
-# x3 <- x2 - 1 # can also do this, maybe just very slightly faster
-toc()
-
-# Calculate the Area Of Occurrence (AOO), before filtering by habitat and elevation
-# expanse() is much faster! But... it doesn't work with large rasters of the extent of some of my sites.
-
-# aoh_df$IUCN_AOO[i] <- expanse(x2, unit = "km") # in km2
-
-print(aoh_df, n = 30)
-
-tic()
-x2_area_test <- x3 %>%
-  terra::cellSize(., unit = "ha", mask = TRUE) %>% 
-  global(fun = "sum", na.rm = TRUE) %>% 
-  as.numeric()
-
-x2_area_test
-toc()
-
-tic()
-x2_area_test1 <- terra::cellSize(x21, unit = "ha", mask = TRUE) %>% 
-  global(fun = "sum", na.rm = TRUE)
-x2_area_test1
-toc()
-
-
-plot(x2)
-plot(x3 + site_area_ha[[site_index]])
-tic()
-global(x3 + site_area_ha[[site_index]], fun = "sum", na.rm = TRUE)
-toc()
-tic()
-global(x2 * site_area_ha[[site_index]], fun = "sum", na.rm = TRUE)
-toc()
-
-x2 * site_area_ha[[site_index]] %>%
-  global(., fun = "sum", na.rm = TRUE)
-
-
-# by calculating cellSize()
-tic()
-x2_area <- 
-  terra::cellSize(x2, unit = "ha", mask = TRUE) %>% 
-  global(fun = "sum", na.rm = TRUE)
-toc()
-
-aoh_df$IUCN_AOO[i] <- x2_area
-
-site_area_ha[[11]]
-plot(site_area_ha[[11]])
-
-# mask the IUCN habitat map to the range raster
-y2 <- x3 + y1
-# y2 <- app(c(x3, y1), sum) # the same, but slightly slower
-# y2 <- terra::mask(x3, y1)
-
-plot(y2)
-
-# ------------------------------------------------------------------------- #
-### Habitat Filter ###
-# ------------------------------------------------------------------------- #
-species_list[i, "binomial"]
-
-z1 <- habitat_prefs %>% 
-  filter(binomial == species_name,
-         suitability == "Suitable") # extract the habitat classifications for the species in question
-
-suitable_habitat_codes <- iucn_crosswalk %>% 
-  filter(code %in% unique(z1$code)) %>%
-  # .$lc %>% 
-  .$map_code %>% 
-  unique() # extract the lc code from my crosswalk that correspond to the IUCN habitat codes
-
-suitable_habitat_rcl <- iucn_crosswalk %>% 
-  filter(code %in% unique(z1$code))
-
-
-# my thoughts on how to do the land cover translation
-# I have decided what proportion of "forest" go into what habitat type at each site. I don't know where though, so I'll just attribute this proportionally, evenly across the whole site. So, what I should do is apply this proportionally *after* I have clipped out the suitable habitats. 
-
-# So, I need to build a translator for the IUCN habitat prefs, and then extract by that.
-# I can then, in a separate step, multiply by the proportion in question.
-# I can calculate the area in each habitat type, and if a species has a subset of one habitat type that is suitable (e.g., grassland, but not savanna or shrubland), I will then adjust the habitat area down by the proportion of my lc "grassland (4)" that is considered the IUCN habitat type grassland at that site. 
-
-tic()
-y3 <- 
-  classify(y2,
-           rcl = select(suitable_habitat_rcl, is = map_code) %>% mutate(becomes = 0),
-           othersNA = TRUE,
-           filename = paste0(p_tmp, "aoh_tmp.tif"),
-           overwrite = TRUE)
-toc()  # 1.894  seconds
-
-# calculate area after habitat filter
-tic()
-y3_area <- 
-  terra::cellSize(y3, unit = "ha", mask = TRUE) %>% 
-  global(fun = "sum", na.rm = TRUE)
-toc()
-
-plot(y3)
-# ------------------------------------------------------------------------- #
-### Elevation Filter ###
-# ------------------------------------------------------------------------- #
-elevation_map
-elevation_map[[site_index]]
-
-elevation_mask <- elevation_map[[site_index]] + y3
-plot(elevation_mask)
-
-y3_r <- raster(elevation_mask)
-
-tic()
-y3 <- 
-  classify(y2,
-           rcl = select(suitable_habitat_rcl, is = map_code) %>% mutate(becomes = 0),
-           othersNA = TRUE,
-           filename = paste0(p_tmp, "aoh_tmp.tif"),
-           overwrite = TRUE)
-toc()
-
-elevation_mask
-elevation_rcl <- elevation_prefs %>% filter(binomial == species_name)
-
-e1 <- elevation_prefs[elevation_prefs$binomial==paste0(species_list[i,1]), ]
-
-terra::app(y3, )
-ele6_t <- elevation_mask
-plot(ele6_t)
-
-
-
-tic()
-ele6_rcl <- classify(elevation_mask, 
-                     rcl = tibble(from = el_rcl$elevation_lower,
-                                  to = el_rcl$elevation_upper, 
-                                  becomes = 0),
-                     include.lowest = TRUE, right = TRUE)
-toc() # sweet! much faster.
-
-plot(ele6_rcl, colNA = "pink")
-
-# mask the range polygon by the habitat mask and the elevation mask
-
-
-print(i)
-write.csv(aoh_df,"~/Dropbox/PostDoc4_Princeton/Species Traits/FutureAOH.csv")
-}
-```
-
-```{r aoh-direct-testing}
-
-# cc_AOH_terra <- function(index,
-#                        site_index,
-#                        year_index,
-#                        calc_lc = TRUE) {
-  # ------------------------------------------------------------------------- #
-  ### starts here ###
-  # ------------------------------------------------------------------------- #
-  tic.clearlog()
-  tic(paste0("run ", index, ":", site_df$site[site_index], ", ", year_index))
-  aoh_test_mg
-  aoh_test_s
-  index <- 3
-  site_index <- 9 # 6 = mato_grosso
-  year_index <- 2010:2017
-  calc_lc <- TRUE
-  calc_AOO <- TRUE
-  
-  species_ranges <- vert_sites %>%
-  filter(vert_class != "gard",
-         site == site_df$site[site_index]) # filter to just the site in question
-  
-  species_list <- species_ranges %>% st_drop_geometry() %>%
-    select(site, vert_class, binomial) %>% unique() %>%
-    arrange(site, vert_class, binomial)
-
-  species_name <- species_list$binomial[index]
-  # species_name <- "Lithobates palustris"
-  
-  habitat_map <- if (calc_lc) {
-    lc[[site_index]][[paste0("y", year_index)]]
-  } else {
-    rast(paste0(p_derived, "site_jung/", site_df$site[site_index], "_jung_l2_30.tif"))
-  }
-  
-  elevation_map <- rast(paste0(p_derived, "elevation/", site_df$site[site_index], "_srtm_crop.tif"))
-  
-  # ---- extract species range polygons at the site ---- #
-  range_sf <- st_cast(species_ranges[species_ranges$binomial == species_name, ]) # select a subset of species range polygons based on binomial, and update all features to multipolygon, for fasterize()
-  plot(range_sf$geometry)
-  
-  # plot(lc[[site_index]][[year_index]])
-  plot(habitat_map)
-  plot(range_sf$geometry, border = "red", add = TRUE)
-
-  # ---- turn the species range polygons (sf) into a raster ---- #
-    
-  range_t <- 
-    fasterize(range_sf,
-              raster::raster(resolution = terra::res(habitat_map),
-                             ext = raster::extent(terra::ext(habitat_map)[1:4]))
-              ) %>% 
-    rast() %>% # convert to SpatRaster 
-    subst(1, 0) # update cell values from 1 to 0.
-  
-  plot(range_t)
-  # ------------------------------------------------------------------------- #
-  ### Habitat Filter ###
-  # ------------------------------------------------------------------------- #
-  z1 <- habitat_prefs %>% 
-    filter(binomial == species_name,
-           suitability == "Suitable") # extract the habitat classifications for the species in question
-  
-  habitat_prefs %>% 
-    filter(binomial == species_name) %>%
-    arrange(suitability) %>% print(n = 25)
-  
-  habitat_details %>% filter(binomial == species_name) %>% .$habitat
-  
-  # extract the lc codes from my crosswalk that correspond to the IUCN habitat codes
-  suitable_habitat_rcl <- iucn_crosswalk %>% 
-    filter(code %in% unique(z1$code))
-  
-  freq(habitat_map)
-  iucn_crosswalk %>% print(n = 42)
-  plot(site_jung_l2$mato_grosso, breaks = c(105.9,106.1))
-  plot(site_jung_l2_30$mato_grosso, breaks = c(105.9,106.1))
-  plot(site_jung_l2_30$mato_grosso, breaks = c(506.9,507.1))
-  plot(site_jung_l2$mato_grosso, breaks = c(405.9,406.1))
-  freq(site_jung_l2_30$mato_grosso)
-  
-  # reclassify habitat raster to 
-  habitat_map1 <- lc[[site_index]][["y2017"]]
-  habitat_map <- lc[[8]]#[[paste0("y", 2010:2017)]]
-  
-  tic()
-  habitat_map_rcl <- 
-    classify(
-      # habitat_map1,
-      habitat_map,
-      rcl = select(suitable_habitat_rcl, 
-                   is = ifelse(calc_lc, "lc", "map_code")
-                   ) %>% unique() %>% 
-               mutate(becomes = 0),
-             othersNA = TRUE,
-             # filename = paste0(p_tmp, "aoh_tmp.tif"),
-             overwrite = TRUE)
-  toc() # 5 seconds for 1, 8.178 s for 3, 11 s for 8, 28 seconds s for all 31
-  
-  31*5
-  28
-  plot(habitat_map_rcl[[1:4]])
-  
-  plot(habitat_map_rcl)
-  # ------------------------------------------------------------------------- #
-  ### Elevation Filter ###
-  # ------------------------------------------------------------------------- #
-  elevation_prefs_rcl <- elevation_prefs %>% filter(binomial == species_name)
-  
-  elevation_map_rcl <- 
-    classify(
-      elevation_map,
-      rcl = tibble(from = elevation_prefs_rcl$elevation_lower,
-                   to = elevation_prefs_rcl$elevation_upper,
-                   becomes = 0),
-      include.lowest = TRUE, right = TRUE)
-  
-  plot(elevation_map_rcl, colNA = "pink")
-  
-  # mask the range polygon by the habitat mask and the elevation mask
-  plot(range_t)
-  tic()
-  aoh <- range_t + elevation_map_rcl
-  aoh <- aoh + habitat_map_rcl
-  toc() # 26 seconds for all 31, # 1.4 for 1 layer 
-  
-
-  # ------------------------------------------------------------------------- #
-  ### Calculate areas:
-  # ------------------------------------------------------------------------- #
-  
-  # Calculate the Area Of Occurrence (AOO), before filtering by habitat and elevation
-  if (calc_AOO) {
-    range_aoo_ha <- 
-    terra::cellSize(range_t, unit = "ha", mask = TRUE) %>% 
-    global(fun = "sum", na.rm = TRUE) %>% .$sum
-    }
-  
-  # Calculate the Area Of Occurrence (AOO), before filtering by habitat and elevation
-  tic()
-  range_aoh_ha <- 
-    terra::cellSize(aoh, unit = "ha", mask = TRUE) %>% 
-    global(fun = "sum", na.rm = TRUE) %>% .$sum
-  toc() # 1.8 seconds for 1, 8 seconds for 5 layers, 40 s for all 31
-  
-  toc(log = T)
-  
-  aoh_tmp <- 
-    tibble(site = site_df$site[site_index],
-           binomial = species_name,
-           year = year_index,
-           # IUCN_aoo_ha = range_aoo_ha,
-           IUCN_aoh_ha = range_aoh_ha)
-  
-  if (calc_AOO) {
-    aoh_tmp <- aoh_tmp %>%
-      mutate(IUCN_aoo_ha = range_aoo_ha)
-  }
-  
-  if (include_time) {
-    aoh_tmp <- aoh_tmp %>%
-      mutate(time = 
-               tic.log(format = F) %>% bind_rows() %>%
-               mutate(time = toc - tic) %>% .$time)
-  }
-  
-  # Note: the slight difference between areas before and after habitat filtering is
-  # the result of a small amount of 0s added to the Yin et al. 2020 land cover maps. 
-  
-  cat("calculated AOH for", species_name, "=", range_aoh_ha, "ha", fill = TRUE)
-  aoh_tmp
-
-```
-
-```{r aoh-function-testing}
-
-# create an empty data.frame to store results from the for loop:
-species_list[, "binomial"]
-
-aoh_df <- tibble(site = site_df$site[site_index],
-                 species = species_list[, "binomial"],
-                 year = yr_index + 1986,
-                 IUCN_aoo_ha = NA,
-                 IUCN_aoh_ha = NA)
-
-
-# things to load:
-load(file = paste0(p_derived, "species_ranges/vert_sites.RData"), verbose = TRUE)
-
-# for a specific site, compile list of species
-species_list
-aoh_df
-
-4000 * 28 /60 / 60 / 11 # hours /11
-
-# what if I do the lc maps in batches, do I save time? 
-
-
-
-tic("test1")
-toc(log=T)
-tic("test2")
-toc(log=T)
-
-tic.clearlog()
-tic.log(format = T) %>% unlist() 
-tic.log(format = F) %>% bind_rows() %>%
-  mutate(time = toc - tic) %>% .$time
-
-
-aoh_test <- lapply(1:5, function(i) {
-  cc_AOH_terra(index = i, site_index = 11, year_index = 31, calc_lc = FALSE)
-}) %>% bind_rows()
-
-seq_along(species_list$binomial)
-
-aoh_test2 <- lapply(1:2, function(i) {
-  cc_AOH_terra(index = i, site_index = 11, year_index = 31, calc_lc = FALSE)
-}) %>% bind_rows()
-
-aoh_test_mg <- lapply(1:5, function(i) {
-  cc_AOH_terra(index = i, site_index = 6, year_index = 31, calc_lc = FALSE)
-}) %>% bind_rows()
-
-
-aoh_test_s2 <- lapply(1:5, function(i) {
-  cc_AOH_terra(index = i, site_index = 9, year_index = 2017, calc_lc = FALSE)
-}) %>% bind_rows()
-
-aoh_test_s[1:5,]
-aoh_test_s2
-
-
-aoh_test_lc_s <- lapply(1:5, function(i) {
-  cc_AOH_terra(index = i, site_index = 9, year_index = 2017, calc_lc = TRUE)
-}) %>% bind_rows()
-aoh_test_lc_s
-aoh_tmp
-
-vert_sites %>% filter(binomial == "Rana chensinensis", 
-                      site == "shaanxi" ) %>% 
-  st_geometry() %>% 
-  plot(add = T, col = "red")
-
-site_sf %>% filter(site == "shaanxi" ) %>% st_geometry() %>% plot()
-
-aoh_test_s1
-
-aoh_test_mg
-habitat_details %>% filter(binomial == "Adenomera andreae") %>% .$habitat
-habitat_prefs %>% filter(binomial == "Adenomera andreae") %>% .$habitat
-
-synonyms 
-species_synonyms %>% filter(binomial == "Adenomera andreae")
-
-aoh_test4 <- 
-  lapply(1:11, function(site_index) {
-    tmp <- lapply(1, function(i) {
-      cc_AOH_terra(index = i, site_index = site_index, year_index = 31, calc_lc = FALSE)
-      }) %>% bind_rows()
-  }) %>% bind_rows()
-  
-
-aoh_test_mult_s <- 
-  lapply(3, function(i) {
-  cc_AOH_terra(index = i, site_index = 9, year_index = 2015:2017, 
-             calc_lc = TRUE, calc_AOO = FALSE, include_time = TRUE)
-}) %>% bind_rows()
-
-aoh_test_mult_s %>% tail
-
-aoh_test_mult_s
-
-
-
-
-aoh_tmp
-aoh_test_mult_s
-
-aoh_test_s
-
-
-aoh_test3
-aoh_test4
-
-# between 24-32 seconds
-
-# run 1:wisconsin, 31: 29.43 sec elapsed
-# calculated AOH for Acris crepitans = 630173.7 ha
-# run 2:wisconsin, 31: 32.413 sec elapsed
-# calculated AOH for Ambystoma laterale = 1962498 ha
-# run 3:wisconsin, 31: 26.02 sec elapsed
-# calculated AOH for Ambystoma maculatum = 1260343 ha
-# run 4:wisconsin, 31: 24.47 sec elapsed
-# calculated AOH for Ambystoma tigrinum = 905840.2 ha
-# run 5:wisconsin, 31: 25.846 sec elapsed
-# calculated AOH for Anaxyrus americanus = 2938938 ha
-# > aoh_test
-
-aoh_test
-aoh_df[1:5,]
-
-aoh_test4
-
-write_csv(aoh_test,
-          file = paste0(p_derived, "aoh/aoh_df.csv"))
-
 ```
 
 
-
-```{r remove-0s-from-lc}
-
-# this doesn't really matter! I'm just comparing the AOH anyways...
-
-tic()
-lc_clean <- subst(lc[[8]][[1:4]], from = 0, to = NA_real_)
-toc()
-# 63 seconds for just four layers of the biggest site. 
-
-compareGeom(lc_clean, lc[[9]])
-
-df1 <- freq(lc_clean)
-df2 <- freq(lc[[9]][[1:4]])
-
-df1 %>% as_tibble() %>% arrange(value)
-df2 %>% as_tibble() %>% arrange(value)
-
-lc_clean <- classify(
-      lc[[9]][[1:4]],
-      rcl = tibble(from = elevation_rcl$elevation_lower,
-                   to = elevation_rcl$elevation_upper,
-                   becomes = 0),
-      include.lowest = TRUE, right = TRUE)
-
-plot(lc[[9]][[1]], breaks = c(-0.1, 0.1), maxcell = 1e8)
-
-
-
-terra::trim()
-
-plot(lc_clean)
-
-tic()
-lc_clean2 <- trim(lc[[9]][[1:4]], value = 0)
-toc()
-
-
-df3 <- freq(lc_clean2)
-
-df3 %>% as_tibble() %>% arrange(value)
-
-```
-
-# {data.table} AOH
-
-```{r load-files-for-dt-AOH}
-# set parameters:
-
-index <- 3
-site_df
-site_index <- 3
-year_index <- 2011:2017
-calc_lc <- TRUE
-include_time <- TRUE
-range_maps <- species_ranges
-
-# ------------------------------------------------------------------------- #
-### load in required elements prior to running the data.table function
-# ------------------------------------------------------------------------- # 
-# all the loading of the habitat maps before:
-tic("load layers")
-
-  hab_dt <- fread(input = paste0(p_dat_derived, "input_data.tables/",
-                                 site_df$site[site_index], ".csv"))
-
-  elevation_map <- lapply(1:11, function(i) {
-  rast(paste0(p_derived, "elevation/", 
-              site_df$site[i], "_srtm_crop.tif")
-       )
-  })
-  
-  site_area_ha <- lapply(
-    list.files(paste0(p_derived, "site_area_ha"), full.names = TRUE), 
-    function(i) rast(i)
-    )
-
-  el_area_dt <- spatraster_to_dt(
-    spt = c(site_area_ha[[site_index]],
-            elevation_map)#, xy_switch = FALSE
-    )
-
-  setnames(el_area_dt, 
-           old = grep("area", names(el_area_dt), value = T), 
-           new = "area_ha")
-  
-  stopifnot(
-    all.equal(hab_dt$x, el_area_dt$x),
-    all.equal(hab_dt$y, el_area_dt$y)
-    )
-  
-  # combine hab_dt and el_area_dt into a single data.table
-  hab_dt[, ':='(area_ha = el_area_dt$area_ha,
-                elevation = el_area_dt$elevation)]
-  
-  rm(el_area_dt) # to save memory on my machine.
-
-  toc() #
-
-
-```
-
-
-
-```{r compare-results-dt-AOH}
-tic("terra method")
-aoh_terra_test_mult_s <- 
-  lapply(1:5, function(i) {
-  cc_AOH_terra(index = i, site_index = 9, year_index = 1987:2017, 
-             calc_lc = TRUE, calc_AOO = FALSE, include_time = TRUE)
-}) %>% bind_rows()
-toc()
-
-# tic()
-# one_sp <- cc_AOH_terra(index = 3, site_index = 9, year_index = 2017, 
-#              calc_lc = TRUE, calc_AOO = FALSE, include_time = TRUE)
-# toc()
-
-tic("data.table method")
-aoh_dt_test_mult_s <- lapply(1:5, function(i) {
-  cc_AOH_data.table(index = i, site_index = 9, year_index = 1987:2017, 
-             calc_lc = TRUE, include_time = TRUE)
-}) %>% bind_rows()
-toc()
-
-# times: 
-# terra: 555.635 s
-# data.table: 262.04
-aoh_terra_test_mult_s$time %>% unique %>% sum /
-  aoh_dt_test_mult_s$time %>% unique %>% sum
-# 2.11 x faster to do it with data.table
-
-# compare results
-aoh_terra_test_mult_s
-aoh_dt_test_mult_s %>% 
-  select(site, binomial, year, IUCN_aoh_ha, time) %>% unique
-
-# they match
-identical(aoh_terra_test_mult_s$IUCN_aoh_ha, aoh_dt_test_mult_s %>% 
-  select(site, binomial, year, IUCN_aoh_ha, time) %>% unique %>%
-  .$IUCN_aoh_ha)
-
-
-# 3 three heavy lifts: hab rcl, elevation rcl, and the final masking
-
-# time comparison 124 for terra function vs. 159 for data.table method
-# now, having switched the order of the data.table filtering, the data.table method takes closer to 50 seconds.
-```
-
-```{r adjust-by-lc-prop}
-
-# what proportion of the area in each of my four land cover codes is in 
-# so, if a species 
-z1
-
-adj_df <- jung_hab_type_area_df %>%
-  filter(site == site_df$site[site_index],
-         code %in% unique(z1$code)) %>%
-  group_by(lc) %>%
-  summarise(adjustment = sum(prop_lc))
-
-jung_hab_type_area_df %>% select(-IUCNLevel) %>%
-  filter(site == site_df$site[9])
-
-
-aoh_dt_test_mult_s
-aoh_dt_test_mult_s
-
-aoh_dt_test_mult_s <- aoh_dt_test_mult_s %>% 
-  as_tibble() %>% 
-  left_join(adj_df, by = "lc") %>% 
-  mutate(adj_area_ha = area_ha * adjustment)
-
-aoh_dt_test_mult_s %>% 
-  select(-IUCN_aoh_ha) %>%
-  left_join(aoh_dt_test_mult_s %>% 
-              group_by(site, binomial, year) %>%
-              summarise(IUCN_aoh_ha = sum(area_ha),
-                        adj_IUCN_aoh_ha = sum(adj_area_ha)),
-            by = c("site", "binomial", "year")
-  )
-
-df_tmp
-
-```
-
-```{r test-wisc}
-# testing with Wisconsin data.table
-# FYI it takes about 45 seconds to load all the data required at the start.
-hab_dt
-
-# too memory intensive.
-
-tic("terra method")
-aoh_terra_test_mult_w <- 
-  lapply(1:5, function(i) {
-  cc_AOH_terra(index = i, site_index = 11, year_index = 1987:2017, 
-             calc_lc = TRUE, calc_AOO = FALSE, include_time = TRUE)
-}) %>% bind_rows()
-toc()
-
-tic("data.table method")
-aoh_dt_test_mult_w <- lapply(1:5, function(i) {
-  cc_AOH_data.table(index = i, site_index = 11, year_index = 1987:2017, 
-             calc_lc = TRUE, include_time = TRUE)
-}) %>% bind_rows()
-toc()
-
-aoh_dt_test_mult_w %>% select(site, binomial, time) %>% unique() %>%
-  mutate(time_p_run = time/31)
-
-
-```
-
-
-## Melting data.tables
-
-Can I gain speed by melting the data.table in order to get the area by year and land cover code in one single data.table call? 
-Ultimately, no. 
-This method seems to be slower by a factor of 1.3. 
-Good to have learned how to melt data.tables, but table this method for now.
-
-```{r melt-dt}
-# in order to use the by function correctly, I need to melt the data.table from wide to long format, and have a column for year. 
-hab_dt
-
-# add a new index, drop x and y
-hab_dt[, key := 1:nrow(.SD)]
-hab_dt[, c("x", "y", paste0("y", 1987:2000)) := NULL]
-
-tdt <- hab_dt[1:200, .(key, y2001, y2002, y2003)]
-
-tdt
-
-# reshape
-
-melt_dt <- melt(tdt, id.vars = c("key"), measure.vars = paste0("y", 2001:2003))
-
-obj_size(tdt)
-obj_size(melt_dt)
-
-
-# test with big one:
-hab_dt
-
-tic()
-hab_dt_melt <- data.table::melt(hab_dt, id.vars = c("key"), measure.vars = paste0("y", 2001:2017))
-toc()
-
-obj_size(hab_dt)
-obj_size(hab_dt_melt) # three times as big.
-
-# how would I summarize now?
-hab_dt_melt
-
-
-hab_dt
-
-# first, filter by range, elevation, etc.:
-hab_dt
-
-hab_filtered_range_el
-
-obj_size(hab_filtered_range_el)
-
-# --------------------- #
-# add a key
-rm(hab_dt)
-hab_filtered_range_el[, key := 1:nrow(.SD)]
-
-# adding a key added this much space:
-(3702098608 - 3792393688) / 10^6 # 90 MB!
-(3792393688 - 3070033520) / 10^6 # deleting X, Y, elevation, and range saves 722 MB 
-obj_size(hab_filtered_range_el) / 10^9 # 3.792 GB
-
-hab_filtered_range_el[, c("x", "y") := NULL]
-obj_size(hab_filtered_range_el) # 3.431 GB
-
-
-hab_filtered_range_el[, c("elevation", "range") := NULL]
-obj_size(hab_filtered_range_el) # 3.070 GB
-
-
-# subset:
-obj_size(hab_filtered_range_el)
-
-names(hab_filtered_range_el)
-hab_filtered_range_el[, c(paste0("y", 1987:2010)) := NULL]
-
-
-obj_size(hab_filtered_range_el)
-
-tic()
-hab_dt_melt <- data.table::melt(hab_filtered_range_el, 
-                                id.vars = c("key", "area_ha"), 
-                                measure.vars = paste0("y", 2011:2017))
-
-hab_dt_melt[value %in% habitat_prefs_rcl, 
-            sum(area_ha), 
-            by = c("variable", "value")]
-
-toc()
-
-
-tic()
-aoh_dt_test_melt_comp_s <- lapply(3, function(i) {
-  cc_AOH_data.table(index = i, site_index = 9, year_index = 2011:2017, 
-             calc_lc = TRUE, include_time = TRUE)
-}) %>% bind_rows()
-toc()
-aoh_dt_test_melt_comp_s
-
-# 
-#     variable value       V1
-#  1:    y2011     1 147962.5
-#  2:    y2011     2 123306.9
-#  3:    y2012     1 150692.8
-#  4:    y2012     2 135720.2
-#  5:    y2013     1 156040.7
-#  6:    y2013     2 135630.5
-#  7:    y2014     1 154844.5
-#  8:    y2014     2 132604.9
-#  9:    y2015     1 156117.8
-# 10:    y2015     2 140025.3
-# 11:    y2016     1 155746.2
-# 12:    y2016     2 145278.5
-# 13:    y2017     1 154090.6
-# 14:    y2017     2 151717.8
-
-```
-
-```{r time-melt}
-hab_dt
-
-# having loaded hab_dt before
-tic("full melt time")
-species_ranges <- vert_sites %>%
-  filter(vert_class != "gard",
-         site == site_df$site[site_index]) # filter to just the site in question
-
-species_list <- species_ranges %>% st_drop_geometry() %>%
-  select(site, vert_class, binomial) %>% unique() %>%
-  arrange(site, vert_class, binomial)
-
-species_name <- species_list$binomial[index]
-# species_name <- "Lithobates palustris"
-cat("Species name:", species_name, fill = TRUE)
-
-# ---- extract species range polygons at the site ---- #
-# select a subset of species range polygons based on binomial, and 
-# update all features to multipolygon, for fasterize()
-range_sf <- st_cast(species_ranges[species_ranges$binomial == species_name, ]) 
-
-# ---- turn the species range polygons (sf) into a raster ---- #
-range_t <- 
-  fasterize(range_sf,
-            raster::raster(resolution = terra::res(elevation_map),
-                           ext = raster::extent(terra::ext(elevation_map)[1:4]))
-  ) %>% 
-  rast() #%>% # convert to SpatRaster 
-# subst(1, 0,
-#       filename = paste0(tmp_location, "range_t_tmp.tif"),
-#       overwrite = T) # update cell values from 1 to 0.
-
-# plot(range_t)
-
-range_dt <- spatraster_to_dt(spt = range_t)
-
-# a quick test to make sure the x and y columns match, to circumvent the need
-# to round x and y to get the data.table::merge() to work correctly.
-stopifnot(
-  all.equal(hab_dt$x, range_dt$x),
-  all.equal(hab_dt$y, range_dt$y)
-)
-
-# add range to the data.table as a column
-hab_dt[, range := range_dt$layer]
-
-# ------------------------------------------------------------------------- #
-### Habitat Filter ###
-# ------------------------------------------------------------------------- #
-z1 <- habitat_prefs %>% 
-  filter(binomial == species_name,
-         suitability == "Suitable") # extract the habitat classifications for the species in question
-
-# extract the lc codes from my crosswalk that correspond to the IUCN habitat codes
-habitat_prefs_rcl <- 
-  iucn_crosswalk %>% 
-  filter(code %in% unique(z1$code)) %>%
-  select(codes = ifelse(calc_lc, "lc", "map_code")) %>% # select lc class codes, or IUCN habitat map codes, depending on the "calc_lc" switch
-  unique() %>% .$codes
-
-# ------------------------------------------------------------------------- #
-### Elevation Filter ###
-# ------------------------------------------------------------------------- #
-elevation_prefs_rcl <- elevation_prefs %>% filter(binomial == species_name)
-
-# ------------------------------------------------------------------------- #
-### Calculate AOH, broken down by habitat type ###
-# ------------------------------------------------------------------------- #
-
-# subset data.table to only pixels within both species range and elevation range, first:
-hab_filtered_range_el <- hab_dt[!is.na(range) &
-                                  elevation <= elevation_prefs_rcl$elevation_upper &
-                                  elevation >= elevation_prefs_rcl$elevation_lower]
-
-
-
-# begin melt chunk:
-rm(hab_dt)
-hab_filtered_range_el[, key := 1:nrow(.SD)]
-hab_filtered_range_el[, c("x", "y", "elevation", "range",
-                          paste0("y", 1987:2010)) := NULL]
-
-hab_dt_melt <- data.table::melt(hab_filtered_range_el, 
-                                id.vars = c("key", "area_ha"), 
-                                measure.vars = paste0("y", 2011:2017))
-
-hab_dt_melt[value %in% habitat_prefs_rcl, 
-            sum(area_ha), 
-            by = c("variable", "value")]
-
-toc() # 22.604 seconds for just 7 layers, which is less than the original data.table code, which runs through each column individually. Just stick with that code.
-```
-
-
-
-
-# Cluster results
-```{r 11-test}
-aoh_dt_11_test <- read_csv(paste0(p_derived, "aoh/aoh_dt_11_test.csv"))
-
-species_list %>% 
-  group_by(site)
-```
-
-
-```{r missing-sp}
-
-# how many did it actually run?
-aoh_dt_11_test %>% 
-  group_by(site) %>% 
-  summarise(n = length(unique(binomial)))
-
-runs_actual <- aoh_dt_11_test %>% 
-  select(site, binomial) %>%
-  unique()
-
-# what happened to Rana temporaria
-runs <- lapply(1:11, function(i) {
-  species_list %>%
-    filter(site == site_df$site[i]) %>%
-    head(n = 10) %>%
-    mutate(index = 1:10)}) %>% bind_rows()
-
-runs %>% print(n = 100)
-runs %>% select(site, binomial)
-runs_actual
-
-missing_sp <- runs %>% 
-  filter(!binomial %in% unique(runs_actual$binomial))
-
-aoh_dt_11_test %>% 
-  filter(binomial %in% missing_sp$binomial)
-
-species_ranges %>%
-  filter(binomial %in% missing_sp$binomial) %>% .[1,] %>%
-  st_geometry() %>%
-  plot()
-
-aoh_dt_11_test %>% 
-  select(site, binomial) %>% 
-  group_by(site) %>%
-  unique() %>% 
-  print(n = 120)
-
-list.files(paste0(p_derived, "aoh/"))
-
-missing_sp
-species_list %>% filter(site == site_df$site[site_index]) %>% head(n = 10)
-
-# -------------------------------------- run function ---------------------------------- #
-aoh_test_c <- lapply(1:3, function(i) {
-  cc_AOH_data.table(index = i, site_index = site_index, year_index = 2011:2017, 
-             calc_lc = TRUE, include_time = TRUE,
-             hab_dt = hab_dt,
-             range_maps = vert_sites)
-}) %>% bind_rows()
-
-aoh_test_c %>% filter(binomial == sp_name)
-plot(lc[[site_index]][[31]])
-plot(range_sf$geometry, add = T, border = "red")
-plot(range_t, add = T)
-plot(range_t)
-
-
-
-# it's due to a mismatch in species names
-non_match
-missing_sp
-
-non_match %>% arrange(site, binomial) %>% print(n = 100)
-
-species_synonyms %>%
-  filter(binomial == sp_name)
-
-species_synonyms %>%
-  filter(synonym == "Babina daunchina")
-
-
-non_match %>%
-  filter(binomial == "Bufotes variabilis")
-
-
-
-missing_sp
-#  site      vert_class binomial                 index
-#   <chr>     <chr>      <chr>                    <int>
-# 1 belarus   amp        Rana temporaria              9   # due to elevation data entry error
-# 2 chongqing amp        Babina daunchina             3   # due to synonym issue
-# 3 iraq      bird       Acrocephalus melanopogon     3   # no suitable habitat within the site
-# 4 orenburg  amp        Bufotes variabilis           3   # suitability is unknown - removed due to this.
-# 5 orenburg  amp        Rana temporaria              8   # due to elevation data entry error
-
-
-missing_sp$binomial
-
-habitat_prefs %>%
-  filter(binomial %in% missing_sp$binomial) %>%
-  print(n = 100)
-
-```
-
-
-
-```{r why-NA?}
-# some values are NA... what causes this?
-# this stems from cases where there is no 
-aoh_dt_11_test %>% 
-  filter(is.na(adj_IUCN_aoh_ha))
-
-# why is the adjustment NA??
-sp_name <- "Bufo bufo"
-site_index <- 1
-
-aoh_dt_11_test %>%
-  filter(site == site_df$site[site_index], binomial == sp_name)
-
-
-habitat_prefs %>%
-  filter(binomial == sp_name) %>%
-  arrange(code)
-
-z1 %>% arrange(code) %>% print(n = 30)
-# test_codes <- 
-  z1 %>%
-  left_join(iucn_crosswalk, by = "code") %>%
-  select(binomial, code, map_code, lc, name, IUCNLevel) #%>%
-  # print(n = 110) %>%
-  # .$lc %>% unique
-
-# based on the habitat_prefs, this species finds 1, 2, 3, and 4 suitable.
-# but, there are no 14.4 habitat type at the site.. so when I join to adj_df, it gives an NA
-aoh_dt_11_test %>%
-  filter(site == site_df$site[site_index], binomial == sp_name) %>%
-  select(site:area_ha) %>%
-  
-  
-
-z1$code %>% sort() %>% length
-unique(z1$code) %>% length
-
-habitat_prefs_rcl
-
-jung_hab_type_area_df %>%
-  filter(site == site_df$site[site_index],
-         #code %in% unique(z1$code)
-         ) %>%
-  arrange(habitat_type)
-
-
-freq(site_jung_l2_30$belarus)
-
-# the iucn crosswalk includes just those IUCN habitat types that Jung's map includes at my sites.
-# based on the way that my adjustment works, I adjust the area of each of the four land cover types based on the proportion of the broader category at each site that is made up of that particular habitat type.
-
-
-iucn_crosswalk <- read_csv(paste0(p_derived, "iucn_lc_crosswalk.csv"))
-print(iucn_crosswalk, n = 100)
-jung_hab_type_area_df %>% filter(site == site_df$site[site_index])
-z1 %>% arrange(code) %>% print(n = 100)
-
-
-# fix the NAs in the summarise function
-aoh_dt_11_test <- aoh_dt_11_test %>%
-  # filter(site == site_df$site[site_index], binomial == sp_name) %>%
-  group_by(site, binomial, year) %>% 
-  summarise(IUCN_aoh_ha = sum(area_ha),
-            adj_IUCN_aoh_ha = sum(adj_area_ha, na.rm = TRUE)) #%>%
-  # filter(is.na(adj_IUCN_aoh_ha))
-```
-
-
-```{r plot-aoh-test}
-ggplot(data = aoh_dt_11_test #%>% filter(site == "shaanxi")
-       ,
-                     mapping = aes(x = year, y = adj_IUCN_aoh_ha, color = binomial)) + 
-  geom_line() +
-  facet_wrap(vars(site), scales = "free")
-
-```
-
-
-## Della results for all 31 layers
-```{r load-31-layer-results}
-# aoh_run_date <- "_2021_12_05"
-aoh_lc_31_files <- list.files(paste0(p_derived, "aoh"), full.names = T) %>% 
-  grep(paste0("aoh_tmp", aoh_run_date), ., value = T)
-
-aoh_31_df <- lapply(aoh_lc_31_files, read_csv) %>% bind_rows()
-
-aoh_31_df
-
-aoh_31_df %>%
-  filter(binomial == "Chlidonias hybrida",
-         site == "shaanxi")
-
-aoh_31_df %>%
-  filter(binomial == "Agamia agami") %>%
-  ggplot(mapping = aes(x = year, y = adj_IUCN_aoh_ha)) +
-  geom_line()
-
-
-
-s_sp <- aoh_31_df %>% 
-  filter(site == site_df$site[9],
-         # binomial == "Tscherskia triton",
-         year == 2017) %>%
-  select(site:year, adj_IUCN_aoh_ha) %>% unique() %>%
-  .$binomial
-
-species_to_remove
-i<-9
-
-missing_sp_31 <- lapply(1:11, function(i){
-  sp_run <- aoh_31_df %>% 
-    filter(site == site_df$site[i]) %>%
-  select(site:year, adj_IUCN_aoh_ha) %>% unique() %>%
-  select(site, binomial) %>% unique()
-  
-  sp_not_run <- species_list %>% filter(site == site_df$site[i]) %>%
-    filter(!binomial %in% sp_run$binomial)
-  sp_not_run
-}) %>% bind_rows()
-
-
-# number of species at each site:
-species_list %>% 
-  group_by(site, #vert_class
-           ) %>% 
-  summarise(num_sp = n())
-
-#######
-species_list
-species_to_remove
-
-aoh_31_df %>% filter(binomial == "Chlidonias hybrida",
-                     site == site_df$site[9])
-
-# e_tmp1 <- 
-  aoh_31_df %>% 
-  filter(adj_IUCN_aoh_ha == 0) %>%
-  arrange(site, binomial, year, lc) %>% 
-  select(site, binomial) %>% unique() %>%
-  filter(site == site_df$site[3])
-  
-species_to_remove %>% filter(site == site_df$site[3]) %>% arrange(binomial)
-missing_sp_31 %>% filter(site == site_df$site[3]) %>% arrange(binomial)
-
-jung_hab_type_area_df %>% filter(site == site_df$site[1]) %>% arrange(code)
-habitat_prefs %>% filter(binomial == "Anthus pratensis",
-                         suitability == "Suitable") %>% arrange(code)
-elevation_prefs %>% filter(binomial == "Anthus pratensis")
-  
-species_to_remove[[1]]
-
-
-species_list %>% filter(site == site_df$site[9]) %>% .$binomial #%>% unique()
-
-missing_sp_tmp <- species_list %>% 
-  filter(site == site_df$site[9]) %>% #.$binomial %>%
-  filter(!binomial %in% s_sp) %>% .$binomial %>% sort()
-
-# all of these species are present in the habitat_prefs file and have suitable habitat
-habitat_prefs %>%
-  filter(binomial %in% missing_sp_tmp) %>% #.$binomial %>% unique() %>% sort() #%>% length()
-  print(n = 50)
-
-missing_sp_tmp
-
-species_ranges %>%
-  filter(binomial == missing_sp_tmp[5]) %>%
-  st_geometry() %>%
-  plot()
-
-species_list %>% filter(site == site_df$site[9]) %>% print(n = 210)
-
-
-plot(lc$shaanxi[[31]])
-
-species_ranges %>%
-  filter(site == site_df$site[9],
-         binomial == missing_sp_tmp[1]) %>%
-  st_geometry() %>%
-  plot(add = T)
-
-#
-site_elevation_range[9,]
-
-for(i in missing_sp_tmp) {
-elevation_prefs %>% filter(binomial == i) %>% print()
-habitat_prefs %>% filter(binomial == i) %>% print()
-}
-
-jung_hab_type_area_df %>% filter(site == site_df$site[9]) %>% arrange(habitat_type)
-```
-
-```{r expl-seff}
-cat(
-  paste("seff", paste0("39004952_", 1:27), collapse = "; "),
-  "> text2.txt"
-    )
-# Use the above to make seff calls to get the full times and memory usage for the full array run
-# then copy and paste this output into a 
-
-
-txt <- read_csv("scripts/ref/seff_out_aoh_abn_lc.csv")
-txt <- read_csv("scripts/ref/seff_out_aoh_abn_lc.csv")
-txt <- read_csv("scripts/ref/seff_out_max.csv")
-txt
-
-seff <- tibble(core_index = 1:18,
-               time = str_subset(txt$out, "CPU Utilized"), 
-               mem = str_subset(txt$out, "Memory Utilized"),
-               state = str_subset(txt$out, "State: ")
-               ) %>%
-  mutate(time = str_extract(time, "[0-9][0-9]:[0-9][0-9]:[0-9][0-9]"),
-         mem = str_extract(mem, "[0-9][0-9].[0-9][0-9]") %>% as.numeric())
-
-seff %>% print(n = 30)
-
-calc_cores
-
-```
-
-
-
-
-
-# AOH of only Abandoned croplands
+# Development
+## AOH of only Abandoned croplands
 
 ```{r species-list-just-2-4}
 species_list %>% filter(grepl("bird|mam", vert_class)) %>% select(binomial) %>% unique() %>% nrow()
@@ -1860,19 +497,15 @@ for(lc_class in 1:4) {
 
 ```
 
-
-# Final Results
-
-## Processing & Distilling
+# Load and Process AOH
 
 ```{r hab-dt-options}
 aoh_type_df # see _util_files.
-
 aoh_type_df$label
 ```
 
 
-```{r load-all-AOH-results}
+```{r load-all-AOH}
 run_label
 aoh_run_date # see _util_main.R
 
@@ -1958,9 +591,9 @@ aoh_l <- lapply(aoh_types,
          everything())
 
 
-# write_csv(aoh_l, file = paste0(p_derived, "aoh_l.csv"))
 write_parquet(aoh_l, paste0(p_derived, "aoh_l.parquet"))
-# aoh_l0 <- read_parquet(paste0(p_derived, "aoh_l0.parquet")) # including abn_lc, abn_iucn, and potential_abn_iucn
+
+
 aoh_l <- read_parquet(paste0(p_derived, "aoh_l.parquet"))
 
 
@@ -1978,102 +611,6 @@ aoh_species_list <- read_parquet(paste0(p_derived, "aoh_species_list.parquet"))
 ```
 
 
-```{r expl-aoh-l}
-# number of species, records, etc.
-aoh_l %>%
-  group_by(aoh_type, vert_class) %>%
-  summarise(num_records = n(),
-            sp = length(unique(binomial))) %>%
-  arrange(vert_class)
-
-# number of records at each site:
-aoh_l %>% 
-  group_by(aoh_type, vert_class, site) %>%
-  summarise(n_sp = length(unique(binomial))) %>%
-  group_by(aoh_type, vert_class) %>% summarise(n = sum(n_sp))
-
-# number of species in each model run
-aoh_l %>% group_by(aoh_type) %>% summarise(n_sp = length(unique(binomial))) # there are different numbers of species due to variance in the habitats that show up in different parts of sites. 
-
-# the lc runs have more, because they are not restricted to the habitats only in abandoned pixels. The proportional adjustment is based on the habitats that are present in any part of the site, not just the abn.
-
-aoh_l %>% group_by(aoh_type, site) %>% 
-  summarise(n_sp = length(unique(binomial))) %>%
-  ungroup() %>% group_by(aoh_type) %>% summarise(n_runs = sum(n_sp))
-
-i <- 9
-
-missing_sp_aoh <- lapply(1:11, function(i){
-  sp_run <- aoh_l %>% 
-    filter(site == site_df$site[i]) %>%
-    select(aoh_type:year, aoh) %>% unique() %>%
-  select(site, vert_class, binomial) %>% unique()
-  
-  sp_not_run <- species_list %>% filter(site == site_df$site[i]) %>%
-    filter(!binomial %in% sp_run$binomial)
-  sp_not_run
-}) %>% bind_rows()
-
-missing_sp_aoh
-
-plot(site_sf[3,]$geometry)
-species_ranges %>% 
-  filter(binomial == "Cettia major") %>%
-  st_geometry() %>%
-  plot(add = T, border = "red")
-
-aoh_l %>% 
-  filter(binomial == "Cettia major")
-habitat_prefs  %>% filter(binomial == "Cettia major") %>%
-  .$code
-
-iucn_crosswalk %>% 
-  filter(code %in% filter(habitat_prefs, binomial == "Cettia major")$code)
-
-jung_hab_type_area_df %>%
-  filter(site == "chongqing")
-
-```
-
-```{r species-attributes}
-aoh %>% 
-  filter(
-    # aoh_type %in% aoh_types[c(1, 3, 6, 7)],
-         aoh > 0,
-         vert_class != "amp",
-         passage_type == "exclude_passage"
-         ) %>%
-  # select(aoh_type, vert_class, binomial, passage_type) %>%
-  group_by(
-    aoh_type,
-           vert_class, passage_type) %>%
-  summarise(n_sp = length(unique(binomial))) %>% # 1688
-  ungroup() %>% group_by(aoh_type, passage_type) %>%
-  mutate(total_mammals_and_birds = sum(n_sp)) %>%
-  ungroup() %>% group_by(aoh_type) %>% mutate(N = sum(n_sp))
-
-species_list
-
-
-names(aoh_l)
-
-
-# caution - slow.
-species_attributes1 <- aoh_l %>% 
-  select(vert_class, binomial, mature_forest_obl, 
-         redlistCategory, total_range_area, range_size_quantile) %>% 
-  unique()
-
-species_attributes <-
-  aoh %>% select(vert_class, binomial, mature_forest_obl, redlistCategory) %>% unique() %>%
-  left_join(species_ranges %>% 
-              st_drop_geometry() %>% as_tibble() %>%
-              select(vert_class, binomial, total_range_area, range_size_quantile) %>% 
-              unique())
-
-```
-
-
 Restricting by:
 1. seasonality, so that only 1, 2, 3 are considered (Codes are: "Resident" (1), "Breeding" (2), "Non-breeding Season" (3), Passage (4), and Seasonal Occurrence Uncertain (5).)
 
@@ -2082,7 +619,7 @@ Restricting by:
 3. mature_forest_obl, so that only non-mature forest obligates are included.
 4. Abandonment only vs. the entire landscape
 
-```{r filter-suitability-by-season}
+```{r filter-AOH-suitability-by-season}
 # Extract a list of species with some habitat suitabilities with season marked as NA, and some with a code.
 # In these contexts, the NA season should be filtered out.
 # Note that some species have been directly updated in the creation of "habitat_prefs" [Glaucidium brodiei (collared owlet) and Mustela sibirica (siberian weasel)].
@@ -2215,7 +752,7 @@ aoh %>%
   filter(binomial == "Boana albopunctata")
 
 
-
+# --------------------------------------------------- #
 # create an index for running the linear models,
 # one index for each unique species at each site, in each of the aoh runs, with and without passage areas.
 run_indices <- 
@@ -2230,13 +767,6 @@ run_indices <-
 aoh <- aoh %>%
   left_join(run_indices)
 
-# save file ----------------- #
-run_indices
-write_parquet(run_indices, paste0(p_derived, "aoh_run_indices.parquet"))
-
-write_parquet(aoh, paste0(p_derived, "aoh.parquet"))
-aoh <- read_parquet(paste0(p_derived, "aoh.parquet"))
-run_indices <- read_parquet(paste0(p_derived, "aoh_run_indices.parquet"))
 
 # Add in the number of observations, number of *unique* observations (in order to filter out constant AOH species, which mess with the models)
 tic()
@@ -2248,8 +778,19 @@ aoh <- aoh %>%
 toc()
 
 
+# save file ----------------- #
+run_indices
+write_parquet(run_indices, paste0(p_derived, "aoh_run_indices.parquet"))
+write_parquet(aoh, paste0(p_derived, "aoh.parquet"))
 
 
+# load back in -------------- #
+aoh <- read_parquet(paste0(p_derived, "aoh.parquet"))
+run_indices <- read_parquet(paste0(p_derived, "aoh_run_indices.parquet"))
+```
+
+## Explore AOH results
+```{r taking-stock}
 # -------------------------------------------------------- #
 
 # taking stock:
@@ -2299,6 +840,104 @@ aoh_l %>%
   ))
 ```
 
+
+
+
+```{r expl-aoh-l}
+# number of species, records, etc.
+aoh_l %>%
+  group_by(aoh_type, vert_class) %>%
+  summarise(num_records = n(),
+            sp = length(unique(binomial))) %>%
+  arrange(vert_class)
+
+# number of records at each site:
+aoh_l %>% 
+  group_by(aoh_type, vert_class, site) %>%
+  summarise(n_sp = length(unique(binomial))) %>%
+  group_by(aoh_type, vert_class) %>% summarise(n = sum(n_sp))
+
+# number of species in each model run
+aoh_l %>% group_by(aoh_type) %>% summarise(n_sp = length(unique(binomial))) # there are different numbers of species due to variance in the habitats that show up in different parts of sites. 
+
+# the lc runs have more, because they are not restricted to the habitats only in abandoned pixels. The proportional adjustment is based on the habitats that are present in any part of the site, not just the abn.
+
+aoh_l %>% group_by(aoh_type, site) %>% 
+  summarise(n_sp = length(unique(binomial))) %>%
+  ungroup() %>% group_by(aoh_type) %>% summarise(n_runs = sum(n_sp))
+
+i <- 9
+
+missing_sp_aoh <- lapply(1:11, function(i){
+  sp_run <- aoh_l %>% 
+    filter(site == site_df$site[i]) %>%
+    select(aoh_type:year, aoh) %>% 
+    unique() %>%
+    select(site, vert_class, binomial) %>% unique()
+  
+  sp_not_run <- species_list %>% filter(site == site_df$site[i]) %>%
+    filter(!binomial %in% sp_run$binomial)
+  sp_not_run
+}) %>% bind_rows()
+
+missing_sp_aoh
+
+plot(site_sf[3,]$geometry)
+species_ranges %>% 
+  filter(binomial == "Cettia major") %>%
+  st_geometry() %>%
+  plot(add = T, border = "red")
+
+aoh_l %>% 
+  filter(binomial == "Cettia major")
+habitat_prefs  %>% filter(binomial == "Cettia major") %>%
+  .$code
+
+iucn_crosswalk %>% 
+  filter(code %in% filter(habitat_prefs, binomial == "Cettia major")$code)
+
+jung_hab_type_area_df %>%
+  filter(site == "chongqing")
+
+```
+
+```{r species-attributes}
+aoh %>% 
+  filter(
+    # aoh_type %in% aoh_types[c(1, 3, 6, 7)],
+         aoh > 0,
+         vert_class != "amp",
+         passage_type == "exclude_passage"
+         ) %>%
+  # select(aoh_type, vert_class, binomial, passage_type) %>%
+  group_by(
+    aoh_type,
+           vert_class, passage_type) %>%
+  summarise(n_sp = length(unique(binomial))) %>% # 1688
+  ungroup() %>% group_by(aoh_type, passage_type) %>%
+  mutate(total_mammals_and_birds = sum(n_sp)) %>%
+  ungroup() %>% group_by(aoh_type) %>% mutate(N = sum(n_sp))
+
+species_list
+
+
+names(aoh_l)
+
+
+# caution - slow.
+species_attributes1 <- aoh_l %>% 
+  select(vert_class, binomial, mature_forest_obl, 
+         redlistCategory, total_range_area, range_size_quantile) %>% 
+  unique()
+
+species_attributes <-
+  aoh %>% select(vert_class, binomial, mature_forest_obl, redlistCategory) %>% unique() %>%
+  left_join(species_ranges %>% 
+              st_drop_geometry() %>% as_tibble() %>%
+              select(vert_class, binomial, total_range_area, range_size_quantile) %>% 
+              unique())
+
+```
 
 ```{r pivot-aoh}
 aoh %>%
@@ -2366,23 +1005,25 @@ site_sf %>% filter(site == "shaanxi") %>% st_geometry() %>% plot()
 
 # ------------
 # mature forest obligates
-aoh_trends_by_sp %>% 
+# aoh_trends_by_sp %>%
+  aoh_feols_trends_by_sp %>%
   filter(passage_type == "exclude_passage",
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type),
          # aoh_type == "crop_abn_iucn",
-         # !(vert_class == "bird" & mature_forest_obl > 0.5)
+         # mature_forest_obl < 0.5
          ) %>%
   group_by(aoh_type, vert_class, passage_type, 
-           mature = case_when(
+           mature_forest_obl = case_when(
              mature_forest_obl <= 0.5 ~ "no",
              mature_forest_obl > 0.5 ~ "yes"),
            # overall_trend, trend_direction, trend_consistency
            ) %>%
-  summarise(n_sp = n()) %>% 
-  ungroup() %>% group_by(aoh_type, vert_class) %>% mutate(vN = sum(n_sp)) %>%
-  ungroup() %>% group_by(aoh_type) %>% mutate(N = sum(n_sp))
+  summarise(n_sp = n()) %>% ungroup() %>% 
+  group_by(aoh_type, vert_class) %>% mutate(vN = sum(n_sp)) %>% ungroup() %>% 
+  group_by(aoh_type) %>% mutate(N = sum(n_sp)) %>% ungroup() %>%
+  arrange(mature_forest_obl, aoh_type, vert_class)
 
 aoh_trends_by_sp %>%
   filter(vert_class == "mam" & mature_forest_obl < 0.5)
@@ -2394,7 +1035,7 @@ aoh_trends_by_sp %>%
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type),
          # aoh_type == "crop_abn_iucn",
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   group_by(aoh_type, vert_class, passage_type, 
            small = case_when(
@@ -2410,7 +1051,7 @@ aoh_trends_by_sp %>%
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type),
          # aoh_type == "crop_abn_iucn",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          range_size_quantile <= 0.5) %>%
   select(aoh_type, vert_class, binomial, redlistCategory, overall_trend) %>%
   unique()
@@ -2420,7 +1061,112 @@ aoh_species_list %>%
   
 ```
 
-## Explore
+```{r small-area-species}
+
+aoh %>% 
+  filter(# binomial == "Myotis evotis", year %in% 1990:1999, 
+         str_detect(passage_type, "exc"),
+         # aoh_type == "crop_abn_iucn"
+         vert_class %in% c("mam", "bird"),
+    # binomial == "Myotis septentrionalis"
+    binomial == "Rhinolophus marshalli"
+         ) %>%
+  select(aoh_type:aoh,common_names, run_index) %>%
+  group_by(run_index) %>%
+  mutate(max_aoh = max(aoh)) %>%
+  select(-c(aoh, year)) %>% unique() %>%
+  filter(
+    # max_aoh < 10,
+         )
+
+
+
+```
+
+
+```{r weird-species}
+aoh %>% filter(binomial == "Inia geoffrensis")
+aoh_trends_by_sp %>% filter(binomial == "Inia geoffrensis")
+aoh_trends_by_sp %>% filter(binomial == "Myotis evotis")
+aoh_trends_by_sp %>% filter(binomial == "Ondatra zibethicus")
+aoh_trends_by_sp %>% filter(binomial == "Panthera pardus")
+aoh_trends_by_sp %>% filter(binomial == "Rhinolophus marshalli", str_detect(passage_type, "exc"))
+aoh_trends_by_sp %>% filter(binomial == "Trachypithecus francoisi", str_detect(passage_type, "exc"))
+aoh_trends_by_sp %>% filter(binomial == "Rhinolophus marshalli", str_detect(passage_type, "exc"))
+aoh_trends_by_sp %>% filter(binomial == "Rhinolophus marshalli", str_detect(passage_type, "exc"))
+aoh_trends_by_sp %>% filter(binomial == "Rhinolophus marshalli", str_detect(passage_type, "exc"))
+aoh_trends_by_sp %>% filter(binomial == "Rhinolophus marshalli", str_detect(passage_type, "exc"))
+aoh_trends_by_sp %>% filter(binomial == "Rhinolophus marshalli", str_detect(passage_type, "exc"))
+aoh_trends_by_sp %>% filter(binomial == "Rhinolophus marshalli", str_detect(passage_type, "exc"))
+aoh_trends_by_sp %>% filter(binomial == "Rhinolophus marshalli", str_detect(passage_type, "exc"))
+
+
+aoh_trends_by_sp %>% filter(binomial == "Spermophilus citellus", str_detect(passage_type, "exc"))
+
+
+aoh %>% filter(binomial == "Myotis evotis", aoh_type == "crop_abn_iucn",  str_detect(passage_type, "exc"))
+
+
+aoh %>%
+    filter(
+      binomial == "Inia geoffrensis",
+      passage_type == "exclude_passage"
+      ) %>%
+  select(aoh_type, site) %>% unique()
+
+aoh %>%
+    filter(
+      binomial == "Lontra longicaudis",
+      passage_type == "exclude_passage"
+      ) %>%
+  select(aoh_type, site) %>% unique()
+
+aoh %>%
+    filter(
+      binomial == "Myotis evotis",
+      passage_type == "exclude_passage"
+      ) %>%
+  select(aoh_type, site) %>% unique()
+
+
+
+aoh %>%
+  filter(
+    # aoh_type == "crop_abn_iucn", 
+    # binomial == "Inia geoffrensis",     
+    # binomial == "Lontra longicaudis",
+    # binomial == "Ondatra zibethicus",
+    # binomial == "Myotis evotis",
+    # binomial == "Panthera pardus",
+    binomial == "Pteronura brasiliensis",
+    passage_type == "exclude_passage"
+    ) %>%
+  # filter(aoh_type == "crop_abn_iucn") %>%
+    
+  ggplot(mapping = aes(x = year, y = aoh/10^3, 
+                       col = aoh_type, group = aoh_type,
+                       # col = binomial#common_names
+                       )) + 
+      theme_classic() + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = 0.95) +
+  labs(x = "Year", y = expression("AOH (10"^{3}*" ha)"), 
+       col = "Species"
+       ) +
+  # scale_x_continuous(n.breaks = 6) +
+
+  facet_grid(
+    rows = vars(aoh_type),
+    cols = vars(site), scales = "free") +
+
+    theme(legend.position = "bottom") #+
+  # guides(col = guide_legend(nrow = 3))
+
+```
+
+
+### Exploratory plots
+
 ```{r prelim-plots}
 sp_to_plot <- "Agamia agami"
 sp_to_plot <- "Certhia familiaris"
@@ -2559,6 +1305,7 @@ ggsave(plot = gg_aoh_example2,
 ```
 
 
+# Models
 
 ## Model trends
 
@@ -2595,7 +1342,7 @@ ggplot(data = df_sp_subset,
 ```
 
 
-```{r calc-lm}
+```{r calc-lm-OLS}
 # -------------------
 # run simple regression on each species' and extract AOH trend over time.
 # -------------------
@@ -2658,9 +1405,10 @@ Having looked at the simplest model, using just `lm()` and assuming independent 
 I do not intend to use the model that includes an autoregressive term. 
 As Tom says, "intuitively it seems to me that controlling for the lag actually ends up controlling for some of the variation that you are interested in."
 
-### Test 1
+
 
 ```{r feols-expl}
+
 set.seed(1)
 library(fixest)
 library(tidyverse)
@@ -2677,7 +1425,7 @@ for(tt in 2:TT) df$x[tt] <- 0.8*df$x[tt-1] + tt + eps[tt]
 feols(x ~ t, data = df) %>% tidy(., conf.int = TRUE, conf.level = 0.95)
 lm(x ~ t, data = df) %>% tidy(., conf.int = TRUE, conf.level = 0.95)
 
-# Newey-west standard errors, which account for autocorrelations, and are generally approved of by the time series economics people. 
+# Newey-West standard errors, which account for autocorrelations, and are generally approved of by the time series economics people. 
 feols(x ~ t, data = df, vcov = vcov_NW(time = ~t)) %>% tidy(., conf.int = TRUE, conf.level = 0.95)
 
 
@@ -2789,6 +1537,7 @@ ggplot() +
 ```
 
 ```{r feols}
+# calculate an OLS regression using the Newey-West estimator to calculate standard errors, using the packaged {fixest}
 
 aoh %>% 
   filter(aoh_type == "crop_abn_iucn", n_unique_obs <= 10) %>% 
@@ -2801,9 +1550,12 @@ aoh %>%
 aoh %>% filter(n_unique_obs == 1) %>% select(aoh_type:binomial, run_index, n_obs, n_unique_obs) %>% unique() %>% arrange(binomial) %>% print(n = 90)
 
 
+##### -------------------------------- #
+# calculate feols
 {
 tic()
-lapply(aoh_types_sub, #aoh_types, 
+lapply(
+  aoh_types,
        function(aoh_type_) {
          aoh_tmp <- aoh %>% 
            filter(aoh_type == aoh_type_,
@@ -2838,12 +1590,11 @@ toc()
 }
 
 
-
 # ------------------------------------------------------ #
 # load back in:
 # ------------------------------------------------------ #
 aoh_feols <- 
-  lapply(aoh_types_sub, 
+  lapply(aoh_types, 
   function(aoh_type_) {read_parquet(paste0(p_derived, "aoh_feols_", aoh_type_,".parquet"))
 }) %>% bind_rows()
 
@@ -2856,13 +1607,236 @@ warnings()
 write_parquet(aoh_feols, paste0(p_derived, "aoh_feols.parquet"))
 
 aoh_feols <- read_parquet(paste0(p_derived, "aoh_feols.parquet"))
+```
+
+```{r weird-sp-missing-aoh-type}
+crop_abn_iucn_sp <- 
+  aoh_feols_trends_by_sp %>%
+  filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage",
+         vert_class != "amp", mature_forest_obl < 0.5) %>%
+  pull(binomial) %>% unique()
 
 
+species_list
 
+max_sp1 <- 
+  aoh_feols_trends_by_sp %>%
+  filter(aoh_type == "max_abn_iucn", passage_type == "exclude_passage",
+         vert_class != "amp", mature_forest_obl < 0.5) %>%
+  pull(binomial) %>% unique()
+
+full_sp1 <- 
+  aoh_feols_trends_by_sp %>%
+  filter(aoh_type == "full_iucn", 
+         passage_type == "exclude_passage", vert_class != "amp", mature_forest_obl < 0.5) %>%
+  pull(binomial) %>% unique()
+
+crop_sp1
+setdiff(sort(crop_sp1), sort(max_sp1))
+setdiff(sort(max_sp1), sort(crop_sp1))
+d1 <- sort(setdiff(full_sp1, max_sp1)) # species in full_sp1 that are not in max_sp1
+sort(setdiff(max_sp1, full_sp1)) # species in max_sp1 that are not in full_sp1
+
+aoh_feols_trends %>%
+  filter(
+    aoh_type == "max_abn_iucn",
+    passage_type == "exclude_passage",
+    vert_class != "amp", 
+    mature_forest_obl < 0.5, 
+    !(binomial %in% crop_sp1)) %>%
+  select(vert_class, binomial) %>%
+  left_join(common_names)
+
+aoh_feols_trends_by_sp %>%
+  filter(
+    aoh_type == "max_abn_iucn",
+    passage_type == "exclude_passage",
+    vert_class != "amp", 
+    mature_forest_obl < 0.5, 
+    !(binomial %in% crop_sp1)) %>%
+  select(vert_class, binomial) %>%
+  left_join(common_names)
+
+
+aoh_feols_trends_by_sp %>%
+  filter(
+    aoh_type == "crop_abn_iucn",
+    passage_type == "exclude_passage",
+    vert_class != "amp", 
+    mature_forest_obl < 0.5, 
+    !(binomial %in% max_sp1)) %>%
+  select(vert_class, binomial) %>% pull(binomial) # %>%
+  left_join(common_names)
+
+
+  
+aoh_feols_trends %>% #_by_sp %>%
+  filter(
+    # aoh_type == "crop_abn_iucn",
+    passage_type == "exclude_passage",
+    vert_class != "amp", 
+    mature_forest_obl < 0.5) %>%
+  group_by(aoh_type, vert_class) %>% 
+  summarise(n = n(), 
+            nn = length(unique(binomial))) %>%
+  arrange(vert_class, aoh_type)
+
+# plot weird species:
+aoh %>%
+  filter(binomial %in% c(
+    # "Sus scrofa"
+    "Phoenicurus erythrogastrus"
+    # "Proechimys goeldii" # in max_abn, not crop_abn
+    # "Pyrrhula pyrrhula" # in crop_abn, not max_abn
+    # "Odocoileus hemionus" # in crop_abn, not max_abn
+    # "Plecotus austriacus" # in crop_abn, not max_abn
+    ),
+    passage_type == "exclude_passage",
+    # aoh_type == "max_abn_iucn", 
+    ) %>%
+  ggplot(aes(y = aoh, x = year, col = site)) +
+  geom_line() +
+  facet_wrap(vars(aoh_type), scales = "free")
+
+# These species were removed from the different aoh types because they had zero change over the course of the time series.
+# They only had one unique observation and were therefore removed from the datasest prior to having their trend calculated. I think this is because the FEOLS call throws an error in this case.
+aoh %>% 
+  # filter(binomial == "Proechimys goeldii", aoh_type == "crop_abn_iucn", passage_type == "exclude_passage") %>% pull(run_index) %>% unique() %>%
+  
+  filter(run_index == 
+           5054
+         ) %>%
+  feols(aoh ~ year0, data = ., vcov = vcov_NW(time = ~year0)) %>%
+  tidy(., conf.int = TRUE, conf.level = 0.95)
+
+
+aoh %>% 
+  filter(n_unique_obs == 1) %>%
+  select(
+    aoh_type,
+    vert_class,
+    # site,
+    binomial,
+    aoh) %>% 
+  unique() %>%
+  arrange(vert_class, binomial, aoh_type) %>%
+  print(n = 50)
+
+
+aoh %>%
+  filter(binomial == "Sus scrofa") %>%
+  select(aoh_type:binomial, run_index) %>% unique()
+
+
+aoh_feols
+
+aoh_lm
+
+setdiff(sort(unique(aoh_lm$run_index)),
+        sort(unique(aoh_feols_trends$run_index))
+        ) %>%
+  length()
+
+
+aoh %>% 
+  filter(n_unique_obs == 1) %>%
+  select(aoh_type, vert_class, binomial, aoh, passage_type) %>% 
+  unique() %>%
+  arrange(vert_class, binomial, aoh_type) %>%
+  nrow()
+
+
+aoh %>% 
+  filter(n_unique_obs == 1) %>%
+  select(
+    aoh_type,
+    vert_class,
+    site,
+    binomial,
+    aoh) %>% 
+  unique() %>%
+  arrange(vert_class, binomial, aoh_type) %>%
+  print(n = 50)
+
+aoh_feols %>% 
+  filter(binomial == "Sus scrofa", 
+         aoh_type == "max_abn_iucn",
+         passage_type == "exclude_passage")
+
+# ------------------------------------------------------ #
+# add species with 0 slope:
+# ------------------------------------------------------ #
+aoh %>% 
+  filter(n_unique_obs == 1) %>%
+  select(-c(year, year0, aoh)) %>% unique() 
+  # select(aoh_type, vert_class, binomial, aoh, passage_type) %>% 
+  # unique() %>%
+  # arrange(vert_class, binomial, aoh_type) %>%
+  # nrow()
+
+aoh %>% 
+  filter(n_unique_obs == 1) %>%
+  select(-c(year, year0, aoh)) %>% unique() %>%
+  mutate(term = "year0", estimate = 0, trend = "no trend")
+
+names(aoh)
+names(aoh_feols_trends)
+
+head(aoh_feols_trends) %>%
+  bind_rows(
+    aoh %>% 
+      filter(n_unique_obs == 1) %>%
+      select(-c(year, year0, aoh)) %>% unique() %>%
+      head() %>%
+      mutate(term = "year0", estimate = 0, trend = "no trend")
+    ) %>%
+  select(trend:obligate_type)
+
+
+aoh_trends
+aoh_feols_trends
+nrow(aoh_trends) - nrow(aoh_feols_trends)
+nrow(aoh_trends_by_sp) - nrow(aoh_feols_trends_by_sp)
+
+aoh_trends_by_sp %>%
+  select(aoh_type:passage_type) %>%
+  mutate(model_type == "lm")
+
+aoh_feols_trends_by_sp %>%
+  select(aoh_type:passage_type)
+
+aoh_feols_trends_by_sp %>%
+  select(aoh_type:passage_type) %>%
+  mutate(model2 = "feols") %>%
+  unique() %>% nrow()
+
+aoh_trends_by_sp %>%
+  select(aoh_type:passage_type) %>%
+  mutate(model1 = "lm") %>%
+  unique() %>% nrow()
+
+
+left_join(
+  aoh_feols_trends_by_sp %>%
+    select(aoh_type:passage_type) %>%
+    mutate(model2 = "feols"),
+  aoh_trends_by_sp %>%
+    select(aoh_type:passage_type) %>%
+    mutate(model1 = "lm"),
+  by = c("aoh_type", "vert_class", "binomial", "passage_type")
+  ) %>% 
+  filter(is.na(model1))
+
+
+```
+
+```{r feols-trends}
+# mature_forest_obl < 0.5,
+#          # !(vert_class == "bird" & mature_forest_obl > 0.5),
 # ------------------------------------------------------ #
 # distill trends
 # ------------------------------------------------------ #
-aoh_feols_trends <- 
+aoh_feols_trends <-
   aoh_feols %>%
   # left_join(run_indices) %>%
   filter(!if_any(!c(mature_forest_obl, common_names), is.na)) %>% # filter out NAs:
@@ -2871,14 +1845,28 @@ aoh_feols_trends <-
   mutate(trend = case_when(
     estimate > 0 & p.value < 0.05 ~ "gain", # Statistically significant gain of AOH
     estimate < 0 & p.value < 0.05 ~ "loss", # Statistically significant loss of AOH
-    p.value > 0.05 ~ "no trend" # no significant trend
+    p.value >= 0.05 ~ "no trend" # no significant trend
     )) %>%
   select(term:binomial, trend, everything()) %>%
+  
+  # add species with 0 slope (n_unique_obs == 1):
+  bind_rows(
+    aoh %>% 
+      filter(n_unique_obs == 1) %>%
+      select(-c(year, year0, aoh)) %>% unique() %>%
+      mutate(term = "year0", estimate = 0, trend = "no trend")
+    ) %>%
+
   mutate(
-    aoh_type = fct_relevel(aoh_type, aoh_types_sub),#[c(6, 7, 3, 5, 1, 2, 4)]),
+    aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 7, 3, 5, 1, 2, 4)]),
     obligate_type = case_when(
       mature_forest_obl > 0.5 ~ "mature_forest_obligate",
       mature_forest_obl < 0.5 ~ "not_obligate"))
+
+write_parquet(aoh_feols_trends, paste0(p_derived, "aoh_feols_trends.parquet"))
+
+aoh_feols_trends <- read_parquet(paste0(p_derived, "aoh_feols_trends.parquet"))
+
 
 
 # ------- trends by species ------- #
@@ -2919,11 +1907,21 @@ aoh_feols_trends_by_sp <-
       fct_relevel(rev(c("consistent", "weak", "opposite"))),
     
     
-    aoh_type = fct_relevel(aoh_type, aoh_types_sub), #[c(6, 7, 3, 5, 1, 2, 4)]),
+    aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 7, 3, 5, 1, 2, 4)]),
     redlistCategory = fct_relevel(redlistCategory, c("Least Concern", "Near Threatened", "Vulnerable", 
                                                      "Endangered", "Critically Endangered", "Data Deficient"))
     )
 
+write_parquet(aoh_feols_trends_by_sp, paste0(p_derived, "aoh_feols_trends_by_sp.parquet"))
+
+aoh_feols_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_feols_trends_by_sp.parquet"))
+
+# ------------------------------------------------------ #
+# load relevant files
+# ------------------------------------------------------ #
+aoh_feols <- read_parquet(paste0(p_derived, "aoh_feols.parquet"))
+aoh_feols_trends <- read_parquet(paste0(p_derived, "aoh_feols_trends.parquet"))
+aoh_feols_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_feols_trends_by_sp.parquet"))
 
 
 # ------------------------------------------------------ #
@@ -2932,18 +1930,20 @@ aoh_feols_trends_by_sp <-
 
 
 
+
+
 ```
 
 ```{r plot-feols}
 lapply(
-  aoh_types_sub,# aoh_types[c(6,3,1,7,5,8)],
+  aoh_types[c(6,3,1,7,5,8)],
   # "crop_abn_iucn",
   function(i) {
   gg_aoh_feols_overall_tmp <-
     aoh_feols_trends_by_sp %>%
     filter(passage_type == "exclude_passage",
          vert_class != "amp",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          aoh_type == i
          ) %>% #.$vert_class %>% unique()
     mutate(vert_class = case_when(
@@ -2982,7 +1982,7 @@ lapply(
       filter(!is.na(trend),
              passage_type == "exclude_passage",
              vert_class != "amp",
-             !(vert_class == "bird" & mature_forest_obl > 0.5),
+             mature_forest_obl < 0.5,
              aoh_type == i
              # redlistCategory != "Data Deficient"
              ) %>%
@@ -3032,9 +2032,98 @@ lapply(
 
 
 
-### Test 2
 
-```{r compare-mean-AOH-start-to-end}
+## Effect sizes
+
+Three ways to report this:
+a. absolute area gain.
+b. % of the site area
+c. proportional gain
+
+Why plot the observed change in AOH instead of the estimated change in AOH, derived from model results?
+Some of the modeled trends produce negative estimates of the starting AOH, which produces truly wonky results for ratios and proportions.
+Essentially, this makes it so that ratios for winner species that start from a negative are consequently negative.
+These observed values are calculated
+
+```{r estimated-changes-aoh-change-df}
+#### START HERE ####
+# add these n_unique_obs == 1 species below, and run the code in the following three chunks again
+
+
+# ------------------
+# determine the relative trend (percent change in AOH start to end)
+# based on the model trends
+# ------------------
+aoh_lm <- read_parquet(paste0(p_derived, "aoh_lm.parquet"))
+aoh_feols <- read_parquet(paste0(p_derived, "aoh_feols.parquet"))
+
+# calculate percent changes
+
+aoh_change_df <-
+  # aoh_lm %>%
+  aoh_feols %>% 
+  select(run_index, 
+         term, estimate,
+         conf.low, conf.high) %>%
+  mutate(term = ifelse(term == "(Intercept)", "intercept", "slope")) %>%
+  pivot_longer(cols = c(estimate, contains("conf")), names_to = "est_type") %>%
+  pivot_wider(id_cols = c(run_index, est_type), 
+              values_from = value,#c(estimate, conf.low, conf.high),
+              names_from = term, #names_prefix = "",
+              ) %>%
+  
+  # add species with 0 slopes, i.e., n_unique_obs == 1
+  bind_rows(
+    aoh %>%
+      filter(n_unique_obs == 1) %>%
+      select(-c(year, year0)) %>% unique() %>%
+      select(run_index, intercept = aoh) %>%
+      mutate(est_type = "estimate", slope = 0)
+    ) %>%
+  
+  left_join(aoh_start_end_l %>% select(run_index, contains("year")) %>% unique(), by = "run_index") %>%
+  left_join(run_indices) %>%
+  select(run_index, est_type, vert_class, site, contains("year"), slope, intercept, 
+         aoh_type, passage_type, vert_class, binomial, mature_forest_obl) %>%
+  left_join(select(area_summary_df, site, total_site_area_ha_2017, area_ever_abn_ha), by = "site") %>% 
+  left_join(aoh_feols_trends %>% select(run_index, trend), by = "run_index") %>%
+  left_join(aoh_feols_trends_by_sp %>% select(aoh_type:overall_trend, trend_direction, trend_consistency), by = c("aoh_type", "vert_class", "binomial", "passage_type")) %>%
+  mutate(time_range = end_year - start_year,
+         aoh_start_est = slope*1 + intercept,
+         aoh_end_est = slope*(time_range) + intercept,
+         abs_change = aoh_end_est - aoh_start_est,
+         abs_change_per_yr = abs_change / time_range,
+         abs_change_as_prop_site_area = abs_change / total_site_area_ha_2017,
+         ratio_change = aoh_end_est / aoh_start_est,
+         prop_change = abs_change / aoh_start_est, 
+         factor_change = case_when(prop_change < 0 ~ 1/prop_change, TRUE ~ prop_change),
+         percent_change = paste0(prettyNum(round(100 * prop_change, digits = 2), nsmall = 2), "%")) # %>%
+    
+    # select(abs_change:percent_change) %>%
+    # print(n = 100)
+
+
+# save file
+write_parquet(aoh_change_df, paste0(p_derived, "aoh_change_df.parquet"))
+
+names(aoh_change_df)
+
+# minor exploration
+
+aoh_change_df %>%
+  filter(est_type == "estimate", aoh_type == "crop_abn_iucn", str_detect(passage_type, "excl"),
+         vert_class != "amp", mature_forest_obl < 0.5)
+
+
+# estimated (^) vs. the observed change directly from aoh_start_end_l
+aoh_start_end_l %>% 
+  filter(window_size == 1,
+         aoh_type == "crop_abn_iucn", str_detect(passage_type, "excl"),
+         vert_class != "amp", mature_forest_obl < 0.5)
+```
+
+```{r observed-change-in-AOH-by-window-size}
+
 tmp_df
 
 # ------------------------------------------------------- #
@@ -3050,20 +2139,27 @@ aoh_start_end <- left_join(
   mutate(window_size = n_)
 
 # ------------- cycle through various window lengths ------------- #
+aoh %>% select(run_index) %>% unique()
+aoh %>% select(aoh_type) %>% unique()
 
 aoh_start_end_l <- 
-  lapply(c(1, seq(from = 5, to = 15, by = 5)), 
-         function(i) {
-           left_join(
-             aoh %>% filter(aoh_type == "crop_abn_iucn") %>% group_by(run_index) %>% slice_min(year, n = i) %>% 
-               summarise(start = mean(aoh), start_year = min(year)) %>% ungroup(),
-             aoh %>% filter(aoh_type == "crop_abn_iucn") %>% group_by(run_index) %>% slice_max(year, n = i) %>% 
-               summarise(end = mean(aoh), end_year = max(year)) %>% ungroup()) %>%
-             mutate(window_size = i)
-}) %>% 
-  bind_rows() %>%
+  lapply(aoh_types, function(j) {
+    lapply(c(1, seq(from = 5, to = 15, by = 5)),
+           function(i) {
+             left_join(
+               aoh %>% 
+                 filter(aoh_type == j) %>% 
+                 group_by(run_index) %>% slice_min(year, n = i) %>% 
+                 summarise(start = mean(aoh), start_year = min(year)) %>% ungroup(),
+               aoh %>% 
+                 filter(aoh_type == j) %>% 
+                 group_by(run_index) %>% slice_max(year, n = i) %>% 
+                 summarise(end = mean(aoh), end_year = max(year)) %>% ungroup()) %>%
+               mutate(window_size = i)
+             }) %>% bind_rows()
+    }) %>% bind_rows() %>%
   left_join(run_indices, by = "run_index") %>%
-  left_join(select(area_summary_df, site, total_site_area_ha_2017), by = "site") %>%
+  left_join(select(area_summary_df, site, total_site_area_ha_2017, area_ever_abn_ha), by = "site") %>%
   left_join(aoh_feols_trends %>% select(run_index, trend)) %>%
   mutate(abs_change = end - start, 
          ratio = end/start, 
@@ -3071,12 +2167,26 @@ aoh_start_end_l <-
          prop_change = abs_change/start, 
          factor_change = case_when(prop_change < 0 ~ 1/prop_change, TRUE ~ prop_change),
          percent_change = paste0(prettyNum(round(100 * prop_change, digits = 2), nsmall = 2), "%"),
-         abs_change_as_percent_site_area = abs_change / total_site_area_ha_2017) %>%
-  select(c("run_index", "start", "start_year", "end", "end_year", "window_size", "abs_change", "prop_change", "percent_change", "ratio", "ratio_mod", "abs_change_as_percent_site_area"), everything())
+         abs_change_as_prop_site_area = abs_change / total_site_area_ha_2017) %>%
+  select(c("run_index", "start", "start_year", "end", "end_year", "window_size", "abs_change", "prop_change", "percent_change", "ratio", "ratio_mod", "abs_change_as_prop_site_area"), everything())
 
 names(aoh_start_end_l)
 
 write_parquet(aoh_start_end_l, paste0(p_derived, "aoh_start_end_l.parquet"))
+
+# add species with 0 slopes, i.e., n_unique_obs == 1
+aoh %>%
+  filter(n_unique_obs == 1) %>%
+  select(-c(year, year0)) %>% unique() %>%
+  select(run_index, intercept = aoh) %>%
+  mutate(est_type = "estimate", slope = 0)
+
+aoh_start_end_trends_l %>% 
+  filter(run_index == 24712)
+
+aoh_start_end_trends_l %>%
+  filter(run_index %in% unique(pull(filter(aoh, n_unique_obs == 1), run_index))) %>%
+  select(site:trend_threshold) %>% pull(trend) %>% length()
 
 
 # ------------------------------------------------------- #
@@ -3112,10 +2222,11 @@ aoh_start_end_trends %>%
 
 gg_aoh_start_end_trends_l <- 
   aoh_start_end_trends_l %>%
-  left_join(run_indices, by = "run_index") %>%
-  filter(passage_type == "exclude_passage",
+  # left_join(run_indices, by = "run_index") %>%
+  filter(aoh_type == "crop_abn_iucn", 
+         passage_type == "exclude_passage",
          vert_class != "amp",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          # aoh_type == i
          ) %>% #.$vert_class %>% unique()
     mutate(vert_class = case_when(
@@ -3150,6 +2261,7 @@ gg_aoh_start_end_trends_l <-
     )
 
 aoh_start_end_trends_l
+gg_aoh_start_end_trends_l
 
 ggsave(gg_aoh_start_end_trends_l,
        filename = paste0(p_output, "plots/aoh/", 
@@ -3160,15 +2272,16 @@ ggsave(gg_aoh_start_end_trends_l,
 ```
 
 
-```{r compare-start-end-to-feols}
+```{r compare-obs-change-to-mod-trends-feols}
 # ---------------------------------------------------------------------- #
 # compare trends with feols
-# ---------------------------------------------------------------------- #
+# ---------------------------------------------------------------------- 
 aoh_start_end_trends_l %>%
   left_join(aoh_feols_trends %>% select(run_index, trend_feols = trend), by = "run_index") %>% 
   filter(is.na(trend_feols)) %>% print(n = 150)
 
 aoh_feols_trends
+names(run_indices)
 
 df_agree <-
   aoh_start_end_trends_l %>%
@@ -3179,12 +2292,11 @@ df_agree <-
   filter(!is.na(agree),
          # agree == "FALSE"
          ) %>%
-  left_join(run_indices, by = "run_index") %>%
   filter(
     # window_size == 5, trend_threshold == 0.1,
     passage_type == "exclude_passage",
     vert_class != "amp",
-    !(vert_class == "bird" & mature_forest_obl > 0.5),
+    mature_forest_obl < 0.5,
     # aoh_type == i
     )  %>% #.$vert_class %>% unique()
   group_by(aoh_type, vert_class, passage_type, trend, trend_threshold, window_size, agree) %>%
@@ -3202,17 +2314,18 @@ df_agree <-
 df_agree$p_dis
 
 # plotting the proportion of disagreements to agreements for all trends
-gg_total_p_disagree <- df_agree %>%
+gg_total_p_disagree <-
+  df_agree %>%
   group_by(aoh_type, vert_class, passage_type, trend_threshold, window_size) %>% 
   arrange(aoh_type, vert_class, passage_type, trend_threshold, window_size) %>%
   summarise(n_agree = sum(n_agree), n_disagree = sum(n_disagree)) %>% ungroup() %>% 
   mutate(p_dis = n_disagree/n_agree) %>%
+    # filter(aoh_type == "crop_abn_iucn") %>%
   # filter(window_size == 5, trend_threshold == 0.1)
   ggplot(mapping = aes(x = trend_threshold, y = p_dis, color = vert_class)) +
   geom_point() +
   theme_classic() +
-
-  facet_grid(~ window_size, labeller = label_both)
+  facet_grid(aoh_type ~ window_size, labeller = label_both, scales = "free")
 
 ggsave(gg_total_p_disagree,
        filename = paste0(p_output, "plots/aoh/", 
@@ -3263,93 +2376,25 @@ df_agree %>%
 
 
 
-### Effect sizes
+### Plot effect sizes
 
-Three ways to report this:
-a. absolute area gain.
-b. % of the site area
-c. proportional gain
-
-```{r aoh-change-df}
-# ------------------
-# determine the relative trend (percent change in AOH start to end)
-# ------------------
-aoh_lm <- read_parquet(paste0(p_derived, "aoh_lm.parquet"))
-aoh_feols <- read_parquet(paste0(p_derived, "aoh_feols.parquet"))
-
-aoh_start_end_l <- read_parquet(paste0(p_derived, "aoh_start_end_l.parquet"))
-aoh_start_end_trends_l <- read_parquet(paste0(p_derived, "aoh_start_end_trends_l.parquet"))
-
-# calculate percent changes
-
-aoh_change_df <-
-  # aoh_lm %>%
-  aoh_feols %>% 
-  select(run_index, 
-         term, estimate,
-         conf.low, conf.high) %>%
-  mutate(term = ifelse(term == "(Intercept)", "intercept", "slope")) %>%
-  pivot_longer(cols = c(estimate, contains("conf")), names_to = "est_type") %>%
-  pivot_wider(id_cols = c(run_index, est_type), 
-              values_from = value,#c(estimate, conf.low, conf.high),
-              names_from = term, #names_prefix = "",
-              ) %>%
-  left_join(run_indices, by = "run_index") %>%
-  left_join(start_end_years_df %>% select(run_index, contains("year")), by = "run_index") %>%
-  select(run_index, est_type, vert_class, site, contains("year"), slope, intercept, aoh_type, passage_type, vert_class, binomial, mature_forest_obl) %>%
-  left_join(select(area_summary_df, site, total_site_area_ha_2017), by = "site") %>% 
-  left_join(aoh_feols_trends %>% select(run_index, trend), by = "run_index") %>%
-  left_join(aoh_feols_trends_by_sp %>% select(aoh_type:overall_trend, trend_direction, trend_consistency), by = c("aoh_type", "vert_class", "binomial", "passage_type")) %>%
-  mutate(time_range = end_year - start_year,
-         aoh_start_est = slope*1 + intercept,
-         aoh_end_est = slope*(time_range) + intercept,
-         abs_change = aoh_end_est - aoh_start_est,
-         abs_change_per_yr = abs_change / time_range,
-         abs_change_as_percent_site_area = abs_change / total_site_area_ha_2017,
-         prop_change = abs_change / aoh_start_est, 
-         factor_change = case_when(prop_change < 0 ~ 1/prop_change, TRUE ~ prop_change),
-         percent_change = paste0(prettyNum(round(100 * prop_change, digits = 2), nsmall = 2), "%"))
-
-
-# save file
-write_parquet(aoh_change_df, paste0(p_derived, "aoh_change_df.parquet"))
-
-names(aoh_change_df)
-
-# minor exploration
-
-aoh_change_df %>%
-  filter(est_type == "estimate", aoh_type == "crop_abn_iucn", str_detect(passage_type, "excl"),
-         vert_class != "amp", !(vert_class == "bird" & mature_forest_obl > 0.5))
-
-
-# estimated (^) vs. the observed change directly from aoh_start_end_l
-aoh_start_end_l %>% 
-  filter(window_size == 1,
-         aoh_type == "crop_abn_iucn", str_detect(passage_type, "excl"),
-         vert_class != "amp", !(vert_class == "bird" & mature_forest_obl > 0.5))
-```
-
-
-```{r plot-aoh-change}
+```{r plot-aoh-change-est}
+aoh_change_df$aoh_type %>% unique()
 # set up temp files:
 
-aoh_change_df_tmp <- aoh_change_df %>% 
-  filter(est_type == "estimate", aoh_type == "crop_abn_iucn", str_detect(passage_type, "excl"),
-         vert_class != "amp", !(vert_class == "bird" & mature_forest_obl > 0.5),
+aoh_change_df_tmp <- 
+  aoh_change_df %>% 
+  filter(est_type == "estimate", # exclude high and low confidence estimates
+         aoh_type == "crop_abn_iucn", 
+         str_detect(passage_type, "excl"),
+         vert_class != "amp", mature_forest_obl < 0.5,
          # overall_trend == "gain", rel_change < 0
          ) 
 
 names(aoh_change_df_tmp)
 
-aoh_start_end_l_tmp <- aoh_start_end_l %>%
-      filter(aoh_type == "crop_abn_iucn", str_detect(passage_type, "excl"),
-             vert_class != "amp", !(vert_class == "bird" & mature_forest_obl > 0.5))
-
-aoh_start_end_l_tmp %>% filter(window_size == 5)
-
 # --------------------------------------------------------------- #
-# ------------ absolute AOH change, by site --------------------- #
+# ------------ absolute AOH change, by site (estimated) --------- #
 # --------------------------------------------------------------- #
 
 gg_abs_change_by_site <-
@@ -3375,7 +2420,7 @@ gg_abs_change_by_site <-
 
 ggsave(
   gg_abs_change_by_site, 
-  filename = paste0(p_output, "plots/aoh/effect_size/", "hist_aoh_abs_change_by_site_annotated.pdf"),
+  filename = paste0(p_output, "plots/aoh/effect_size/", "hist_aoh_abs_change_est_by_site_annotated.pdf"),
   width = 7, height = 8.5, units = "in")
 
 
@@ -3386,13 +2431,14 @@ gg_abs_change_by_trend <-
   aoh_change_df_tmp %>%
       ggplot() +
       # geom_vline(xintercept = 0, linetype = "dashed", col = "gray50") +
-      geom_histogram(aes(x = abs(abs_change)/10^6, fill = trend, group = trend), bins = 50, col = "black", size = 0.5) +
-  geom_vline(data = aoh_change_df_tmp %>% 
+      geom_histogram(aes(x = abs(abs_change)/10^6, fill = trend, group = trend), bins = 50, col = "black", 
+                     size = 0.5) +
+    geom_vline(data = aoh_change_df_tmp %>% 
                group_by(trend, vert_class) %>%
                summarise(n = n(), mean = mean(abs_change), median = median(abs_change)) %>% 
                pivot_longer(cols = c("mean", "median"), names_to = "Statistic") %>% ungroup(), 
-               mapping = aes(xintercept = abs(value)/10^6, linetype = Statistic), size = 0.75
-               ) + 
+               mapping = aes(xintercept = abs(value)/10^6, linetype = Statistic), 
+             size = 0.75, alpha = 0.5) +
       facet_grid(rows = vars(trend), cols = vars(vert_class),
                  scales = "free",
                  labeller = as_labeller(aoh_type_labels)) +
@@ -3404,7 +2450,7 @@ gg_abs_change_by_trend <-
       theme(legend.position = "right", ggh4x.axis.ticks.length.minor = rel(2/3))
 
 ggsave(gg_abs_change_by_trend,
-    filename = paste0(p_output, "plots/aoh/effect_size/", "hist_aoh_abs_change_by_trend_free_annotated.pdf"),
+    filename = paste0(p_output, "plots/aoh/effect_size/", "hist_aoh_abs_change_est_by_trend_free_annotated.pdf"),
     width = 7, height = 5, units = "in")
 
 # --------------------------------------------------------------- #
@@ -3413,8 +2459,8 @@ ggsave(gg_abs_change_by_trend,
 gg_abs_change_as_percent_site_area_by_trend <-
   aoh_change_df_tmp %>%
       ggplot() +
-      geom_vline(xintercept = 0, linetype = "dashed", col = "gray50") +
-      geom_histogram(aes(x = abs(abs_change_as_percent_site_area) * 100, fill = trend, group = trend), bins = 50, col = "black", size = 0.5) +
+      # geom_vline(xintercept = 0, linetype = "dashed", col = "gray50") +
+      geom_histogram(aes(x = abs(abs_change_as_prop_site_area) * 100, fill = trend, group = trend), bins = 50, col = "black", size = 0.5) +
       facet_grid(rows = vars(trend), cols = vars(vert_class),
                  scales = "free",
                  labeller = as_labeller(aoh_type_labels)) +
@@ -3424,7 +2470,7 @@ gg_abs_change_as_percent_site_area_by_trend <-
       theme(legend.position = "bottom")
 
 ggsave(gg_abs_change_as_percent_site_area_by_trend,
-    filename = paste0(p_output, "plots/aoh/effect_size/", "hist_abs_change_as_percent_site_area_by_trend.pdf"),
+    filename = paste0(p_output, "plots/aoh/effect_size/", "hist_abs_change_est_as_percent_site_area_by_trend.pdf"),
     width = 7, height = 6, units = "in")
 
 
@@ -3444,7 +2490,7 @@ gg_abs_change_per_year <-
 
 ggsave(
   gg_abs_change_per_year, 
-  filename = paste0(p_output, "plots/aoh/effect_size/", "hist_aoh_abs_change_per_year.pdf"),
+  filename = paste0(p_output, "plots/aoh/effect_size/", "hist_aoh_abs_change_est_per_year.pdf"),
   width = 7, height = 8.5, units = "in")
 
 # --------------------------------------------------------------- #
@@ -3454,7 +2500,7 @@ ggsave(
 gg_abs_change_as_percent_site_area <- 
   aoh_change_df_tmp %>%
   ggplot() + 
-  geom_histogram(aes(x = abs_change_as_percent_site_area * 100, fill = trend, group = trend), bins = 50, col = "black") +
+  geom_histogram(aes(x = abs_change_as_prop_site_area * 100, fill = trend, group = trend), bins = 50, col = "black") +
   theme_classic() +
   scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
   labs(x = "Change in AOH as a percent of site area (%)", y = "Count") + 
@@ -3463,12 +2509,12 @@ gg_abs_change_as_percent_site_area <-
 
 ggsave(
   gg_abs_change_as_percent_site_area, 
-  filename = paste0(p_output, "plots/aoh/effect_size/", "hist_abs_change_as_percent_site_area.pdf"),
+  filename = paste0(p_output, "plots/aoh/effect_size/", "hist_abs_change_est_as_percent_site_area.pdf"),
   width = 7, height = 8.5, units = "in")
 
 
 # --------------------------------------------------------------- #
-# ------------ proportional change in AOH --------------------- #
+# ------------ proportional change in AOH ----------------------- #
 # --------------------------------------------------------------- #
 
 gg_prop_change <- 
@@ -3483,11 +2529,11 @@ gg_prop_change <-
 
 ggsave(
   gg_prop_change, 
-  filename = paste0(p_output, "plots/aoh/effect_size/", "hist_prop_change.pdf"),
+  filename = paste0(p_output, "plots/aoh/effect_size/", "hist_prop_change_est.pdf"),
   width = 7, height = 8.5, units = "in")
 
 # --------------------------------------------------------------- #
-# ------------ proportional change in AOH, constrained --------------------- #
+# -------- proportional change in AOH, constrained -------------- #
 # --------------------------------------------------------------- #
 aoh_change_df_tmp %>% 
   select(run_index, vert_class, site, trend, contains("change")) %>% 
@@ -3507,26 +2553,65 @@ gg_prop_change_constrained <-
 
 ggsave(
   gg_prop_change_constrained, 
-  filename = paste0(p_output, "plots/aoh/effect_size/", "hist_prop_change_constrained.pdf"),
+  filename = paste0(p_output, "plots/aoh/effect_size/", "hist_prop_change_est_constrained.pdf"),
   width = 7, height = 8.5, units = "in")
 
 
-aoh_change_df_tmp %>% 
-  select(run_index, vert_class, site, trend, contains("change"),
-         contains("aoh")) %>% 
-  filter(abs(prop_change) < 10,
-         site == "shaanxi", trend == "gain", prop_change < 0
-  )
+
+# --------------------------------------------------------------- #
+# ------------ ratio change in AOH ------------------------------ #
+# --------------------------------------------------------------- #
+gg_ratio_change <-
+  aoh_change_df_tmp %>%
+  ggplot() + 
+  geom_histogram(aes(x = ratio_change, fill = trend, group = trend), bins = 50, col = "black") +
+  theme_classic() +
+  scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
+  labs(x = "Ratio of ending AOH to starting AOH", y = "Count") + 
+  theme(legend.position = "bottom", strip.text.y.right = element_text(size = 8, angle = 0, hjust = 0, vjust = 0)) +
+  facet_grid(site ~ ., scales = "free", labeller = as_labeller(fancy_labels))
+
+ggsave(
+  gg_ratio_change, 
+  filename = paste0(p_output, "plots/aoh/effect_size/", "hist_ratio_change_est.pdf"),
+  width = 7, height = 8.5, units = "in")
+
+# --------------------------------------------------------------- #
+# ------------ ratio change in AOH, constrained ----------------- #
+# --------------------------------------------------------------- #
+gg_ratio_change_constrained <-
+  aoh_change_df_tmp %>%
+  filter(abs(ratio_change) < 10) %>%
+  ggplot() + 
+  geom_histogram(aes(x = ratio_change, fill = trend, group = trend), bins = 50, col = "black") +
+  theme_classic() +
+  scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
+  labs(x = "Ratio of ending AOH to starting AOH", y = "Count") + 
+  theme(legend.position = "bottom", strip.text.y.right = element_text(size = 8, angle = 0, hjust = 0, vjust = 0)) +
+  facet_grid(site ~ ., scales = "free", labeller = as_labeller(fancy_labels))
+
+ggsave(
+  gg_ratio_change_constrained, 
+  filename = paste0(p_output, "plots/aoh/effect_size/", "hist_ratio_change_est_constrained.pdf"),
+  width = 7, height = 8.5, units = "in")
+
+```
+
+
+```{r plot-aoh-change-obs}
 
 # --------------------------------------------------------------- #
 # ------------ observed absolute AOH change --------------------- #
 # --------------------------------------------------------------- #
+aoh_start_end_l_tmp_plots <- aoh_start_end_l %>%
+      filter(aoh_type == "crop_abn_iucn", str_detect(passage_type, "excl"),
+             vert_class != "amp", mature_forest_obl < 0.5)
 
-names(aoh_feols_trends)
+aoh_start_end_l_tmp_plots %>% filter(window_size == 5)
 
 lapply(c(1, 5, 10, 15), function(i) {
   ggsave(
-    aoh_start_end_l_tmp %>% 
+    aoh_start_end_l_tmp_plots %>% 
       filter(window_size == i) %>%
       ggplot() + 
       geom_histogram(aes(x = abs_change/ 10^3, fill = trend, group = trend), bins = 50, col = "black") +
@@ -3545,73 +2630,123 @@ lapply(c(1, 5, 10, 15), function(i) {
 # --------------------------------------------------------------- #
 # ------------ proportional change in observed AOH -------------- #
 # --------------------------------------------------------------- #
-
-names(aoh_feols_trends)
-
-gg_prop_change_obs <-
-  aoh_start_end_l_tmp %>% 
-      filter(window_size == 1) %>%
-  filter(abs(prop_change) < 30) %>%
-  # filter(prop_change < 0) %>% 
-  ggplot() + 
-  geom_histogram(aes(x = prop_change, fill = trend, group = trend), bins = 100, col = "black") +
-  theme_classic() +
-  scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
-  labs(x = "Proportional change in observed AOH", y = "Count") + 
-  theme(legend.position = "bottom", strip.text.y.right = element_text(size = 8, angle = 0, hjust = 0, vjust = 0)) +
-  facet_grid(site ~ ., scales = "free", labeller = as_labeller(fancy_labels))
-
-ggsave(
-  gg_prop_change_obs, 
-  filename = paste0(p_output, "plots/aoh/effect_size/", "hist_prop_change_obs.pdf"),
-  width = 7, height = 8.5, units = "in")
-
 # apply across multiple window sizes:
-lapply(c(1, 5, 10, 15), function(i) {
-  ggsave(
-  aoh_start_end_l_tmp %>% 
-      filter(window_size == i, 
-             abs(prop_change) < 30) %>%
-  ggplot() + 
-  geom_histogram(aes(x = prop_change, fill = trend, group = trend), bins = 100, col = "black") +
-  theme_classic() +
-  scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
-  labs(x = "Proportional change in observed AOH", y = "Count", caption = paste0("Comparing mean values in first and last ", i, " years")) + 
-  theme(legend.position = "bottom", strip.text.y.right = element_text(size = 8, angle = 0, hjust = 0, vjust = 0)) +
-  facet_grid(site ~ ., scales = "free", labeller = as_labeller(fancy_labels)),
-  
-  filename = paste0(p_output, "plots/aoh/effect_size/", "hist_prop_change_obs_", i, ".pdf"),
-  width = 7, height = 8.5, units = "in")
+constrain_ <- TRUE
+i <- 5
+lapply(c("TRUE", "FALSE"), function (constrain_) {
+  lapply(c(1, 5, 10, 15
+           ), function(i) {
+    ggsave(
+      aoh_start_end_l_tmp_plots %>% 
+        filter(window_size == i) %>%
+        { if (constrain_) filter(., abs(prop_change) < 30) else .} %>%
+        ggplot() + 
+        geom_histogram(aes(x = prop_change, fill = trend, group = trend), bins = 100, col = "black") +
+        theme_classic() +
+        scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
+        labs(x = "Proportional change in observed AOH", y = "Count",
+             caption = paste0("Comparing mean values in first and last ", i, " years")) + 
+        theme(legend.position = "bottom", 
+              strip.text.y.right = element_text(size = 8, angle = 0, hjust = 0, vjust = 0)) +
+        facet_grid(site ~ ., scales = "free", labeller = as_labeller(fancy_labels)),
+      filename = paste0(p_output, "plots/aoh/effect_size/", "hist_prop_change_obs_", 
+                        {if(constrain_) "constrained_" else ""},
+                        i, ".pdf"),
+      width = 7, height = 8.5, units = "in")
+    })
 })
 
 
 
+# --------------------------------------------------------------- #
+# ------------ ratio change in observed AOH --------------------- #
+# --------------------------------------------------------------- #
+# apply across multiple window sizes:
+lapply(c("TRUE", "FALSE"), function (constrain_) {
+  lapply(c(1, 5, 10, 15), function(i) {
+  ggsave(
+    aoh_start_end_l_tmp_plots %>% 
+      filter(window_size == i) %>%
+      { if (constrain_) filter(., abs(ratio) < 25) else .} %>%
+      
+      ggplot() + 
+      geom_histogram(aes(x = ratio, fill = trend, group = trend), bins = 100, col = "black") +
+      theme_classic() +
+      scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], 
+                        values = palette_du_jour[c(1, 3, 6)]) + 
+      labs(x = "Ratio of ending AOH to starting AOH (observed)", 
+           y = "Count", caption = paste0("Comparing mean values in first and last ", i, " years")) + 
+      scale_x_continuous() +
+      theme(legend.position = "bottom", 
+            strip.text.y.right = element_text(size = 8, angle = 0, hjust = 0, vjust = 0)) +
+      facet_grid(site ~ ., scales = "free", 
+                 labeller = as_labeller(fancy_labels)),
+    
+    filename = paste0(p_output, "plots/aoh/effect_size/", "hist_aoh_ratio_obs_",
+                      {if(constrain_) "constrained_" else "x"},
+                      i, ".pdf"),
+    width = 7, height = 8.5, units = "in")
+    })
+  })
+
+
+# --------------------------------------------------------------- #
+# -------- change in observed AOH as a prop of site area -------- #
+# --------------------------------------------------------------- #
+names(aoh_start_end_l_tmp_plots)
+i
+# apply across multiple window sizes:
+# lapply(c(1, 5, 10, 15), function(i) {
+#   ggsave(
+  aoh_start_end_l_tmp_plots %>% 
+    filter(window_size == 1) %>%
+    ggplot() + 
+    geom_histogram(aes(x = abs_change_as_prop_site_area, fill = trend, group = trend), bins = 100, col = "black") +
+    geom_vline(data = aoh_start_end_l_tmp_plots %>%
+                 filter(window_size == 1, trend != "no trend") %>%
+                 group_by(trend, site) %>%
+                 summarise(n = n(), mean = mean(abs_change_as_prop_site_area), 
+                           median = median(abs_change_as_prop_site_area)) %>%
+                 pivot_longer(cols = c("mean", "median"), names_to = "Statistic") %>% ungroup(),
+               mapping = aes(xintercept = value, linetype = Statistic, col = trend), size = 0.75) +
+    theme_classic() +
+    scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
+    scale_color_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
+    labs(x = "Change in observed AOH as a proportion of site area", y = "Count", 
+         caption = paste0("Comparing mean values in first and last ", i, "years")) + 
+    theme(legend.position = "bottom", strip.text.y.right = element_text(size = 8, angle = 0, hjust = 0, vjust = 0)) +
+    facet_grid(site ~ ., scales = "free", labeller = as_labeller(fancy_labels))
+#   ,
+#   
+#   filename = paste0(p_output, "plots/aoh/effect_size/", "hist_aoh_change_as_prop_site_area_obs_", i, "x.pdf"),
+#   width = 7, height = 8.5, units = "in")
+#   
+# })
+
+```
+
+
+```{r feols-slopes}
+
+aoh_feols_trends %>%
+  filter(aoh_type == "crop_abn_iucn",
+         passage_type == "exclude_passage",
+         mature_forest_obl < 0.5) %>%
+  ggplot(aes(x = estimate, fill = trend)) + 
+  geom_histogram() + 
+  facet_wrap(vars(site), scales = "free")
 
 
 
+aoh_feols_trends %>%
+  filter(
+    aoh_type == "crop_abn_iucn",
+    passage_type == "exclude_passage",
+    mature_forest_obl < 0.5) %>%
+  ggplot(aes(x = estimate, fill = trend)) + 
+  geom_histogram() + 
+  facet_grid(rows = vars(site), scales = "free")
 
-
-aoh %>%
-  filter(run_index %in% weird_runs) %>%
-  left_join(aoh_feols_trends) %>%
-
-  ggplot(aes(x = year, y = aoh/10^6, col = trend,
-                 group = binomial
-                 )) +
-      geom_line(alpha = 0.15) + 
-      theme_classic() + 
-      scale_color_manual(labels = palette_labels[c(1, 3, 6)],
-                         values = palette_du_jour[c(1, 3, 6)]) +
-      scale_fill_manual(labels = palette_labels[c(1, 3, 6)],
-                        values = palette_du_jour[c(1, 3, 6)]) +
-      labs(y = expression("AOH (10"^{6}*" ha)"),
-           x = "Year", col = "Trend", fill = "Mean Trend") + 
-      guides(color = guide_legend(override.aes = list(alpha = 1, size = 1.5, order = 1))) +
-      theme(legend.position = c(0.9, 0.125),
-            legend.background = element_blank(),
-            legend.spacing = unit(-4, units = "mm")
-            ) +
-      facet_wrap(vars(site), scales = "free_y", labeller = as_labeller(fancy_labels))
 ```
 
 
@@ -3627,12 +2762,12 @@ For declines in AOH, the absolute change is negative, and
 # ------------ factor change in observed AOH (i.e., negative values are 1/proportion) -------------- #
 # --------------------------------------------------------------- #
 
-aoh_start_end_l_tmp %>% filter(window_size == 5)
+aoh_start_end_l_tmp_plots %>% filter(window_size == 5)
 
 # ---------------- by site ---------- #
 lapply(c(1, 5, 10, 15), function(i) {
   ggsave(
-    aoh_start_end_l_tmp %>% 
+    aoh_start_end_l_tmp_plots %>% 
       filter(window_size == i,
              abs(ratio_mod) < 15) %>%
       ggplot() +
@@ -3641,7 +2776,7 @@ lapply(c(1, 5, 10, 15), function(i) {
                      # closed = "left",  center = 0,
                      col = "black", size = 0.5
                      ) +
-      geom_vline(data = aoh_start_end_l_tmp %>% 
+      geom_vline(data = aoh_start_end_l_tmp_plots %>% 
                    filter(window_size == i, !is.na(trend), trend != "no trend") %>%
                    group_by(trend, site) %>%
                    summarise(n = n(), mean = mean(ratio_mod), median = median(ratio_mod)) %>%
@@ -3664,7 +2799,7 @@ lapply(c(1, 5, 10, 15), function(i) {
 })
 
 
-aoh_start_end_l_tmp %>% 
+aoh_start_end_l_tmp_plots %>% 
       filter(window_size == 5) %>% 
       filter(abs(ratio_mod) < 15,
              !is.na(trend))
@@ -3673,7 +2808,7 @@ aoh_start_end_l_tmp %>%
 
 # ---------------- by trend ---------- #
 ggsave(
-  aoh_start_end_l_tmp %>% 
+  aoh_start_end_l_tmp_plots %>% 
       filter(window_size == 5, abs(ratio_mod) < 15, !is.na(trend)) %>%
       ggplot() +
       geom_vline(xintercept = 0, linetype = "dashed", col = "gray50") +
@@ -3696,7 +2831,7 @@ ggsave(
 # ---------------- version 2 ---------- #
 
 ggsave(
-  aoh_start_end_l_tmp %>% 
+  aoh_start_end_l_tmp_plots %>% 
       filter(window_size == 5,
              abs(ratio_mod) < 15,
              !is.na(trend)) %>%
@@ -3704,7 +2839,7 @@ ggsave(
       # geom_vline(xintercept = 0, linetype = "dashed", col = "gray50") +
       geom_histogram(aes(x = abs(ratio_mod), fill = trend, col = trend, group = trend), bins = 50, binwidth = 0.5,
                      col = "black", size = 0.5) +
-    geom_vline(data = aoh_start_end_l_tmp %>% filter(window_size == 5, 
+    geom_vline(data = aoh_start_end_l_tmp_plots %>% filter(window_size == 5, 
                                                      # abs(ratio_mod) < 15,
                                                      !is.na(trend)) %>%
                  group_by(trend, vert_class,# site
@@ -3732,7 +2867,7 @@ ggsave(
 
 # --------------- by trend, all together ------ #
 ggsave(
-  aoh_start_end_l_tmp %>% 
+  aoh_start_end_l_tmp_plots %>% 
       filter(window_size == 5, abs(ratio_mod) < 15, !is.na(trend)) %>%
       ggplot() +
       geom_vline(xintercept = 0, linetype = "dashed", col = "gray50") +
@@ -3761,7 +2896,7 @@ ggsave(
 ggsave(
   aoh_change_df %>%
       filter(aoh_type == "crop_abn_iucn", str_detect(passage_type, "excl"),
-             vert_class != "amp", !(vert_class == "bird" & mature_forest_obl > 0.5)) %>%
+             vert_class != "amp", mature_forest_obl < 0.5) %>%
       left_join(aoh_feols_trends %>% select(run_index, trend)) %>%
       select(run_index, aoh_end_est, aoh_start_est, contains("change"), site, trend) %>%
       mutate(ratio = aoh_end_est/aoh_start_est,
@@ -3792,7 +2927,7 @@ ggsave(
 ```{r plot_expl}
 # birds above 0, mammals below 0:
 ggsave(
-  aoh_start_end_l_tmp %>% 
+  aoh_start_end_l_tmp_plots %>% 
       filter(window_size == 5, abs(ratio_mod) < 15) %>%
   mutate(rounded = plyr::round_any(ratio_mod, 0.5, ceiling)) %>% #select(run_index, ratio, ratio_mod, rounded) %>%
   group_by(vert_class, site, rounded, trend) %>%
@@ -3850,7 +2985,7 @@ ggsave(
 
 
 # just the steps:
-  aoh_start_end_l_tmp %>% 
+  aoh_start_end_l_tmp_plots %>% 
       filter(window_size == 5, abs(ratio_mod) < 15) %>%
   mutate(rounded = plyr::round_any(ratio_mod, 0.5, floor)) %>%
   group_by(vert_class, site, rounded, trend) %>%
@@ -3896,7 +3031,7 @@ ggsave(
 
 
 # density ridges:
-aoh_start_end_l_tmp %>% 
+aoh_start_end_l_tmp_plots %>% 
       filter(window_size == 5, abs(ratio_mod) < 15, !is.na(trend)) %>%
   ggplot() + 
   geom_vline(xintercept = 0, linetype = "dashed", col = "gray50") +
@@ -3916,7 +3051,7 @@ aoh_start_end_l_tmp %>%
 
 ```{r log-factor}
 
-aoh_start_end_l_tmp %>% 
+aoh_start_end_l_tmp_plots %>% 
   filter(window_size == 5,
          ratio > 1,
          abs(ratio_mod) < 10
@@ -4023,7 +3158,7 @@ aoh_change_df_tmp %>%
 # ----------------------------------------------------------------- #
 
 # --------- d ----------- #
-aoh_start_end_l_tmp %>% 
+aoh_start_end_l_tmp_plots %>% 
   filter(window_size == 5, !is.na(trend)) %>%
   group_by(trend, vert_class) %>%
   summarise(n = n(), mean = mean(abs(ratio_mod)), median = median(abs(ratio_mod))) %>% 
@@ -4037,7 +3172,7 @@ aoh_start_end_l_tmp %>%
                     values = palette_du_jour[c(1, 3, 6)])
 
 # --------- e ----------- #
-aoh_start_end_l_tmp %>% 
+aoh_start_end_l_tmp_plots %>% 
   filter(window_size == 5, # abs(ratio_mod) < 15,
          !is.na(trend)) %>%
   group_by(trend, vert_class, site) %>%
@@ -4052,7 +3187,7 @@ aoh_start_end_l_tmp %>%
 
 
 # --------- f ----------- #
-aoh_start_end_l_tmp %>% 
+aoh_start_end_l_tmp_plots %>% 
   filter(window_size == 5, # abs(ratio_mod) < 15,
          !is.na(trend)) %>%
   group_by(trend, site) %>%
@@ -4063,6 +3198,24 @@ aoh_start_end_l_tmp %>%
   scale_color_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)],
                     values = palette_du_jour[c(1, 3, 6)])
 
+
+
+```
+
+```{r explore-negative-ratio-winner-species}
+aoh_change_df_tmp %>%
+  filter(abs(ratio_change) < 10, site == "belarus") %>%
+  ggplot() + 
+  geom_histogram(aes(x = ratio_change, fill = trend, group = trend), bins = 50, col = "black") +
+  theme_classic() +
+  # scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
+  labs(x = "Ratio of ending AOH to starting AOH", y = "Count") + 
+  theme(legend.position = "bottom", strip.text.y.right = element_text(size = 8, angle = 0, hjust = 0, vjust = 0)) +
+  facet_grid(site ~ ., scales = "free", labeller = as_labeller(fancy_labels))
+
+aoh_change_df_tmp %>%
+  filter(abs(ratio_change) < 10, site == "belarus") %>%
+  select(site, aoh_type, passage_type, binomial, mature_forest_obl, aoh_start_est, aoh_end_est, trend, ratio_change)
 
 
 ```
@@ -4421,7 +3574,7 @@ lapply(
     aoh_lag_trends_by_sp %>%
     filter(passage_type == "exclude_passage",
          vert_class != "amp",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          aoh_type == i
          ) %>% #.$vert_class %>% unique()
     mutate(vert_class = case_when(
@@ -4460,7 +3613,7 @@ lapply(
       filter(!is.na(trend),
              passage_type == "exclude_passage",
              vert_class != "amp",
-             !(vert_class == "bird" & mature_forest_obl > 0.5),
+             mature_forest_obl < 0.5,
              aoh_type == i
              # redlistCategory != "Data Deficient"
              ) %>%
@@ -4518,7 +3671,7 @@ ggplotly(
   aoh %>%
   filter(aoh_type == "crop_abn_iucn", site == "shaanxi",
          vert_class == "bird",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          passage_type == "exclude_passage"
          ) %>%
   # left_join(aoh_trends) %>%
@@ -4824,7 +3977,7 @@ lapply(
     aoh_lm_subset3_trends_by_sp %>%
     filter(passage_type == "exclude_passage",
          vert_class != "amp",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          aoh_type == i
          ) %>% #.$vert_class %>% unique()
     mutate(vert_class = case_when(
@@ -4863,7 +4016,7 @@ lapply(
       filter(!is.na(trend),
              passage_type == "exclude_passage",
              vert_class != "amp",
-             !(vert_class == "bird" & mature_forest_obl > 0.5),
+             mature_forest_obl < 0.5,
              aoh_type == i
              # redlistCategory != "Data Deficient"
              ) %>%
@@ -4921,7 +4074,7 @@ lapply(
     aoh_lm_subset5_trends_by_sp %>%
     filter(passage_type == "exclude_passage",
          vert_class != "amp",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          aoh_type == i
          ) %>% #.$vert_class %>% unique()
     mutate(vert_class = case_when(
@@ -4960,7 +4113,7 @@ lapply(
       filter(!is.na(trend),
              passage_type == "exclude_passage",
              vert_class != "amp",
-             !(vert_class == "bird" & mature_forest_obl > 0.5),
+             mature_forest_obl < 0.5,
              aoh_type == i
              # redlistCategory != "Data Deficient"
              ) %>%
@@ -5064,7 +4217,7 @@ comparing_tmp_auto_stats_df <-
          # type == "OLS",
          passage_type == "exclude_passage",
          vert_class != "amp", 
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   group_by(type, aoh_type, vert_class, passage_type,
            overall_trend, trend_direction) %>%
@@ -5129,15 +4282,39 @@ gtsave(gt_tauto, filename = paste0(p_derived, "comparing_stats_tauto_table_arran
 
 
 
-# ----------------------------------------------------------- #
-# -- NW -- comparing observed vs. potential
-# ----------------------------------------------------------- #
-
 
 
 # ----------------------------------------------------------- #
-# -- NW -- calculation comparisons
+# -- NW -- comparing observed vs. potential, across calculations
 # ----------------------------------------------------------- #
+aoh_feols_trends_by_sp$aoh_type %>% unique()
+
+aoh_feols_trends_by_sp %>%
+  mutate(type = as_factor("NW"),
+         overall_trend = 
+           fct_relevel(overall_trend, c("gain", "loss", "no trend", 
+                                        "weak gain", "weak loss", "context dependent"))) %>%
+  filter(str_detect(aoh_type, "crop_abn|full"), 
+         passage_type == "exclude_passage",
+         vert_class != "amp", 
+         mature_forest_obl < 0.5
+         ) %>% #.$aoh_type %>% unique()
+  group_by(type, aoh_type, vert_class, passage_type,
+           overall_trend, trend_direction) %>%
+  summarise(n_sp = n()) %>%
+  arrange(type, vert_class, aoh_type) %>%
+  ungroup() %>%
+  group_by(type, aoh_type, vert_class) %>%
+  mutate(total_sp = sum(n_sp),
+         r = n_sp/total_sp,
+         p = 100 * r,
+         pr = round(p, digits = 2),
+         pp = paste0(prettyNum(pr, nsmall = 2), "%")) %>% ungroup() %>%
+  select(type, aoh_type, overall_trend, vert_class, r) %>%
+  pivot_wider(id_cols = c(type, aoh_type, vert_class), 
+              names_from = overall_trend, values_from = r) %>%
+  arrange(vert_class, type)
+
 ```
 
 ```{r species-specific-changes}
@@ -5212,7 +4389,7 @@ aoh_trends_by_sp
          passage_type == "exclude_passage",
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction) %>%
@@ -5452,7 +4629,6 @@ aoh_trends_by_sp <-
 write_parquet(aoh_trends_by_sp, paste0(p_derived, "aoh_trends_by_sp.parquet"))
 aoh_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_trends_by_sp.parquet"))
 
-
 ```
 
 
@@ -5474,7 +4650,7 @@ trend_changes <-
   filter(vert_class != "amp",
          str_detect(aoh_type, "crop"),
          passage_type == "exclude_passage",
-         # mature_forest_obl < 0.5
+         mature_forest_obl < 0.5
          ) %>%
   pivot_wider(id_cols = c(vert_class, site, binomial),
               values_from = trend,
@@ -5596,7 +4772,7 @@ gg_aoh_trend_lines_by_site <-
   lapply(aoh_types[c(6, 3, 1, 7, 5, 8)], function(i) {
   df_tmp %>%
     filter(aoh_type == i,
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            passage_type == "exclude_passage"
            ) %>%
   pivot_longer(cols = contains("year0"), values_to = "year") %>%
@@ -5662,7 +4838,7 @@ ggplotly(gg_aoh_trend_lines_by_site$crop_abn_iucn)
 gg_aoh_trend_lines_wisc_crop <-
   df_tmp %>%
     filter(aoh_type == "crop_abn_iucn", site == "wisconsin",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            passage_type == "exclude_passage"
            ) %>%
   pivot_longer(cols = contains("year0"), values_to = "year") %>%
@@ -5717,7 +4893,7 @@ gg_aoh_sp_obs_by_site <-
   lapply(aoh_types[c(6, 3, 1, 7, 5, 8)], function(i) {
   aoh %>%
       filter(aoh_type == i,
-             !(vert_class == "bird" & mature_forest_obl > 0.5),
+             mature_forest_obl < 0.5,
              passage_type == "exclude_passage"
              ) %>%
       left_join(aoh_trends) %>%
@@ -5767,7 +4943,7 @@ ggplotly(
   aoh %>%
   filter(aoh_type == "crop_abn_iucn", site == "shaanxi",
          vert_class == "bird",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          passage_type == "exclude_passage"
          ) %>%
   left_join(aoh_trends) %>%
@@ -5798,7 +4974,7 @@ ggplotly(
 gg_aoh_sp_obs_wisc_crop <-
   aoh %>%
       filter(aoh_type == "crop_abn_iucn", site == "wisconsin",
-             !(vert_class == "bird" & mature_forest_obl > 0.5),
+             mature_forest_obl < 0.5,
              passage_type == "exclude_passage"
              ) %>%
       left_join(aoh_trends) %>%
@@ -5835,7 +5011,7 @@ gg_aoh_sp_obs_wisc_crop_plus1 <- gg_aoh_sp_obs_wisc_crop +
                 filter(
                   binomial == "Sturnella magna",
                   aoh_type == "crop_abn_iucn", site == "wisconsin",
-                       !(vert_class == "bird" & mature_forest_obl > 0.5),
+                       mature_forest_obl < 0.5,
                        passage_type == "exclude_passage"
                        ) %>%
                 left_join(aoh_trends), 
@@ -5850,7 +5026,7 @@ gg_aoh_sp_obs_wisc_crop_plus2 <- gg_aoh_sp_obs_wisc_crop_plus1 +
                 filter(
                   binomial == "Setophaga pinus",
                   aoh_type == "crop_abn_iucn", site == "wisconsin",
-                       !(vert_class == "bird" & mature_forest_obl > 0.5),
+                       mature_forest_obl < 0.5,
                        passage_type == "exclude_passage"
                        ) %>%
                 left_join(aoh_trends), 
@@ -5865,7 +5041,7 @@ gg_aoh_sp_obs_wisc_crop_plus3 <- gg_aoh_sp_obs_wisc_crop_plus2 +
                 filter(
                   binomial == "Troglodytes aedon",
                   aoh_type == "crop_abn_iucn", site == "wisconsin",
-                       !(vert_class == "bird" & mature_forest_obl > 0.5),
+                       mature_forest_obl < 0.5,
                        passage_type == "exclude_passage"
                        ) %>%
                 left_join(aoh_trends), 
@@ -5905,7 +5081,7 @@ gg_compare_cases_one_site <-
     filter(site == "shaanxi",
            vert_class == "bird",
            aoh_type %in% aoh_types[c(6, 3, 1)],
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            passage_type == "exclude_passage"
            ) %>%
     mutate(aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 3, 1)])) %>%
@@ -5943,7 +5119,7 @@ aoh_trends %>%
     # site == "wisconsin",
          vert_class == "bird",
          aoh_type %in% aoh_types[c(6, 3, 1)],
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          passage_type == "exclude_passage"
          ) %>%
   mutate(aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 3, 1)])) %>%
@@ -5961,7 +5137,16 @@ aoh_trends %>%
 ```
 
 
-# Figures 
+# Statistical tests
+
+
+# Figures
+
+(11.15.2022) - It makes sense to restrict all scenarios (Calc. 1 - cropland abandonment only, Calc. 2 - abandoned lands, starting from 1987, and Calc. 3 - full landscape) to the same set of species, so that comparisons are consistent.
+There are some species (e.g., the neotropical otter *Lontra longicaudis* and the Amazon river dolphin *Inia geoffrensis*) that do not have any habitat that is affected by abandonment.
+In these cases, their only habitat shows up in the full landscape scenario.
+
+May also make sense to filter species by the amount of habitat. 
 
 ## Overall Trends
 
@@ -6049,6 +5234,9 @@ aoh_trends_by_sp %>%
 
 ```
 
+
+
+
 ```{r set-up-aoh-types-sub}
 aoh_types_sub <- aoh_types[c(6, 3, 1)]
 threat_statuses <- c("Threatened", "Not Threatened")
@@ -6056,21 +5244,26 @@ threat_statuses <- c("Threatened", "Not Threatened")
 
 
 ```{r trend-summary-overall}
+
 # for (i in 1:4) {
 #   
 #   passage_opt <- filter(plot_filter_options_df, run == i)$passage_opt
 #   mature_opt <- filter(plot_filter_options_df, run == i)$mature_opt
 
-gg_aoh_trend_by_vert_aoh_type <-
-  aoh_trends_by_sp %>%
+# gg_aoh_trend_by_vert_aoh_type <-
+  aoh_feols_trends_by_sp %>% # new version, accounting for temporal autocorrelation via NW estimator
   filter(
     # binomial %in% (filter(species_list, site != "mato_grosso") %>% .$binomial %>% unique()), # all species excluding those only found in Mato Grosso
+    binomial %in% unique(aoh_feols_trends_by_sp %>%
+                            filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage",
+                                   vert_class != "amp", mature_forest_obl < 0.5) %>%
+                            pull(binomial)),
     passage_type == "exclude_passage",
-         vert_class != "amp", 
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         !grepl("potential", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
-         ) %>%
+    vert_class != "amp", 
+    !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
+    !grepl("potential", aoh_type),
+    mature_forest_obl < 0.5
+    ) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
   summarise(n_sp = n()) %>%
@@ -6228,7 +5421,7 @@ gg_trends_stack_percent <-
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
 
@@ -6361,7 +5554,7 @@ gg_trend_summary_by_iucn_status_lumped <-
   filter(passage_type == "exclude_passage",
          vert_class != "amp", 
          redlistCategory != "Data Deficient",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type),
          # aoh_type == "crop_abn_iucn"
@@ -6405,7 +5598,7 @@ gg_trend_summary_by_iucn_status_lumped_numeric <-
   filter(passage_type == "exclude_passage",
          vert_class != "amp", 
          redlistCategory != "Data Deficient",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type)
          ) %>%
@@ -6453,7 +5646,7 @@ gg_trend_summary_by_iucn_status <-
   filter(passage_type == "exclude_passage",
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          !grepl("potential", aoh_type),
          # aoh_type == "crop_abn_iucn"
          redlistCategory != "Data Deficient"
@@ -6512,7 +5705,7 @@ gg_trend_summary_by_iucn_status_lumped_by_site <-
                vert_class != "amp", 
                # vert_class == class,
                redlistCategory != "Data Deficient",
-               !(vert_class == "bird" & mature_forest_obl > 0.5),
+               mature_forest_obl < 0.5,
                !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
                !grepl("potential", aoh_type),
                aoh_type == i
@@ -6589,7 +5782,7 @@ gg_aoh_by_iucn_lumped_by_site_bars <-
                vert_class != "amp", 
                redlistCategory != "Data Deficient",
                aoh_type == i,
-               !(vert_class == "bird" & mature_forest_obl > 0.5)
+               mature_forest_obl < 0.5
                ) %>%
         group_by(aoh_type, vert_class, passage_type, 
                  site,
@@ -6673,7 +5866,7 @@ gg_aoh_iucn_overall_tmp <-
   filter(passage_type == "exclude_passage",
          vert_class != "amp", 
          redlistCategory != "Data Deficient",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          aoh_type == i
          ) %>%
 
@@ -6732,7 +5925,7 @@ gg_aoh_by_iucn_lumped_by_site_bars_tmp <-
                vert_class != "amp", 
                redlistCategory != "Data Deficient",
                aoh_type == i,
-               !(vert_class == "bird" & mature_forest_obl > 0.5)
+               mature_forest_obl < 0.5
                ) %>%
         group_by(aoh_type, vert_class, passage_type, 
                  site,
@@ -6817,7 +6010,7 @@ gg_trend_summary_by_range <-
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type),
          # aoh_type == "crop_abn_iucn",
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
 
@@ -6873,7 +6066,7 @@ gg_trend_summary_by_range_side <-
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type),
          # aoh_type == "crop_abn_iucn",
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
 
@@ -6967,7 +6160,7 @@ gg_trend_summary_range_by_site1 <-
          vert_class != "amp", 
          aoh_type == i,
          # redlistCategory != "Data Deficient",
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
 
@@ -7018,7 +6211,7 @@ gg_trend_summary_range_by_site2 <-
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type),       
          # redlistCategory != "Data Deficient"
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
 
@@ -7172,7 +6365,7 @@ gg_trend_summary_by_site <-
              !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
              !grepl("potential", aoh_type),
              aoh_type == i,
-             !(vert_class == "bird" & mature_forest_obl > 0.5)
+             mature_forest_obl < 0.5
              ) %>%
 
       group_by(aoh_type, vert_class, passage_type, 
@@ -7274,7 +6467,7 @@ lapply(1:3, function(i) {
 ```{r overall-plus-by-site-combo}
 # filter just birds mature forest obl
 aoh_trends_by_sp %>%
-  filter(!(vert_class == "bird" & mature_forest_obl > 0.5)) %>%
+  filter(mature_forest_obl < 0.5) %>%
   select(vert_class) %>% unique()
 
 aoh_types[c(6,3,1,7,5,8)]
@@ -7287,7 +6480,7 @@ lapply(
     aoh_trends_by_sp %>%
     filter(passage_type == "exclude_passage",
          vert_class != "amp", 
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          aoh_type == i
          ) %>%
     mutate(vert_class = case_when(
@@ -7326,7 +6519,7 @@ lapply(
       filter(!is.na(trend),
              passage_type == "exclude_passage",
              vert_class != "amp",
-             !(vert_class == "bird" & mature_forest_obl > 0.5),
+             mature_forest_obl < 0.5,
              aoh_type == i
              # redlistCategory != "Data Deficient"
              ) %>%
@@ -7380,7 +6573,7 @@ lapply(
   
   filter(passage_type == "exclude_passage",
          vert_class != "amp", 
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type),
          
@@ -7520,7 +6713,7 @@ gg_trend_summary_by_site_stacked_3 <-
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
 
@@ -7628,7 +6821,7 @@ gg_trends_obs_v_pot_overall <-
   filter(passage_type == passage_opt,
          vert_class != "amp", 
          grepl("crop", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
 
@@ -7731,7 +6924,7 @@ gg_trend_summary_obs_v_pot_by_site <-
          vert_class != "amp", 
          # !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          grepl("crop", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
 
@@ -7778,11 +6971,9 @@ gg_trend_summary_obs_v_pot_by_site_sbs <-
          vert_class != "amp", 
          vert_class == vert_class_,
          # !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         grepl("crop", aoh_type)
+         grepl("crop", aoh_type),
+         mature_forest_obl < 0.5
          ) %>%
-      
-      # if bird, filter out mature_forest_obl
-  {if (vert_class_ == "bird") filter(., mature_forest_obl < 0.5) else .} %>%
 
   group_by(aoh_type, vert_class, passage_type, 
            site, trend) %>%
@@ -7902,7 +7093,7 @@ gg_aoh_obs_v_pot_overall_tmp <-
   filter(passage_type == "exclude_passage",
          vert_class != "amp", 
          # redlistCategory != "Data Deficient",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          str_detect(aoh_type, "crop")# == i
          ) %>%
 
@@ -7957,7 +7148,7 @@ gg_aoh_by_obs_v_pot_lumped_by_site_bars_tmp <-
         filter(passage_type == "exclude_passage",
                vert_class != "amp", 
                aoh_type %in% c("crop_abn_iucn", "crop_abn_potential_iucn"),
-               !(vert_class == "bird" & mature_forest_obl > 0.5)
+               mature_forest_obl < 0.5
                ) %>%
         group_by(aoh_type, vert_class, passage_type, 
                  site, trend) %>%
@@ -8031,18 +7222,23 @@ ggsave(
 
 # Comparing the last year of area for each species between crop_abn_iucn and crop_abn_potential_iucn
 
-aoh_p_change_obs_v_pot <-
+# aoh_p_change_obs_v_pot_ols <-
+aoh_p_change_obs_v_pot_feols <-
   aoh %>%
   filter(passage_type == "exclude_passage",
          vert_class != "amp",
          str_detect(aoh_type, "crop"),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   select(-start_year) %>%
   left_join(aoh_start_years) %>% 
   select(aoh_type:year, end_year, everything()) %>%
   filter(year == end_year) %>%
-  left_join(aoh_trends %>% select(aoh_type, vert_class, site, binomial, trend, passage_type)) %>%
+  left_join(
+    # aoh_trends %>% # ols
+    aoh_feols_trends %>%  # feols, with Newey-West estimated standard errors
+      select(aoh_type, vert_class, site, binomial, trend, passage_type)
+    ) %>%
   mutate(aoh_type = case_when(
     aoh_type == "crop_abn_iucn" ~ "observed",
     aoh_type == "crop_abn_potential_iucn" ~ "potential"
@@ -8079,10 +7275,15 @@ aoh_p_change_obs_v_pot <-
     grepl("no trend$", trend_change) ~ "Indeterminate"
   ) %>% fct_relevel("Improve", "No change", "Indeterminate", "Worsen")) 
 
-write_csv(aoh_p_change_obs_v_pot, paste0(p_derived, "aoh_p_change_obs_v_pot.csv"))
+write_csv(aoh_p_change_obs_v_pot_ols, paste0(p_derived, "aoh_p_change_obs_v_pot_ols.csv"))
+write_csv(aoh_p_change_obs_v_pot_feols, paste0(p_derived, "aoh_p_change_obs_v_pot_feols.csv"))
 
-aoh_p_change_obs_v_pot_summary <- 
-  aoh_p_change_obs_v_pot %>%
+# produce summary, switching between ols and feols (including NW)
+# aoh_p_change_obs_v_pot_summary_ols <- 
+#     aoh_p_change_obs_v_pot_ols %>%
+aoh_p_change_obs_v_pot_summary_feols <-
+  aoh_p_change_obs_v_pot_feols %>%
+
   # select(vert_class:binomial, contains("trend"), contains("change")) %>%
   group_by(vert_class, site,
            # trend_observed, trend_potential,
@@ -8094,15 +7295,15 @@ aoh_p_change_obs_v_pot_summary <-
   arrange(vert_class, change_direction, trend_change)
 
 
-write_csv(aoh_p_change_obs_v_pot_summary, 
-          paste0(p_derived, "aoh_p_change_obs_v_pot_summary.csv"))
+write_csv(aoh_p_change_obs_v_pot_summary_ols, paste0(p_derived, "aoh_p_change_obs_v_pot_summary_ols.csv"))
+write_csv(aoh_p_change_obs_v_pot_summary_feols, paste0(p_derived, "aoh_p_change_obs_v_pot_summary_feols.csv"))
 
 
-aoh_p_change_obs_v_pot_summary %>% print(n = 50)
+aoh_p_change_obs_v_pot_summary_feols %>% print(n = 50)
   
-gg_aoh_p_change_obs_v_pot <-
+gg_aoh_p_change_obs_v_pot_feols <-
   lapply(c("mam", "bird"), function(vert_class_) {
-  aoh_p_change_obs_v_pot_summary %>%
+  aoh_p_change_obs_v_pot_summary_feols %>%
   filter(vert_class == vert_class_) %>%
   ggplot(mapping = aes(x = trend_change, 
                        fill = change_direction,
@@ -8123,14 +7324,14 @@ gg_aoh_p_change_obs_v_pot <-
   facet_wrap(vars(site), scales = "free", labeller = as_labeller(fancy_labels))
 })
 
-names(gg_aoh_p_change_obs_v_pot) <- c("mam", "bird")
-gg_aoh_p_change_obs_v_pot$bird
-gg_aoh_p_change_obs_v_pot$mam
+names(gg_aoh_p_change_obs_v_pot_feols) <- c("mam", "bird")
+gg_aoh_p_change_obs_v_pot_feols$bird
+gg_aoh_p_change_obs_v_pot_feols$mam
 
 lapply(1:2, function(i) {
-  ggsave(gg_aoh_p_change_obs_v_pot[[i]],
+  ggsave(gg_aoh_p_change_obs_v_pot_feols[[i]],
        filename = paste0(p_output, "plots/aoh/", "aoh_p_change_obs_v_pot_",
-                         names(gg_aoh_p_change_obs_v_pot)[i], aoh_run_date, ".pdf"),
+                         names(gg_aoh_p_change_obs_v_pot_feols)[i], aoh_run_date, ".pdf"),
        width = 8, height = 7.5, units = "in")
 })
 
@@ -8177,7 +7378,7 @@ dff %>%  filter(site == "belarus", str_detect(binomial, "Acrocephalus scho"),
                           "potential_abn_iucn"
                           ),
          # !grepl("potential", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
@@ -8231,7 +7432,7 @@ gg_aoh_trend_overall_by_type_w_pot_stack <-
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          # !grepl("potential", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
 
   group_by(aoh_type, vert_class, passage_type,
@@ -8281,7 +7482,7 @@ aoh_all_types_by_site_tmp <-
              vert_class != "amp", 
              !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
              # !grepl("potential", aoh_type),
-             !(vert_class == "bird" & mature_forest_obl > 0.5),
+             mature_forest_obl < 0.5,
              site %in% site_df$site[i],
 
              # str_detect(aoh_type, "full"),
@@ -8648,6 +7849,7 @@ sp_name <- "Sturnella magna"
 sp_name <- "Hylatomus pileatus"
 sp_name <- "Dryobates pubescens"
 
+
 site_index <- 11
 
 gg_aoh_example_sp <-
@@ -8658,7 +7860,7 @@ gg_aoh_example_sp <-
       binomial %in% c("Sturnella magna", "Dryobates pubescens", "Setophaga pinus"),
       vert_class == "bird",
       aoh_type %in% aoh_types[c(6, 3, 1)],
-      # !(vert_class == "bird" & mature_forest_obl > 0.5),
+      # mature_forest_obl < 0.5,
       passage_type == "exclude_passage"
       ) %>%
   mutate(aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 3, 1)])) %>% 
@@ -8718,7 +7920,7 @@ gg_fpo_overall_crop <-
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          # !grepl("potential", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
@@ -8764,7 +7966,7 @@ gg_fpo_overall_crop_w_full <-
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          # !grepl("potential", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
@@ -8809,7 +8011,7 @@ ggsave(gg_fpo_overall_crop_w_full,
 gg_tmp_total_b <- aoh_trends_by_sp %>%
     filter(passage_type == "exclude_passage",
          vert_class != "amp", 
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          aoh_type == "crop_abn_iucn",
          vert_class == "bird"
          ) %>%
@@ -8849,7 +8051,7 @@ gg_tmp_total_m <-
   aoh_trends_by_sp %>%
     filter(passage_type == "exclude_passage",
          vert_class != "amp", 
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          aoh_type == "crop_abn_iucn",
          vert_class == "mam"
          ) %>%
@@ -8910,7 +8112,7 @@ ggsave(plot_grid(gg_tmp_total_b, gg_tmp_total_m,
 gg_tmp_total_b_obs_pot <-
   aoh_trends_by_sp %>%
     filter(passage_type == "exclude_passage",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          str_detect(aoh_type, "crop"),
          vert_class == "bird"
          ) %>%
@@ -8946,7 +8148,7 @@ gg_tmp_total_b_obs_pot <-
 gg_tmp_total_m_obs_pot <-
   aoh_trends_by_sp %>%
     filter(passage_type == "exclude_passage",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          str_detect(aoh_type, "crop"),
          vert_class == "mam"
          ) %>%
@@ -8999,8 +8201,6 @@ ggsave(plot_grid(gg_tmp_total_b_obs_pot, gg_tmp_total_m_obs_pot,
 # ------------------------------------ #
 # overall, just crop_abn_iucn
 # ------------------------------------ #
-
-
 gg_fpo_overall_feols_nw_crop <-
   # aoh_trends_by_sp %>%
   aoh_feols_trends_by_sp %>%
@@ -9010,7 +8210,7 @@ gg_fpo_overall_feols_nw_crop <-
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          # !grepl("potential", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
@@ -9056,7 +8256,7 @@ gg_fpo_overall_feols_nw_crop_w_full <-
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          # !grepl("potential", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
@@ -9101,7 +8301,7 @@ ggsave(gg_fpo_overall_feols_nw_crop_w_full,
 gg_tmp_total_b_feols_nw <- aoh_feols_trends_by_sp %>%
     filter(passage_type == "exclude_passage",
          vert_class != "amp", 
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          aoh_type == "crop_abn_iucn",
          vert_class == "bird"
          ) %>%
@@ -9141,7 +8341,7 @@ gg_tmp_total_m_feols_nw <-
   aoh_feols_trends_by_sp %>%
     filter(passage_type == "exclude_passage",
          vert_class != "amp", 
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          aoh_type == "crop_abn_iucn",
          vert_class == "mam"
          ) %>%
@@ -9198,10 +8398,10 @@ ggsave(plot_grid(gg_tmp_total_b_feols_nw, gg_tmp_total_m_feols_nw,
 #obs v pot
 aoh_feols_trends_by_sp$aoh_type %>% unique()
 
-# gg_tmp_total_b_obs_pot_feols_nw <-
+gg_tmp_total_b_obs_pot_feols_nw <-
   aoh_feols_trends_by_sp %>%
     filter(passage_type == "exclude_passage",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          str_detect(aoh_type, "crop"),
          vert_class == "bird"
          ) %>%
@@ -9237,7 +8437,7 @@ aoh_feols_trends_by_sp$aoh_type %>% unique()
 gg_tmp_total_m_obs_pot_feols_nw <-
   aoh_feols_trends_by_sp %>%
     filter(passage_type == "exclude_passage",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          str_detect(aoh_type, "crop"),
          vert_class == "mam"
          ) %>%
@@ -10033,7 +9233,7 @@ aoh_trends_by_sp %>%
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type),
          # aoh_type == "crop_abn_iucn",
-         # !(vert_class == "bird" & mature_forest_obl > 0.5)
+         # mature_forest_obl < 0.5
          ) %>%
   group_by(aoh_type, vert_class, passage_type, 
            mature = case_when(
@@ -10116,7 +9316,7 @@ ggsave(plot = aoh_species_list_by_site %>%
   filter(
     #passage_type == "exclude_passage",
          vert_class != "amp", 
-         # !(vert_class == "bird" & mature_forest_obl > 0.5),
+         # mature_forest_obl < 0.5,
          vert_class == "bird",
          # aoh_type == i
          ) %>%
@@ -10385,21 +9585,6 @@ aoh_l %>%
   filter(test < -0.000001)
 ```
 
-
-```{r remove-mature-forest-obl}
-# 2. mature_forest_obl, so that only non-mature forest obligates are included.
-
-
-aoh_l %>%
-  filter(mature_forest_obl < 0.5)
-
-aoh_l
-  group_by(aoh_type, vert_class) %>%
-  summarise(num_sp = n(),
-            sp = length(unique(binomial))) %>%
-  arrange(vert_class)
-
-```
 
 ```{r remove-unimportant-habitats}
 # TBD
