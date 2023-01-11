@@ -42,26 +42,59 @@ source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/_util/
 # my_format <- "simple"
 ```
 
-```{r set-files}
+```{r set-tmp-files}
 aoh_feols # aoh_lm
-aoh_ms_tmp_trends <- aoh_feols_trends %>%
+
+aoh_ms_tmp_trends <- 
+  aoh_feols_trends %>%
   mutate(
     aoh_type = as_factor(aoh_type),
     vert_class = as_factor(vert_class),
     trend = as_factor(trend),
     threatened = case_when(
     redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
-    TRUE ~ "Not Threatened"))
+    TRUE ~ "Not Threatened")) %>%
+  
+  filter(
+    # exclude all species not affected by abandonment:
+    binomial %in% unique(aoh_feols_trends_by_sp %>%
+                           filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage",
+                                  vert_class != "amp", mature_forest_obl < 0.5) %>%
+                           pull(binomial)),
+    passage_type == "exclude_passage", # exclude passage areas from AOH calculations
+    vert_class != "amp",
+    !aoh_type %in% c("abn_iucn", "potential_abn_iucn"), # exclude unused scenarios
+    # !grepl("potential", aoh_type),
+    mature_forest_obl < 0.5
+  )
 
-aoh_ms_tmp_trends_by_sp <- aoh_feols_trends_by_sp %>%
+
+aoh_ms_tmp_trends_by_sp <- 
+  aoh_feols_trends_by_sp %>%
   mutate(
     aoh_type = as_factor(aoh_type),
     vert_class = as_factor(vert_class),
     overall_trend = as_factor(overall_trend),
     threatened = case_when(
     redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
-    TRUE ~ "Not Threatened"))
+    TRUE ~ "Not Threatened")) %>%
+  
+  filter(
+    # exclude all species not affected by abandonment:
+    binomial %in% unique(aoh_feols_trends_by_sp %>%
+                           filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage",
+                                  vert_class != "amp", mature_forest_obl < 0.5) %>%
+                           pull(binomial)),
+    passage_type == "exclude_passage", # exclude passage areas from AOH calculations
+    vert_class != "amp",
+    !aoh_type %in% c("abn_iucn", "potential_abn_iucn"), # exclude unused scenarios
+    # !grepl("potential", aoh_type),
+    mature_forest_obl < 0.5
+  )
 
+
+aoh_ms_tmp_trends %>% filter(is.na(trend))
+aoh_ms_tmp_trends_by_sp %>% filter(is.na(overall_trend))
 ```
 
 ```{r preview-chapter, eval=FALSE, include = FALSE}
@@ -121,12 +154,6 @@ options(knitr.table.format = function() {
 ```{r abstract-stats, include = FALSE}
 abs_aoh_tmp <- 
   aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         # !grepl("potential", aoh_type),
-         mature_forest_obl < 0.5
-         ) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend,
            trend_direction) %>%
@@ -178,12 +205,6 @@ abstract_stats <- list(
 
 
 aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         # !grepl("potential", aoh_type),
-         mature_forest_obl < 0.5
-         ) %>%
   group_by(aoh_type, vert_class, passage_type,
            # overall_trend, 
            trend_direction
@@ -206,19 +227,12 @@ aoh_ms_tmp_trends_by_sp %>%
 ```{r get-stats-aoh-stats-main, include = FALSE}
 # number of small-ranged birds and mammals
 aoh_ms_tmp_trends_by_sp %>% 
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp",
-         mature_forest_obl < 0.5,
-         aoh_type == "crop_abn_iucn",
+  filter(aoh_type == "crop_abn_iucn",
          range_size_quantile < 0.5)
 
 aoh_stat_tmp_by_site_crop <-
   aoh_ms_tmp_trends %>%
-      filter(!is.na(trend),
-             passage_type == "exclude_passage",
-             vert_class != "amp",
-             mature_forest_obl < 0.5,
-             aoh_type == "crop_abn_iucn"
+      filter(aoh_type == "crop_abn_iucn"
              # redlistCategory != "Data Deficient"
              ) %>%
       group_by(aoh_type, vert_class, passage_type, 
@@ -239,12 +253,6 @@ aoh_stat_tmp_by_site_crop %>% group_by(vert_class) %>% summarise(mean_prop_wl = 
 
 aoh_overall_tmp <-
   aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         # !grepl("potential", aoh_type),
-         mature_forest_obl < 0.5
-         ) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
   summarise(n_sp = n()) %>%
@@ -329,10 +337,7 @@ aoh_stats_main <- list(
   
   
   wl_prop_bird_site_sp = aoh_ms_tmp_trends %>%
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "crop_abn_iucn") %>%
+    filter(aoh_type == "crop_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
     arrange(vert_class, aoh_type) %>%
@@ -341,10 +346,7 @@ aoh_stats_main <- list(
     .$prop_wl %>% round(digits = 2),
   
   wl_prop_mam_site_sp = aoh_ms_tmp_trends %>%
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "crop_abn_iucn") %>%
+    filter(aoh_type == "crop_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
     arrange(vert_class, aoh_type) %>%
@@ -353,10 +355,7 @@ aoh_stats_main <- list(
     .$prop_wl %>% round(digits = 2),
   
   wl_prop_bird_sp = aoh_ms_tmp_trends_by_sp %>% 
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "crop_abn_iucn") %>%
+    filter(aoh_type == "crop_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              overall_trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -365,10 +364,7 @@ aoh_stats_main <- list(
     .$prop_wl %>% round(digits = 2),
   
   wl_prop_bird_sp_w_weak = aoh_ms_tmp_trends_by_sp %>% 
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "crop_abn_iucn") %>%
+    filter(aoh_type == "crop_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              trend_direction) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -377,10 +373,7 @@ aoh_stats_main <- list(
     .$prop_wl %>% round(digits = 2),
   
   wl_prop_mam_sp = aoh_ms_tmp_trends_by_sp %>% 
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "crop_abn_iucn") %>%
+    filter(aoh_type == "crop_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              overall_trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -389,10 +382,7 @@ aoh_stats_main <- list(
     .$prop_wl %>% round(digits = 2),
   
   wl_prop_mam_sp_w_weak = aoh_ms_tmp_trends_by_sp %>% 
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "crop_abn_iucn") %>%
+    filter(aoh_type == "crop_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              trend_direction) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -415,10 +405,7 @@ aoh_stats_main <- list(
 
 # get specific stats for certain sites:
 aoh_ms_tmp_trends %>%
-      filter(site == "iraq", !is.na(trend),
-             passage_type == "exclude_passage",
-             vert_class != "amp", vert_class == "bird",
-             mature_forest_obl < 0.5,
+      filter(site == "iraq", vert_class == "bird",
              # aoh_type == "crop_abn_iucn"
              # redlistCategory != "Data Deficient"
              ) %>%
@@ -434,12 +421,6 @@ aoh_ms_tmp_trends %>%
 # do mammals have a statistically significantly higher proportion of winners than birds?
 # ------------------------------------------------------ #
 aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         # !grepl("potential", aoh_type),
-         mature_forest_obl < 0.5
-         ) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
   summarise(n_sp = n()) %>%
@@ -453,12 +434,6 @@ aoh_ms_tmp_trends_by_sp %>%
 # make a contingency table:
 # ---------- #
 aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         mature_forest_obl < 0.5
-         ) %>%
-  
   # compare mammals and birds
   filter(aoh_type == "crop_abn_iucn") %>% select(vert_class, overall_trend) %>%
   
@@ -473,11 +448,6 @@ aoh_ms_tmp_trends_by_sp %>%
 # ---------- #
 obs_diff_bird_v_mam <-
   aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         mature_forest_obl < 0.5
-         ) %>%
   filter(aoh_type == "crop_abn_iucn") %>%
   group_by(vert_class) %>%
   summarise(p_gain = mean(overall_trend == "gain")) %>% 
@@ -495,11 +465,6 @@ set.seed(1612)
 # ---------- #
 null_bird_v_mam <-
   aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         mature_forest_obl < 0.5
-         ) %>%
   
   # compare mammals and birds
   filter(aoh_type == "crop_abn_iucn", 
@@ -529,11 +494,6 @@ null_bird_v_mam %>%
 # ---------- #
 # create a bootstrapped distribution of differences:
 boot_bird_v_mam <- aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         mature_forest_obl < 0.5
-         ) %>%
   
   # compare mammals and birds
   filter(aoh_type == "crop_abn_iucn", overall_trend %in% c("gain", "loss")) %>% 
@@ -609,18 +569,17 @@ aoh_gain_bird_v_mam_incl_weak_tmp <-
 
 # consistent and weak gains, birds vs. mammals:
 p_test_gain_m_v_b_incl_weak <- 
-  prop.test(x = aoh_gain_bird_v_mam_incl_weak_tmp$n_sp,
-          n = aoh_gain_bird_v_mam_incl_weak_tmp$N)
+  prop.test(
+    x = aoh_gain_bird_v_mam_incl_weak_tmp$n_sp,
+    n = aoh_gain_bird_v_mam_incl_weak_tmp$N
+    )
 
 ```
 
 ```{r thr-v-non-thr-stat-test, include = FALSE}
 # using {infer} to test whether there are statistical differences in proportions of winners and losers for threatened and non-threatened species
 aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage", vert_class != "amp", 
-         mature_forest_obl < 0.5,
-         aoh_type == "crop_abn_iucn"
-         ) %>%
+  filter(aoh_type == "crop_abn_iucn") %>%
   group_by(aoh_type, vert_class, passage_type,
            threatened,
            overall_trend, trend_consistency, trend_direction) %>%
@@ -640,10 +599,7 @@ aoh_ms_tmp_trends_by_sp %>%
 # make a contingency table:
 # ---------- #
 aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage", vert_class != "amp", 
-         mature_forest_obl < 0.5,
-         aoh_type == "crop_abn_iucn"
-         ) %>%
+  filter(aoh_type == "crop_abn_iucn") %>%
 
   # compare mammals and birds
   # select(aoh_type:binomial, threatened, overall_trend) %>%
@@ -659,11 +615,7 @@ aoh_ms_tmp_trends_by_sp %>%
 # ---------- #
 obs_diff_by_iucn <-
   aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         mature_forest_obl < 0.5,
-         aoh_type == "crop_abn_iucn"
-         ) %>%
+  filter(aoh_type == "crop_abn_iucn") %>%
   group_by(aoh_type, threatened) %>%
   summarise(p_gain = mean(overall_trend == "gain"), # strict gains only
             p_gain_w_weak = mean(str_detect(overall_trend, "gain")) # include weak gains
@@ -683,11 +635,7 @@ set.seed(1612)
 # ---------- #
 null_by_iucn <-
   aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         mature_forest_obl < 0.5,
-         aoh_type == "crop_abn_iucn"
-         ) %>%
+  filter(aoh_type == "crop_abn_iucn") %>%
   
   # compare threatened and non-threatened species, using only strict gains
   mutate(response = case_when(overall_trend == "gain" ~ "gain", TRUE ~ "non_gain")) %>%
@@ -723,11 +671,7 @@ null_by_iucn %>%
 # create a bootstrapped distribution of differences:
 boot_by_iucn <- 
   aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         mature_forest_obl < 0.5,
-         aoh_type == "crop_abn_iucn"
-         ) %>%
+  filter(aoh_type == "crop_abn_iucn") %>%
   
   # compare mammals and birds
   mutate(
@@ -763,12 +707,7 @@ c(obs_diff_by_iucn - 2 * se_by_iucn,
 
 aoh_gain_by_iucn_tmp <-
   aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         !grepl("potential", aoh_type),
-         mature_forest_obl < 0.5
-         ) %>%
+  filter(!grepl("potential", aoh_type)) %>%
   group_by(aoh_type, vert_class, passage_type,
            threatened,
            overall_trend, trend_consistency,
@@ -819,12 +758,7 @@ p_test_iucn_mam <-
 # ------------------------------------------ #
 aoh_gain_by_iucn_incl_weak_tmp <-
   aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         !grepl("potential", aoh_type),
-         mature_forest_obl < 0.5
-         ) %>%
+  filter(!grepl("potential", aoh_type)) %>%
   group_by(aoh_type, vert_class, passage_type,
            threatened = case_when(
              redlistCategory %in% 
@@ -862,10 +796,7 @@ p_test_iucn_mam_incl_weak <-
 
 # contingency table:
 aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage", vert_class != "amp", 
-         mature_forest_obl < 0.5,
-         str_detect(aoh_type, "crop")
-         ) %>%
+  filter(str_detect(aoh_type, "crop")) %>%
   mutate(response = case_when(overall_trend == "gain" ~ "gain", TRUE ~ "non_gain")) %>%
   droplevels() %>%
   select(aoh_type, vert_class,
@@ -881,10 +812,7 @@ aoh_ms_tmp_trends_by_sp %>%
 # ---------- #
 obs_diff_obs_v_pot <-
   aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage", vert_class != "amp", 
-         mature_forest_obl < 0.5,
-         str_detect(aoh_type, "crop")
-         ) %>%
+  filter(str_detect(aoh_type, "crop")) %>%
   mutate(response = case_when(overall_trend == "gain" ~ "gain", TRUE ~ "non_gain")) %>%
   group_by(aoh_type) %>%
   summarise(p_gain = mean(response == "gain"),
@@ -898,10 +826,7 @@ obs_diff_obs_v_pot <-
 
 # more details:
 aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage", vert_class != "amp", 
-         mature_forest_obl < 0.5,
-         str_detect(aoh_type, "crop")
-         ) %>%
+  filter(str_detect(aoh_type, "crop")) %>%
   mutate(response = case_when(overall_trend == "gain" ~ "gain", TRUE ~ "non_gain")) %>%
   group_by(aoh_type,
            vert_class, passage_type, overall_trend, trend_direction, trend_consistency
@@ -928,10 +853,7 @@ set.seed(22)
 # ---------- #
 null_obs_v_pot <-
   aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage", vert_class != "amp", 
-         mature_forest_obl < 0.5,
-         str_detect(aoh_type, "crop")
-         ) %>%
+  filter(str_detect(aoh_type, "crop")) %>%
   droplevels() %>%
   
   # compare aoh_types, observed and potential abandonment, using only strict gains
@@ -968,10 +890,7 @@ null_obs_v_pot %>%
 # create a bootstrapped distribution of differences:
 boot_obs_v_pot <-
   aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage", vert_class != "amp", 
-         mature_forest_obl < 0.5,
-         str_detect(aoh_type, "crop")
-         ) %>%
+  filter(str_detect(aoh_type, "crop")) %>%
   droplevels() %>%
   # compare mammals and birds
   mutate(
@@ -1013,11 +932,7 @@ mg_improve_tmp <- aoh_p_change_obs_v_pot_summary %>% filter(site == "mato_grosso
 # basic numbers:
 aoh_overall_obs_v_pot_tmp <-
   aoh_ms_tmp_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         str_detect(aoh_type, "crop"),
-         mature_forest_obl < 0.5
-         ) %>%
+  filter(str_detect(aoh_type, "crop")) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
   summarise(n_sp = n()) %>% ungroup() %>%
@@ -1036,10 +951,7 @@ aoh_overall_obs_v_pot_tmp %>%
 
 aoh_n_by_site_obs_v_pot <- 
   aoh_ms_tmp_trends %>%
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           str_detect(aoh_type, "crop")) %>%
+    filter(str_detect(aoh_type, "crop")) %>%
     group_by(site, aoh_type, vert_class, trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
     pivot_wider(names_from = aoh_type, values_from = n_sp) %>%
@@ -1110,9 +1022,7 @@ obs_v_pot_stats <- list(
   select(percent_change) %>% max(),
   
   mg_n_winner_bird_obs = aoh_ms_tmp_trends %>%
-  filter(passage_type == "exclude_passage", vert_class != "amp", 
-         grepl("crop", aoh_type),
-         mature_forest_obl < 0.5) %>%
+  filter(grepl("crop", aoh_type)) %>%
   group_by(aoh_type, vert_class, passage_type, 
            site, trend) %>%
   summarise(n_sp = n()) %>%
@@ -1122,9 +1032,7 @@ obs_v_pot_stats <- list(
   filter(vert_class == "bird") %>% .$crop_abn_iucn,
   
   mg_n_winner_bird_pot = aoh_ms_tmp_trends %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", grepl("crop", aoh_type),
-         mature_forest_obl < 0.5) %>%
+  filter(grepl("crop", aoh_type)) %>%
   group_by(aoh_type, vert_class, passage_type, 
            site, trend) %>%
   summarise(n_sp = n()) %>%
@@ -1134,9 +1042,7 @@ obs_v_pot_stats <- list(
   filter(vert_class == "bird") %>% .$crop_abn_potential_iucn,
   
   mg_n_winner_mam_obs = aoh_ms_tmp_trends %>%
-  filter(passage_type == "exclude_passage", vert_class != "amp", 
-         grepl("crop", aoh_type),
-         mature_forest_obl < 0.5) %>%
+  filter(grepl("crop", aoh_type)) %>%
   group_by(aoh_type, vert_class, passage_type, 
            site, trend) %>%
   summarise(n_sp = n()) %>%
@@ -1146,9 +1052,7 @@ obs_v_pot_stats <- list(
   filter(vert_class == "mam") %>% .$crop_abn_iucn,
   
   mg_n_winner_mam_pot = aoh_ms_tmp_trends %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", grepl("crop", aoh_type),
-         mature_forest_obl < 0.5) %>%
+  filter(grepl("crop", aoh_type)) %>%
   group_by(aoh_type, vert_class, passage_type, 
            site, trend) %>%
   summarise(n_sp = n()) %>%
@@ -1321,9 +1225,7 @@ aoh_p_change_obs_v_pot %>%
 
 # Number of species with various trends in each scenario:
 aoh_ms_tmp_trends %>%
-  filter(passage_type == "exclude_passage",
-         vert_class == "bird", grepl("crop", aoh_type),
-         mature_forest_obl < 0.5) %>%
+  filter(vert_class == "bird", grepl("crop", aoh_type)) %>%
   group_by(aoh_type, vert_class, passage_type, site, trend) %>%
   summarise(n_sp = n(), ) %>% 
   filter(site != "mato_grosso") %>%
@@ -1362,6 +1264,7 @@ aoh_gain_bird_by_calc_tmp <-
   mutate(N = sum(n_sp)) %>%
   filter(!str_detect(aoh_type, "potential"),
          overall_trend == "gain", vert_class == "bird")
+
 aoh_loss_bird_by_calc_tmp <-
   aoh_overall_tmp %>% ungroup() %>%
   group_by(aoh_type, vert_class, passage_type) %>%
@@ -1438,12 +1341,7 @@ p_test_loss_mam_by_calc23 <- prop.test(
 ```{r get-stats-aoh-calc2-3, include = FALSE}
 aoh_stat_tmp_by_site_max <-
   aoh_ms_tmp_trends %>%
-      filter(!is.na(trend),
-             passage_type == "exclude_passage",
-             vert_class != "amp",
-             mature_forest_obl < 0.5,
-             aoh_type == "max_abn_iucn"
-             ) %>%
+      filter(aoh_type == "max_abn_iucn") %>%
       group_by(aoh_type, vert_class, passage_type, 
                site,
                trend) %>%
@@ -1472,10 +1370,7 @@ aoh_stats_max <- list(
                        vert_class == "mam")$n_sp,
   
   wl_prop_bird_site_sp = aoh_ms_tmp_trends %>%
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "max_abn_iucn") %>%
+    filter(aoh_type == "max_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
     arrange(vert_class, aoh_type) %>%
@@ -1484,10 +1379,7 @@ aoh_stats_max <- list(
     .$prop_wl %>% round(digits = 2),
   
   wl_prop_mam_site_sp = aoh_ms_tmp_trends %>%
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "max_abn_iucn") %>%
+    filter(aoh_type == "max_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
     arrange(vert_class, aoh_type) %>%
@@ -1496,10 +1388,7 @@ aoh_stats_max <- list(
     .$prop_wl %>% round(digits = 2),
   
   wl_prop_bird_sp = aoh_ms_tmp_trends_by_sp %>% 
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "max_abn_iucn") %>%
+    filter(aoh_type == "max_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              overall_trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -1508,10 +1397,7 @@ aoh_stats_max <- list(
     .$prop_wl %>% round(digits = 2),
   
   wl_prop_bird_sp_w_weak = aoh_ms_tmp_trends_by_sp %>% 
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "max_abn_iucn") %>%
+    filter(aoh_type == "max_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              trend_direction) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -1520,10 +1406,7 @@ aoh_stats_max <- list(
     .$prop_wl %>% round(digits = 2),
   
   wl_prop_mam_sp = aoh_ms_tmp_trends_by_sp %>% 
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "max_abn_iucn") %>%
+    filter(aoh_type == "max_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              overall_trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -1532,10 +1415,7 @@ aoh_stats_max <- list(
     .$prop_wl %>% round(digits = 2),
   
   wl_prop_mam_sp_w_weak = aoh_ms_tmp_trends_by_sp %>% 
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "max_abn_iucn") %>%
+    filter(aoh_type == "max_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              trend_direction) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -1559,12 +1439,7 @@ aoh_stats_max <- list(
 # ------ entire landscape ------ #
 aoh_stat_tmp_by_site_full <-
   aoh_ms_tmp_trends %>%
-      filter(!is.na(trend),
-             passage_type == "exclude_passage",
-             vert_class != "amp",
-             mature_forest_obl < 0.5,
-             aoh_type == "full_iucn"
-             ) %>%
+      filter(aoh_type == "full_iucn") %>%
       group_by(aoh_type, vert_class, passage_type, 
                site,
                trend) %>%
@@ -1592,10 +1467,7 @@ aoh_stats_full <- list(
                        aoh_type == "full_iucn", overall_trend == "loss",
                        vert_class == "mam")$n_sp,
   wl_prop_bird_site_sp = aoh_ms_tmp_trends %>%
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "full_iucn") %>%
+    filter(aoh_type == "full_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
     arrange(vert_class, aoh_type) %>%
@@ -1604,10 +1476,7 @@ aoh_stats_full <- list(
     .$prop_wl %>% round(digits = 2),
   
   wl_prop_mam_site_sp = aoh_ms_tmp_trends %>%
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "full_iucn") %>%
+    filter(aoh_type == "full_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
     arrange(vert_class, aoh_type) %>%
@@ -1616,10 +1485,7 @@ aoh_stats_full <- list(
     .$prop_wl %>% round(digits = 2),
   
   wl_prop_bird_sp = aoh_ms_tmp_trends_by_sp %>% 
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "full_iucn") %>%
+    filter(aoh_type == "full_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              overall_trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -1628,10 +1494,7 @@ aoh_stats_full <- list(
     .$prop_wl %>% round(digits = 2),
   
   wl_prop_bird_sp_w_weak = aoh_ms_tmp_trends_by_sp %>% 
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "full_iucn") %>%
+    filter(aoh_type == "full_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              trend_direction) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -1640,10 +1503,7 @@ aoh_stats_full <- list(
     .$prop_wl %>% round(digits = 2),
   
   wl_prop_mam_sp = aoh_ms_tmp_trends_by_sp %>% 
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "full_iucn") %>%
+    filter(aoh_type == "full_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              overall_trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -1652,10 +1512,7 @@ aoh_stats_full <- list(
     .$prop_wl %>% round(digits = 2),
   
   wl_prop_mam_sp_w_weak = aoh_ms_tmp_trends_by_sp %>% 
-    filter(passage_type == "exclude_passage",
-           vert_class != "amp",
-           mature_forest_obl < 0.5,
-           aoh_type == "full_iucn") %>%
+    filter(aoh_type == "full_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              trend_direction) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
