@@ -42,6 +42,28 @@ source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/_util/
 # my_format <- "simple"
 ```
 
+```{r set-files}
+aoh_feols # aoh_lm
+aoh_ms_tmp_trends <- aoh_feols_trends %>%
+  mutate(
+    aoh_type = as_factor(aoh_type),
+    vert_class = as_factor(vert_class),
+    trend = as_factor(trend),
+    threatened = case_when(
+    redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
+    TRUE ~ "Not Threatened"))
+
+aoh_ms_tmp_trends_by_sp <- aoh_feols_trends_by_sp %>%
+  mutate(
+    aoh_type = as_factor(aoh_type),
+    vert_class = as_factor(vert_class),
+    overall_trend = as_factor(overall_trend),
+    threatened = case_when(
+    redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
+    TRUE ~ "Not Threatened"))
+
+```
+
 ```{r preview-chapter, eval=FALSE, include = FALSE}
 my_format <- "simple"
 rmarkdown::render("scripts/biodiv_abn_MS.Rmd",
@@ -98,12 +120,12 @@ options(knitr.table.format = function() {
 
 ```{r abstract-stats, include = FALSE}
 abs_aoh_tmp <- 
-  aoh_trends_by_sp %>%
+  aoh_ms_tmp_trends_by_sp %>%
   filter(passage_type == "exclude_passage",
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          # !grepl("potential", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend,
@@ -155,12 +177,12 @@ abstract_stats <- list(
 )
 
 
-aoh_trends_by_sp %>%
+aoh_ms_tmp_trends_by_sp %>%
   filter(passage_type == "exclude_passage",
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          # !grepl("potential", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   group_by(aoh_type, vert_class, passage_type,
            # overall_trend, 
@@ -183,19 +205,19 @@ aoh_trends_by_sp %>%
 ```
 ```{r get-stats-aoh-stats-main, include = FALSE}
 # number of small-ranged birds and mammals
-aoh_trends_by_sp %>% 
+aoh_ms_tmp_trends_by_sp %>% 
   filter(passage_type == "exclude_passage",
          vert_class != "amp",
-         !(vert_class == "bird" & mature_forest_obl > 0.5),
+         mature_forest_obl < 0.5,
          aoh_type == "crop_abn_iucn",
          range_size_quantile < 0.5)
 
 aoh_stat_tmp_by_site_crop <-
-  aoh_trends %>%
+  aoh_ms_tmp_trends %>%
       filter(!is.na(trend),
              passage_type == "exclude_passage",
              vert_class != "amp",
-             !(vert_class == "bird" & mature_forest_obl > 0.5),
+             mature_forest_obl < 0.5,
              aoh_type == "crop_abn_iucn"
              # redlistCategory != "Data Deficient"
              ) %>%
@@ -216,12 +238,12 @@ aoh_stat_tmp_by_site_crop %>% group_by(vert_class) %>% slice_min(prop_wl)
 aoh_stat_tmp_by_site_crop %>% group_by(vert_class) %>% summarise(mean_prop_wl = mean(prop_wl))
 
 aoh_overall_tmp <-
-  aoh_trends_by_sp %>%
+  aoh_ms_tmp_trends_by_sp %>%
   filter(passage_type == "exclude_passage",
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          # !grepl("potential", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
@@ -306,10 +328,10 @@ aoh_stats_main <- list(
                        vert_class == "mam")$percent,
   
   
-  wl_prop_bird_site_sp = aoh_trends %>%
+  wl_prop_bird_site_sp = aoh_ms_tmp_trends %>%
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "crop_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -318,10 +340,10 @@ aoh_stats_main <- list(
     mutate(prop_wl = gain/loss) %>% filter(vert_class == "bird") %>%
     .$prop_wl %>% round(digits = 2),
   
-  wl_prop_mam_site_sp = aoh_trends %>%
+  wl_prop_mam_site_sp = aoh_ms_tmp_trends %>%
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "crop_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -330,10 +352,10 @@ aoh_stats_main <- list(
     mutate(prop_wl = gain/loss) %>% filter(vert_class == "mam") %>%
     .$prop_wl %>% round(digits = 2),
   
-  wl_prop_bird_sp = aoh_trends_by_sp %>% 
+  wl_prop_bird_sp = aoh_ms_tmp_trends_by_sp %>% 
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "crop_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              overall_trend) %>%
@@ -342,10 +364,10 @@ aoh_stats_main <- list(
     mutate(prop_wl = gain/loss) %>% filter(vert_class == "bird") %>%
     .$prop_wl %>% round(digits = 2),
   
-  wl_prop_bird_sp_w_weak = aoh_trends_by_sp %>% 
+  wl_prop_bird_sp_w_weak = aoh_ms_tmp_trends_by_sp %>% 
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "crop_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              trend_direction) %>%
@@ -354,10 +376,10 @@ aoh_stats_main <- list(
     mutate(prop_wl = gain/loss) %>% filter(vert_class == "bird") %>%
     .$prop_wl %>% round(digits = 2),
   
-  wl_prop_mam_sp = aoh_trends_by_sp %>% 
+  wl_prop_mam_sp = aoh_ms_tmp_trends_by_sp %>% 
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "crop_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              overall_trend) %>%
@@ -366,10 +388,10 @@ aoh_stats_main <- list(
     mutate(prop_wl = gain/loss) %>% filter(vert_class == "mam") %>%
     .$prop_wl %>% round(digits = 2),
   
-  wl_prop_mam_sp_w_weak = aoh_trends_by_sp %>% 
+  wl_prop_mam_sp_w_weak = aoh_ms_tmp_trends_by_sp %>% 
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "crop_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              trend_direction) %>%
@@ -392,11 +414,11 @@ aoh_stats_main <- list(
 
 
 # get specific stats for certain sites:
-aoh_trends %>%
+aoh_ms_tmp_trends %>%
       filter(site == "iraq", !is.na(trend),
              passage_type == "exclude_passage",
              vert_class != "amp", vert_class == "bird",
-             !(vert_class == "bird" & mature_forest_obl > 0.5),
+             mature_forest_obl < 0.5,
              # aoh_type == "crop_abn_iucn"
              # redlistCategory != "Data Deficient"
              ) %>%
@@ -404,12 +426,142 @@ aoh_trends %>%
                site,
                trend) %>%
       summarise(n_sp = n()) %>% ungroup()
+```
 
 
-
+```{r mam-v-birds, include = FALSE}
 # ------------------------------------------------------ #
 # do mammals have a statistically significantly higher proportion of winners than birds?
 # ------------------------------------------------------ #
+aoh_ms_tmp_trends_by_sp %>%
+  filter(passage_type == "exclude_passage",
+         vert_class != "amp", 
+         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
+         # !grepl("potential", aoh_type),
+         mature_forest_obl < 0.5
+         ) %>%
+  group_by(aoh_type, vert_class, passage_type,
+           overall_trend, trend_direction, trend_consistency) %>%
+  summarise(n_sp = n()) %>%
+  arrange(vert_class, aoh_type) %>% ungroup() %>% #select(aoh_type) %>% unique()
+  group_by(aoh_type, vert_class, passage_type) %>%
+  mutate(N = sum(n_sp), 
+         percent = prettyNum(round(100*n_sp/N, digits = 2), nsmall = 2)) %>% ungroup() %>%
+    filter(aoh_type == "crop_abn_iucn")
+
+# ---------- #
+# make a contingency table:
+# ---------- #
+aoh_ms_tmp_trends_by_sp %>%
+  filter(passage_type == "exclude_passage",
+         vert_class != "amp", 
+         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
+         mature_forest_obl < 0.5
+         ) %>%
+  
+  # compare mammals and birds
+  filter(aoh_type == "crop_abn_iucn") %>% select(vert_class, overall_trend) %>%
+  
+  # compare aoh_type
+  # filter(str_detect(aoh_type, "crop")) %>% select(aoh_type, overall_trend) %>%
+  
+  # produce contingency table
+  table()
+
+# ---------- #
+# calculate proportion of winners (differenced):
+# ---------- #
+obs_diff_bird_v_mam <-
+  aoh_ms_tmp_trends_by_sp %>%
+  filter(passage_type == "exclude_passage",
+         vert_class != "amp", 
+         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
+         mature_forest_obl < 0.5
+         ) %>%
+  filter(aoh_type == "crop_abn_iucn") %>%
+  group_by(vert_class) %>%
+  summarise(p_gain = mean(overall_trend == "gain")) %>% 
+  pull() %>%
+  diff()
+
+# ---------- #
+# Null hypothesis: mammals and birds have the same proportion of winners and losers
+# ---------- #
+# In other words, the difference between the two proportions should be 0. 
+set.seed(1612)
+
+# ---------- #
+# create a null distribution of differences:
+# ---------- #
+null_bird_v_mam <-
+  aoh_ms_tmp_trends_by_sp %>%
+  filter(passage_type == "exclude_passage",
+         vert_class != "amp", 
+         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
+         mature_forest_obl < 0.5
+         ) %>%
+  
+  # compare mammals and birds
+  filter(aoh_type == "crop_abn_iucn", 
+         ) %>% 
+  mutate(response = case_when(overall_trend == "gain" ~ "gain", TRUE ~ "non_gain")) %>%
+  select(vert_class, response) %>%
+
+  infer::specify(response ~ vert_class, success = "gain") %>%
+  infer::hypothesize(null = "independence") %>%
+  infer::generate(reps = 1000, type = "permute") %>%
+  infer::calculate(stat = "diff in props", order = c("mam", "bird"))
+
+# ---------- #
+# plot distribution with observed difference in proportions
+# ---------- #
+null_bird_v_mam %>%
+  ggplot(aes(x = stat)) + geom_density() + 
+  geom_vline(xintercept = obs_diff_bird_v_mam, col = "red")
+
+# calculate p-value from distribution:
+null_bird_v_mam %>%
+  summarise(p_value = 2* mean(stat >= obs_diff_bird_v_mam)) %>% 
+  pull()
+
+# ---------- #
+# Calculate confidence interval around difference
+# ---------- #
+# create a bootstrapped distribution of differences:
+boot_bird_v_mam <- aoh_ms_tmp_trends_by_sp %>%
+  filter(passage_type == "exclude_passage",
+         vert_class != "amp", 
+         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
+         mature_forest_obl < 0.5
+         ) %>%
+  
+  # compare mammals and birds
+  filter(aoh_type == "crop_abn_iucn", overall_trend %in% c("gain", "loss")) %>% 
+  mutate(response = case_when(overall_trend == "gain" ~ "gain", 
+                              TRUE ~ "non_gain")) %>%
+  select(vert_class, response) %>%
+  infer::specify(response ~ vert_class, success = "gain") %>%
+  # infer::hypothesize(null = "independence") %>%
+  infer::generate(reps = 1000, type = "bootstrap") %>%
+  infer::calculate(stat = "diff in props", order = c("mam", "bird"))
+
+# Calculate standard errors:
+se_bird_v_mam <- boot_bird_v_mam %>% summarise(se = sd(stat)) %>% pull()
+
+# ---------- #
+# Confidence interval 
+# ---------- #
+c(obs_diff_bird_v_mam - 2 * se_bird_v_mam,
+  obs_diff_bird_v_mam + 2 * se_bird_v_mam)
+
+
+# ------------------------------------------------------------ #
+# ------------------------------------------------------------ #
+# ------------------------------------------------------------ #
+# Compare to results with prop.test
+# ------------------------------------------------------------ #
+# ------------------------------------------------------------ #
+# ------------------------------------------------------------ #
 
 aoh_gain_bird_v_mam_tmp <-
   aoh_overall_tmp %>% 
@@ -463,20 +615,162 @@ p_test_gain_m_v_b_incl_weak <-
 ```
 
 ```{r thr-v-non-thr-stat-test, include = FALSE}
+# using {infer} to test whether there are statistical differences in proportions of winners and losers for threatened and non-threatened species
+aoh_ms_tmp_trends_by_sp %>%
+  filter(passage_type == "exclude_passage", vert_class != "amp", 
+         mature_forest_obl < 0.5,
+         aoh_type == "crop_abn_iucn"
+         ) %>%
+  group_by(aoh_type, vert_class, passage_type,
+           threatened,
+           overall_trend, trend_consistency, trend_direction) %>%
+  summarise(n_sp = n()) %>%
+  arrange(vert_class, aoh_type) %>% ungroup() %>%
+  
+  group_by(aoh_type, 
+           #vert_class, 
+           passage_type, threatened) %>%
+  mutate(N = sum(n_sp)) %>% ungroup() %>%
+  filter(
+    overall_trend == "gain"
+    # trend_direction == "gain"
+         )
 
-aoh_gain_thr_v_non_thr_tmp <-
-  aoh_trends_by_sp %>%
+# ---------- #
+# make a contingency table:
+# ---------- #
+aoh_ms_tmp_trends_by_sp %>%
+  filter(passage_type == "exclude_passage", vert_class != "amp", 
+         mature_forest_obl < 0.5,
+         aoh_type == "crop_abn_iucn"
+         ) %>%
+
+  # compare mammals and birds
+  # select(aoh_type:binomial, threatened, overall_trend) %>%
+  select(threatened, overall_trend, 
+         # vert_class
+         ) %>%
+
+  # produce contingency table
+  table()
+
+# ---------- #
+# calculate proportion of winners (differenced):
+# ---------- #
+obs_diff_by_iucn <-
+  aoh_ms_tmp_trends_by_sp %>%
+  filter(passage_type == "exclude_passage",
+         vert_class != "amp", 
+         mature_forest_obl < 0.5,
+         aoh_type == "crop_abn_iucn"
+         ) %>%
+  group_by(aoh_type, threatened) %>%
+  summarise(p_gain = mean(overall_trend == "gain"), # strict gains only
+            p_gain_w_weak = mean(str_detect(overall_trend, "gain")) # include weak gains
+            ) %>% 
+  # pull(p_gain_w_weak) %>%
+  pull(p_gain) %>%
+  diff()
+
+# ---------- #
+# Null hypothesis: mammals and birds have the same proportion of winners and losers
+# ---------- #
+# In other words, the difference between the two proportions should be 0. 
+set.seed(1612)
+
+# ---------- #
+# create a null distribution of differences:
+# ---------- #
+null_by_iucn <-
+  aoh_ms_tmp_trends_by_sp %>%
+  filter(passage_type == "exclude_passage",
+         vert_class != "amp", 
+         mature_forest_obl < 0.5,
+         aoh_type == "crop_abn_iucn"
+         ) %>%
+  
+  # compare threatened and non-threatened species, using only strict gains
+  mutate(response = case_when(overall_trend == "gain" ~ "gain", TRUE ~ "non_gain")) %>%
+  
+  # include weak gains
+  # mutate(response = case_when(str_detect(overall_trend, "gain") ~ "gain", TRUE ~ "non_gain")) %>%
+
+  
+  infer::specify(response ~ threatened, success = "gain") %>%
+  infer::hypothesize(null = "independence") %>%
+  infer::generate(reps = 1000, type = "permute") %>%
+  infer::calculate(stat = "diff in props", order = c("Threatened", "Not Threatened"))
+
+
+# ---------- #
+# plot distribution with observed difference in proportions
+# ---------- #
+null_by_iucn %>%
+  ggplot(aes(x = stat)) + geom_density() + 
+  geom_vline(xintercept = obs_diff_by_iucn, col = "red")
+# 
+
+# calculate p-value from distribution:
+null_by_iucn %>%
+  summarise(p_value = 2* mean(stat >= obs_diff_by_iucn)) %>% 
+  pull()
+# 0.552 when including strict gains only
+# 0.088 - still non-significant when including weak gains
+
+# ---------- #
+# Calculate confidence interval around difference
+# ---------- #
+# create a bootstrapped distribution of differences:
+boot_by_iucn <- 
+  aoh_ms_tmp_trends_by_sp %>%
+  filter(passage_type == "exclude_passage",
+         vert_class != "amp", 
+         mature_forest_obl < 0.5,
+         aoh_type == "crop_abn_iucn"
+         ) %>%
+  
+  # compare mammals and birds
+  mutate(
+    response = case_when(
+      overall_trend == "gain" ~ "gain", # strict only
+      # str_detect(overall_trend, "gain") ~ "gain", # including weak gains too
+      TRUE ~ "non_gain")) %>%
+
+  infer::specify(response ~ threatened, success = "gain") %>%
+  # infer::hypothesize(null = "independence") %>%
+  infer::generate(reps = 1000, type = "bootstrap") %>%
+  infer::calculate(stat = "diff in props", order = c("Threatened", "Not Threatened"))
+
+# Calculate standard errors:
+se_by_iucn <- boot_by_iucn %>% summarise(se = sd(stat)) %>% pull()
+
+# ---------- #
+# Confidence interval 
+# ---------- #
+c(obs_diff_by_iucn - 2 * se_by_iucn,
+  obs_diff_by_iucn + 2 * se_by_iucn)
+
+# [1] -0.0768320  0.1767056 # including strict gains only (overlapping with 0)
+# [1] 0.01576708 0.19815655 # including weak gains (just barely doesn't overlap with 0, perhaps weakly significant)
+
+
+
+
+
+# ------------------------------------------ #
+# using prop.test()
+# ------------------------------------------ #
+
+aoh_gain_by_iucn_tmp <-
+  aoh_ms_tmp_trends_by_sp %>%
   filter(passage_type == "exclude_passage",
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   group_by(aoh_type, vert_class, passage_type,
-           threatened = case_when(
-             redlistCategory %in% 
-               c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
-             TRUE ~ "Not Threatened"),
+           threatened,
            overall_trend, trend_consistency,
            trend_direction) %>%
   summarise(n_sp = n()) %>%
@@ -491,42 +785,45 @@ aoh_gain_thr_v_non_thr_tmp <-
          )
 
 # ------------------------------------ #
-# do threatened species really have a statistically significant higher proportion of winners?
+# Do threatened species have a statistically significant higher proportion of winners?
+# ------------------------------------------ #
 
-aoh_gain_thr_v_non_thr_tmp %>% 
+aoh_gain_by_iucn_tmp %>% 
   group_by(threatened) %>% 
   summarise(n_sp = sum(n_sp), N = sum(N)) %>%
-  .$n_sp
+  pull(n_sp)
 
 p_test_iucn_all <-
-  prop.test(x = aoh_gain_thr_v_non_thr_tmp %>% 
+  prop.test(x = aoh_gain_by_iucn_tmp %>% 
+              group_by(threatened) %>% 
+              summarise(n_sp = sum(n_sp), N = sum(N)) %>% 
+              pull(n_sp),
+            n = aoh_gain_by_iucn_tmp %>% 
               group_by(threatened) %>% 
               summarise(n_sp = sum(n_sp), N = sum(N)) %>%
-              .$n_sp,
-            n = aoh_gain_thr_v_non_thr_tmp %>% 
-              group_by(threatened) %>% 
-              summarise(n_sp = sum(n_sp), N = sum(N)) %>%
-              .$N)
+              pull(N))
 
 
 # birds
 p_test_iucn_bird <-
-  prop.test(x = aoh_gain_thr_v_non_thr_tmp %>% filter(vert_class == "bird") %>% .$n_sp,
-            n = aoh_gain_thr_v_non_thr_tmp %>% filter(vert_class == "bird") %>% .$N)
+  prop.test(x = aoh_gain_by_iucn_tmp %>% filter(vert_class == "bird") %>% pull(n_sp),
+            n = aoh_gain_by_iucn_tmp %>% filter(vert_class == "bird") %>% .$N)
 
 # mammals
 p_test_iucn_mam <-
-  prop.test(x = aoh_gain_thr_v_non_thr_tmp %>% filter(vert_class == "mam") %>% .$n_sp,
-            n = aoh_gain_thr_v_non_thr_tmp %>% filter(vert_class == "mam") %>% .$N)
+  prop.test(x = aoh_gain_by_iucn_tmp %>% filter(vert_class == "mam") %>% pull(n_sp),
+            n = aoh_gain_by_iucn_tmp %>% filter(vert_class == "mam") %>% .$N)
 
+# ------------------------------------------ #
 # now, including weak trends:
-aoh_gain_thr_v_non_thr_incl_weak_tmp <-
-  aoh_trends_by_sp %>%
+# ------------------------------------------ #
+aoh_gain_by_iucn_incl_weak_tmp <-
+  aoh_ms_tmp_trends_by_sp %>%
   filter(passage_type == "exclude_passage",
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   group_by(aoh_type, vert_class, passage_type,
            threatened = case_when(
@@ -548,15 +845,161 @@ aoh_gain_thr_v_non_thr_incl_weak_tmp <-
 
 # birds
 p_test_iucn_bird_incl_weak <-
-  prop.test(x = aoh_gain_thr_v_non_thr_incl_weak_tmp %>% filter(vert_class == "bird") %>% .$n_sp,
-            n = aoh_gain_thr_v_non_thr_incl_weak_tmp %>% filter(vert_class == "bird") %>% .$N)
+  prop.test(x = aoh_gain_by_iucn_incl_weak_tmp %>% filter(vert_class == "bird") %>% pull(n_sp),
+            n = aoh_gain_by_iucn_incl_weak_tmp %>% filter(vert_class == "bird") %>% .$N)
 
 # mammals
 p_test_iucn_mam_incl_weak <-
-  prop.test(x = aoh_gain_thr_v_non_thr_incl_weak_tmp %>% filter(vert_class == "mam") %>% .$n_sp,
-            n = aoh_gain_thr_v_non_thr_incl_weak_tmp %>% filter(vert_class == "mam") %>% .$N)
+  prop.test(x = aoh_gain_by_iucn_incl_weak_tmp %>% filter(vert_class == "mam") %>% pull(n_sp),
+            n = aoh_gain_by_iucn_incl_weak_tmp %>% filter(vert_class == "mam") %>% .$N)
 
 ```
+
+```{r obs-v-pot-infer}
+# ----------- #
+# exploration
+# ----------- #
+
+# contingency table:
+aoh_ms_tmp_trends_by_sp %>%
+  filter(passage_type == "exclude_passage", vert_class != "amp", 
+         mature_forest_obl < 0.5,
+         str_detect(aoh_type, "crop")
+         ) %>%
+  mutate(response = case_when(overall_trend == "gain" ~ "gain", TRUE ~ "non_gain")) %>%
+  droplevels() %>%
+  select(aoh_type, vert_class,
+         response,
+         # overall_trend
+         ) %>% table()
+
+# proportion of winners overall
+
+
+# ---------- #
+# calculate proportion of winners (differenced):
+# ---------- #
+obs_diff_obs_v_pot <-
+  aoh_ms_tmp_trends_by_sp %>%
+  filter(passage_type == "exclude_passage", vert_class != "amp", 
+         mature_forest_obl < 0.5,
+         str_detect(aoh_type, "crop")
+         ) %>%
+  mutate(response = case_when(overall_trend == "gain" ~ "gain", TRUE ~ "non_gain")) %>%
+  group_by(aoh_type) %>%
+  summarise(p_gain = mean(response == "gain"),
+            p_gain_w_weak = mean(str_detect(overall_trend, "gain")), # include weak gains
+            p_loss = mean(overall_trend == "loss"),
+            n_sp = n()) %>% ungroup() %>%
+  pull(p_gain) %>%
+  # pull(p_gain_w_weak) %>%
+  diff()
+
+
+# more details:
+aoh_ms_tmp_trends_by_sp %>%
+  filter(passage_type == "exclude_passage", vert_class != "amp", 
+         mature_forest_obl < 0.5,
+         str_detect(aoh_type, "crop")
+         ) %>%
+  mutate(response = case_when(overall_trend == "gain" ~ "gain", TRUE ~ "non_gain")) %>%
+  group_by(aoh_type,
+           vert_class, passage_type, overall_trend, trend_direction, trend_consistency
+           ) %>%
+  summarise(n_sp = n()) %>% ungroup() %>%
+  arrange(vert_class, aoh_type, trend_direction, overall_trend) %>% 
+  group_by(vert_class, aoh_type) %>% 
+  mutate(N = sum(n_sp)) %>% ungroup() %>%
+  mutate(percent = 100 * n_sp/N) %>% print(n = 30)
+
+
+# -------------------------------------------------------------------- #
+# using {infer} to test whether there are statistical differences in proportions of winners and losers for threatened and non-threatened species
+
+
+# ---------- #
+# Null hypothesis: mammals and birds have the same proportion of winners and losers
+# ---------- #
+# In other words, the difference between the two proportions should be 0. 
+set.seed(22)
+
+# ---------- #
+# create a null distribution of differences:
+# ---------- #
+null_obs_v_pot <-
+  aoh_ms_tmp_trends_by_sp %>%
+  filter(passage_type == "exclude_passage", vert_class != "amp", 
+         mature_forest_obl < 0.5,
+         str_detect(aoh_type, "crop")
+         ) %>%
+  droplevels() %>%
+  
+  # compare aoh_types, observed and potential abandonment, using only strict gains
+  mutate(response = case_when(overall_trend == "gain" ~ "gain", TRUE ~ "non_gain")) %>%
+  
+  # include weak gains
+  # mutate(response = case_when(str_detect(overall_trend, "gain") ~ "gain", TRUE ~ "non_gain")) %>%
+
+  
+  infer::specify(response ~ aoh_type, success = "gain") %>%
+  infer::hypothesize(null = "independence") %>%
+  infer::generate(reps = 1000, type = "permute") %>%
+  infer::calculate(stat = "diff in props", order = c("crop_abn_potential_iucn", "crop_abn_iucn"))
+
+
+# ---------- #
+# plot distribution with observed difference in proportions
+# ---------- #
+null_obs_v_pot %>%
+  ggplot(aes(x = stat)) + geom_density() + 
+  geom_vline(xintercept = obs_diff_obs_v_pot, col = "red")
+# 
+
+# calculate p-value from distribution:
+null_obs_v_pot %>%
+  summarise(p_value = 2* mean(stat >= obs_diff_obs_v_pot)) %>% 
+  pull()
+# 0 when including strict gains only - highly significant
+# 0.278 - not significant when including weak gains
+
+# ---------- #
+# Calculate confidence interval around difference
+# ---------- #
+# create a bootstrapped distribution of differences:
+boot_obs_v_pot <-
+  aoh_ms_tmp_trends_by_sp %>%
+  filter(passage_type == "exclude_passage", vert_class != "amp", 
+         mature_forest_obl < 0.5,
+         str_detect(aoh_type, "crop")
+         ) %>%
+  droplevels() %>%
+  # compare mammals and birds
+  mutate(
+    response = case_when(
+      overall_trend == "gain" ~ "gain", # strict only
+      # str_detect(overall_trend, "gain") ~ "gain", # including weak gains too
+      TRUE ~ "non_gain")) %>%
+
+  infer::specify(response ~ aoh_type, success = "gain") %>%
+  # infer::hypothesize(null = "independence") %>%
+  infer::generate(reps = 1000, type = "bootstrap") %>%
+  infer::calculate(stat = "diff in props", order = c("crop_abn_potential_iucn", "crop_abn_iucn"))
+
+# Calculate standard errors:
+se_obs_v_pot <- boot_obs_v_pot %>% summarise(se = sd(stat)) %>% pull()
+
+# ---------- #
+# Confidence interval 
+# ---------- #
+c(obs_diff_obs_v_pot - 2 * se_obs_v_pot,
+  obs_diff_obs_v_pot + 2 * se_obs_v_pot)
+
+# [1] 0.06760623 0.13653579 # including strict gains only (significant, non overlapping with 0)
+# [1] -0.01344239  0.04894534 # including weak gains (overlapping with 0, not significant)
+
+
+```
+
 
 ```{r get-stats-obs-v-pot, include = FALSE}
 # relevant files
@@ -569,11 +1012,11 @@ mg_improve_tmp <- aoh_p_change_obs_v_pot_summary %>% filter(site == "mato_grosso
 
 # basic numbers:
 aoh_overall_obs_v_pot_tmp <-
-  aoh_trends_by_sp %>%
+  aoh_ms_tmp_trends_by_sp %>%
   filter(passage_type == "exclude_passage",
          vert_class != "amp", 
          str_detect(aoh_type, "crop"),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)
+         mature_forest_obl < 0.5
          ) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
@@ -581,7 +1024,7 @@ aoh_overall_obs_v_pot_tmp <-
   arrange(vert_class, trend_direction, overall_trend, aoh_type) %>% 
     group_by(vert_class, aoh_type) %>% 
     mutate(N = sum(n_sp)) %>% ungroup() %>%
-    mutate(percent = 100 * n_sp/N) %>%
+    mutate(percent = 100 * n_sp/N) #%>%
     print(n = 100)
 
 aoh_overall_obs_v_pot_tmp %>%
@@ -592,10 +1035,10 @@ aoh_overall_obs_v_pot_tmp %>%
 #
 
 aoh_n_by_site_obs_v_pot <- 
-  aoh_trends %>%
+  aoh_ms_tmp_trends %>%
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            str_detect(aoh_type, "crop")) %>%
     group_by(site, aoh_type, vert_class, trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -613,13 +1056,13 @@ aoh_n_by_site_obs_v_pot %>%
 obs_v_pot_stats <- list(
   bird_gain_p_test = prop.test(
     x = aoh_overall_obs_v_pot_tmp %>% 
-      filter(vert_class == "bird", overall_trend == "gain") %>% .$n_sp,
+      filter(vert_class == "bird", overall_trend == "gain") %>% pull(n_sp),
     n = aoh_overall_obs_v_pot_tmp %>% 
       filter(vert_class == "bird", overall_trend == "gain") %>% .$N),
   
   mam_gain_p_test = prop.test(
     x = aoh_overall_obs_v_pot_tmp %>% 
-      filter(vert_class == "mam", overall_trend == "gain") %>% .$n_sp,
+      filter(vert_class == "mam", overall_trend == "gain") %>% pull(n_sp),
     n = aoh_overall_obs_v_pot_tmp %>% 
       filter(vert_class == "mam", overall_trend == "gain") %>% .$N),
  
@@ -666,10 +1109,10 @@ obs_v_pot_stats <- list(
   filter(site != "mato_grosso", trend == "loss", vert_class == "mam") %>% 
   select(percent_change) %>% max(),
   
-  mg_n_winner_bird_obs = aoh_trends %>%
+  mg_n_winner_bird_obs = aoh_ms_tmp_trends %>%
   filter(passage_type == "exclude_passage", vert_class != "amp", 
          grepl("crop", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)) %>%
+         mature_forest_obl < 0.5) %>%
   group_by(aoh_type, vert_class, passage_type, 
            site, trend) %>%
   summarise(n_sp = n()) %>%
@@ -678,10 +1121,10 @@ obs_v_pot_stats <- list(
   pivot_wider(values_from = n_sp, names_from = aoh_type) %>%
   filter(vert_class == "bird") %>% .$crop_abn_iucn,
   
-  mg_n_winner_bird_pot = aoh_trends %>%
+  mg_n_winner_bird_pot = aoh_ms_tmp_trends %>%
   filter(passage_type == "exclude_passage",
          vert_class != "amp", grepl("crop", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)) %>%
+         mature_forest_obl < 0.5) %>%
   group_by(aoh_type, vert_class, passage_type, 
            site, trend) %>%
   summarise(n_sp = n()) %>%
@@ -690,10 +1133,10 @@ obs_v_pot_stats <- list(
   pivot_wider(values_from = n_sp, names_from = aoh_type) %>%
   filter(vert_class == "bird") %>% .$crop_abn_potential_iucn,
   
-  mg_n_winner_mam_obs = aoh_trends %>%
+  mg_n_winner_mam_obs = aoh_ms_tmp_trends %>%
   filter(passage_type == "exclude_passage", vert_class != "amp", 
          grepl("crop", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)) %>%
+         mature_forest_obl < 0.5) %>%
   group_by(aoh_type, vert_class, passage_type, 
            site, trend) %>%
   summarise(n_sp = n()) %>%
@@ -702,10 +1145,10 @@ obs_v_pot_stats <- list(
   pivot_wider(values_from = n_sp, names_from = aoh_type) %>%
   filter(vert_class == "mam") %>% .$crop_abn_iucn,
   
-  mg_n_winner_mam_pot = aoh_trends %>%
+  mg_n_winner_mam_pot = aoh_ms_tmp_trends %>%
   filter(passage_type == "exclude_passage",
          vert_class != "amp", grepl("crop", aoh_type),
-         !(vert_class == "bird" & mature_forest_obl > 0.5)) %>%
+         mature_forest_obl < 0.5) %>%
   group_by(aoh_type, vert_class, passage_type, 
            site, trend) %>%
   summarise(n_sp = n()) %>%
@@ -717,16 +1160,16 @@ obs_v_pot_stats <- list(
   
   mg_improve_n_total = mg_improve_tmp %>% summarise(n = sum(n_sp_in_group)),
   mg_improve_n_bird_no_trend = mg_improve_tmp %>% 
-    filter(str_detect(trend_change, "no"), vert_class == "bird") %>% .$n_sp_in_group,
+    filter(str_detect(trend_change, "no"), vert_class == "bird") %>% pull(n_sp_in_group),
   
   mg_improve_n_mam_no_trend = mg_improve_tmp %>% 
-    filter(str_detect(trend_change, "no"), vert_class == "mam") %>% .$n_sp_in_group,
+    filter(str_detect(trend_change, "no"), vert_class == "mam") %>% pull(n_sp_in_group),
   
   mg_improve_n_bird_loss = mg_improve_tmp %>% 
-    filter(str_detect(trend_change, "loss"), vert_class == "bird") %>% .$n_sp_in_group,
+    filter(str_detect(trend_change, "loss"), vert_class == "bird") %>% pull(n_sp_in_group),
   
   mg_improve_n_mam_loss = mg_improve_tmp %>% 
-    filter(str_detect(trend_change, "loss"), vert_class == "mam") %>% .$n_sp_in_group,
+    filter(str_detect(trend_change, "loss"), vert_class == "mam") %>% pull(n_sp_in_group),
   
   mg_improve_mean_p_gain = 
     format(round(
@@ -738,10 +1181,10 @@ obs_v_pot_stats <- list(
   
   mg_worsen_n_bird = aoh_p_change_obs_v_pot_summary %>% 
         filter(site == "mato_grosso", change_direction == "Worsen",
-               vert_class == "bird") %>% .$n_sp_in_group,
+               vert_class == "bird") %>% pull(n_sp_in_group),
   mg_worsen_n_mam = aoh_p_change_obs_v_pot_summary %>% 
         filter(site == "mato_grosso", change_direction == "Worsen",
-               vert_class == "mam") %>% .$n_sp_in_group,
+               vert_class == "mam") %>% pull(n_sp_in_group),
   
   mg_worsen_mean_p_loss = format(round(aoh_p_change_obs_v_pot_summary %>% 
         filter(site == "mato_grosso", change_direction == "Worsen") %>%
@@ -757,7 +1200,7 @@ obs_v_pot_stats <- list(
     select(vert_class, binomial, trend_change, change_direction) %>% unique() %>% 
     group_by(vert_class, change_direction) %>%
     summarise(n_sp = length(unique(binomial))) %>%
-    filter(vert_class == "bird") %>% .$n_sp,
+    filter(vert_class == "bird") %>% pull(n_sp),
   
   n_sp_improve_non_mg_mam = aoh_p_change_obs_v_pot %>%
     select(vert_class, site, binomial, contains("change")) %>%
@@ -765,7 +1208,7 @@ obs_v_pot_stats <- list(
     select(vert_class, binomial, trend_change, change_direction) %>% unique() %>% 
     group_by(vert_class, change_direction) %>%
     summarise(n_sp = length(unique(binomial))) %>%
-    filter(vert_class == "mam") %>% .$n_sp,
+    filter(vert_class == "mam") %>% pull(n_sp),
   
   n_same_loss_bird = 
     aoh_p_change_obs_v_pot_summary %>%
@@ -773,7 +1216,7 @@ obs_v_pot_stats <- list(
     summarise(n_sp = sum(n_sp_in_group),
               w_mean = sum(mean_p_change*n_sp_in_group) / n_sp) %>%
     arrange(vert_class, change_direction) %>%
-    filter(trend_change == "same (loss)", vert_class == "bird") %>% .$n_sp,
+    filter(trend_change == "same (loss)", vert_class == "bird") %>% pull(n_sp),
   
   n_same_loss_mam = 
     aoh_p_change_obs_v_pot_summary %>%
@@ -781,7 +1224,7 @@ obs_v_pot_stats <- list(
     summarise(n_sp = sum(n_sp_in_group),
               w_mean = sum(mean_p_change*n_sp_in_group) / n_sp) %>%
     arrange(vert_class, change_direction) %>%
-    filter(trend_change == "same (loss)", vert_class == "mam") %>% .$n_sp,
+    filter(trend_change == "same (loss)", vert_class == "mam") %>% pull(n_sp),
   
   mean_p_loss_same = round(
     aoh_p_change_obs_v_pot_summary %>%
@@ -835,7 +1278,7 @@ obs_v_pot_stats <- list(
     summarise(n_sp = sum(n_sp_in_group),
               w_mean = sum(mean_p_change*n_sp_in_group) / n_sp) %>%
     arrange(vert_class, change_direction) %>%
-    filter(trend_change == "same (gain)", vert_class == "bird") %>% .$n_sp,
+    filter(trend_change == "same (gain)", vert_class == "bird") %>% pull(n_sp),
   
   n_same_gain_mam = 
     aoh_p_change_obs_v_pot_summary %>%
@@ -843,7 +1286,7 @@ obs_v_pot_stats <- list(
     summarise(n_sp = sum(n_sp_in_group),
               w_mean = sum(mean_p_change*n_sp_in_group) / n_sp) %>%
     arrange(vert_class, change_direction) %>%
-    filter(trend_change == "same (gain)", vert_class == "mam") %>% .$n_sp,
+    filter(trend_change == "same (gain)", vert_class == "mam") %>% pull(n_sp),
   
   mean_p_gain_same = aoh_p_change_obs_v_pot_summary %>%
     group_by(vert_class, trend_change, change_direction) %>% 
@@ -877,7 +1320,7 @@ aoh_p_change_obs_v_pot %>%
   summarise(n_sp = length(unique(binomial)))
 
 # Number of species with various trends in each scenario:
-aoh_trends %>%
+aoh_ms_tmp_trends %>%
   filter(passage_type == "exclude_passage",
          vert_class == "bird", grepl("crop", aoh_type),
          mature_forest_obl < 0.5) %>%
@@ -994,11 +1437,11 @@ p_test_loss_mam_by_calc23 <- prop.test(
 
 ```{r get-stats-aoh-calc2-3, include = FALSE}
 aoh_stat_tmp_by_site_max <-
-  aoh_trends %>%
+  aoh_ms_tmp_trends %>%
       filter(!is.na(trend),
              passage_type == "exclude_passage",
              vert_class != "amp",
-             !(vert_class == "bird" & mature_forest_obl > 0.5),
+             mature_forest_obl < 0.5,
              aoh_type == "max_abn_iucn"
              ) %>%
       group_by(aoh_type, vert_class, passage_type, 
@@ -1028,10 +1471,10 @@ aoh_stats_max <- list(
                        aoh_type == "max_abn_iucn", overall_trend == "loss",
                        vert_class == "mam")$n_sp,
   
-  wl_prop_bird_site_sp = aoh_trends %>%
+  wl_prop_bird_site_sp = aoh_ms_tmp_trends %>%
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "max_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -1040,10 +1483,10 @@ aoh_stats_max <- list(
     mutate(prop_wl = gain/loss) %>% filter(vert_class == "bird") %>%
     .$prop_wl %>% round(digits = 2),
   
-  wl_prop_mam_site_sp = aoh_trends %>%
+  wl_prop_mam_site_sp = aoh_ms_tmp_trends %>%
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "max_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -1052,10 +1495,10 @@ aoh_stats_max <- list(
     mutate(prop_wl = gain/loss) %>% filter(vert_class == "mam") %>%
     .$prop_wl %>% round(digits = 2),
   
-  wl_prop_bird_sp = aoh_trends_by_sp %>% 
+  wl_prop_bird_sp = aoh_ms_tmp_trends_by_sp %>% 
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "max_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              overall_trend) %>%
@@ -1064,10 +1507,10 @@ aoh_stats_max <- list(
     mutate(prop_wl = gain/loss) %>% filter(vert_class == "bird") %>%
     .$prop_wl %>% round(digits = 2),
   
-  wl_prop_bird_sp_w_weak = aoh_trends_by_sp %>% 
+  wl_prop_bird_sp_w_weak = aoh_ms_tmp_trends_by_sp %>% 
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "max_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              trend_direction) %>%
@@ -1076,10 +1519,10 @@ aoh_stats_max <- list(
     mutate(prop_wl = gain/loss) %>% filter(vert_class == "bird") %>%
     .$prop_wl %>% round(digits = 2),
   
-  wl_prop_mam_sp = aoh_trends_by_sp %>% 
+  wl_prop_mam_sp = aoh_ms_tmp_trends_by_sp %>% 
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "max_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              overall_trend) %>%
@@ -1088,10 +1531,10 @@ aoh_stats_max <- list(
     mutate(prop_wl = gain/loss) %>% filter(vert_class == "mam") %>%
     .$prop_wl %>% round(digits = 2),
   
-  wl_prop_mam_sp_w_weak = aoh_trends_by_sp %>% 
+  wl_prop_mam_sp_w_weak = aoh_ms_tmp_trends_by_sp %>% 
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "max_abn_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              trend_direction) %>%
@@ -1115,11 +1558,11 @@ aoh_stats_max <- list(
 
 # ------ entire landscape ------ #
 aoh_stat_tmp_by_site_full <-
-  aoh_trends %>%
+  aoh_ms_tmp_trends %>%
       filter(!is.na(trend),
              passage_type == "exclude_passage",
              vert_class != "amp",
-             !(vert_class == "bird" & mature_forest_obl > 0.5),
+             mature_forest_obl < 0.5,
              aoh_type == "full_iucn"
              ) %>%
       group_by(aoh_type, vert_class, passage_type, 
@@ -1148,10 +1591,10 @@ aoh_stats_full <- list(
   n_loss_mam = filter(aoh_overall_tmp, 
                        aoh_type == "full_iucn", overall_trend == "loss",
                        vert_class == "mam")$n_sp,
-  wl_prop_bird_site_sp = aoh_trends %>%
+  wl_prop_bird_site_sp = aoh_ms_tmp_trends %>%
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "full_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -1160,10 +1603,10 @@ aoh_stats_full <- list(
     mutate(prop_wl = gain/loss) %>% filter(vert_class == "bird") %>%
     .$prop_wl %>% round(digits = 2),
   
-  wl_prop_mam_site_sp = aoh_trends %>%
+  wl_prop_mam_site_sp = aoh_ms_tmp_trends %>%
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "full_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
@@ -1172,10 +1615,10 @@ aoh_stats_full <- list(
     mutate(prop_wl = gain/loss) %>% filter(vert_class == "mam") %>%
     .$prop_wl %>% round(digits = 2),
   
-  wl_prop_bird_sp = aoh_trends_by_sp %>% 
+  wl_prop_bird_sp = aoh_ms_tmp_trends_by_sp %>% 
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "full_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              overall_trend) %>%
@@ -1184,10 +1627,10 @@ aoh_stats_full <- list(
     mutate(prop_wl = gain/loss) %>% filter(vert_class == "bird") %>%
     .$prop_wl %>% round(digits = 2),
   
-  wl_prop_bird_sp_w_weak = aoh_trends_by_sp %>% 
+  wl_prop_bird_sp_w_weak = aoh_ms_tmp_trends_by_sp %>% 
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "full_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              trend_direction) %>%
@@ -1196,10 +1639,10 @@ aoh_stats_full <- list(
     mutate(prop_wl = gain/loss) %>% filter(vert_class == "bird") %>%
     .$prop_wl %>% round(digits = 2),
   
-  wl_prop_mam_sp = aoh_trends_by_sp %>% 
+  wl_prop_mam_sp = aoh_ms_tmp_trends_by_sp %>% 
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "full_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              overall_trend) %>%
@@ -1208,10 +1651,10 @@ aoh_stats_full <- list(
     mutate(prop_wl = gain/loss) %>% filter(vert_class == "mam") %>%
     .$prop_wl %>% round(digits = 2),
   
-  wl_prop_mam_sp_w_weak = aoh_trends_by_sp %>% 
+  wl_prop_mam_sp_w_weak = aoh_ms_tmp_trends_by_sp %>% 
     filter(passage_type == "exclude_passage",
            vert_class != "amp",
-           !(vert_class == "bird" & mature_forest_obl > 0.5),
+           mature_forest_obl < 0.5,
            aoh_type == "full_iucn") %>%
     group_by(aoh_type, vert_class, passage_type, 
              trend_direction) %>%
@@ -1388,7 +1831,7 @@ The lone exception were birds in Iraq (our site with the lowest species richness
 Though bird and mammals species were each much more likely to gain habitat than to lose habitat due to abandonment, in general, a relatively greater share of mammal species gained habitat than birds species, both overall (Fig. \@ref(fig:aoh-overall-stacked)) and at individual sites (Fig. \@ref(fig:aoh-by-site-stacked)).
 This overall difference between the proportion of bird and mammal species with gains in habitat was statistically significant, based on a two-sample proportion test [$X^2$ (df = `r p_test_gain_m_v_b$parameter`, *N* = `r sum(aoh_gain_bird_v_mam_tmp$N)`) = `r round(p_test_gain_m_v_b$statistic, digits = 2)`, *p* `r ifelse(p_test_gain_m_v_b$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_gain_m_v_b$p.value, digits = 2)))`].
 
-When considering only threatened species, we found that a greater proportion of threatened species gained habitat as a result of abandonment than lost habitat (Fig. \@ref(fig:aoh-iucn-by-site-crop-abn)), though there were relatively few threatened species per site (Fig. \@ref(fig:richness-by-site)) and the proportions of winners were not statistically significantly different for threatened and non-threatened species [two-sample proportion test: $X^2$ (df = `r p_test_iucn_all$parameter`, *N* = `r aoh_gain_thr_v_non_thr_tmp %>% .$N %>% sum()`) = `r prettyNum(round(p_test_iucn_all$statistic, digits = 2), nsmall = 2)`, *p* `r ifelse(p_test_iucn_all$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_iucn_all$p.value, digits = 2)))`].
+When considering only threatened species, we found that a greater proportion of threatened species gained habitat as a result of abandonment than lost habitat (Fig. \@ref(fig:aoh-iucn-by-site-crop-abn)), though there were relatively few threatened species per site (Fig. \@ref(fig:richness-by-site)) and the proportions of winners were not statistically significantly different for threatened and non-threatened species [two-sample proportion test: $X^2$ (df = `r p_test_iucn_all$parameter`, *N* = `r aoh_gain_by_iucn_tmp %>% .$N %>% sum()`) = `r prettyNum(round(p_test_iucn_all$statistic, digits = 2), nsmall = 2)`, *p* `r ifelse(p_test_iucn_all$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_iucn_all$p.value, digits = 2)))`].
 Though relatively few small-ranged birds and mammals were affected by abandonment at our sites (3 bird and 6 mammal species), therefore precluding statistical significance, we also found that nearly all small-ranged species gained habitat as a result of abandonment (with the exception of one small-ranged bird: the Iraq babbler, *Argya altirostris*; see Fig. \@ref(fig:aoh-by-range)).
 
 (ref:caption-aoh-iucn-by-site-crop-abn) The number of threatened and not threatened bird and mammal species with various trends in AOH in abandoned pixels from cultivation through 2017 (Calculation 1).  Site totals are shown on the left, and overall totals are shown on the right, with birds on the top half and mammals on the bottom half. Site specific results for Calculations 2 and 3 are shown in Figs. \@ref(fig:aoh-iucn-by-site-max-abn) and \@ref(fig:aoh-iucn-by-site-full) respectively. Overall results for Calculations 1, 2, and 3 are shown in Fig. \@ref(fig:aoh-by-iucn-lumped), and for individual IUCN categories in Fig. \@ref(fig:aoh-by-iucn).
@@ -1457,6 +1900,17 @@ Though the number of birds that gained habitat increased in this potential scena
 ```{r aoh-overall, fig.cap = '(ref:caption-aoh-overall)', fig.pos = "!hbt"}
 knitr::include_graphics(path = paste0(p_plots, "aoh/aoh_trend_by_vert_aoh_type", aoh_run_date,".pdf"))
 ```
+
+## Effect size
+
+Key conclusions:
+
+## Traits
+
+Key conclusions:
+
+
+
 
 # Discussion {.unnumbered}
 
@@ -1641,8 +2095,8 @@ Throughout this analysis, we used two-sample Z-tests to test whether for equalit
 Mammals and birds showed statistically significant differences in the proportion of both winner and loser species following abandonment (Calculation 1).
 Mammals showed a significantly higher proportion of species that were winners (reported in main text), and also a significantly lower proportion of species that were losers [$X^2$ (df = `r p_test_loss_m_v_b$parameter`, *N* = `r sum(aoh_gain_bird_v_mam_tmp$N)`) = `r round(p_test_loss_m_v_b$statistic, digits = 2)`, *p* `r ifelse(p_test_loss_m_v_b$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_loss_m_v_b$p.value, digits = 2)))`].
 
-When comparing the proportion of winner species between threatened and non-threatened species, we found that the difference between these two proportions was not statistically significant [two-sample proportion test: $X^2$ (df = `r p_test_iucn_all$parameter`, *N* = `r aoh_gain_thr_v_non_thr_tmp %>% .$N %>% sum()`) = `r round(p_test_iucn_all$statistic, digits = 2)`, *p* `r ifelse(p_test_iucn_all$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_iucn_all$p.value, digits = 2)))`].
-This was also the case for birds [$X^2$ (df = `r p_test_iucn_bird$parameter`, *N* = `r aoh_gain_thr_v_non_thr_tmp %>% filter(vert_class == "bird") %>% .$N %>% sum()`) = `r round(p_test_iucn_bird$statistic, digits = 2)`, *p* `r ifelse(p_test_iucn_bird$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_iucn_bird$p.value, digits = 2)))`] and mammals [$X^2$ (df = `r p_test_iucn_mam$parameter`, *N* = `r aoh_gain_thr_v_non_thr_tmp %>% filter(vert_class == "mam") %>% .$N %>% sum()`) = `r round(p_test_iucn_mam$statistic, digits = 2)`, *p* `r ifelse(p_test_iucn_mam$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_iucn_mam$p.value, digits = 2)))`] individually.
+When comparing the proportion of winner species between threatened and non-threatened species, we found that the difference between these two proportions was not statistically significant [two-sample proportion test: $X^2$ (df = `r p_test_iucn_all$parameter`, *N* = `r aoh_gain_by_iucn_tmp %>% .$N %>% sum()`) = `r round(p_test_iucn_all$statistic, digits = 2)`, *p* `r ifelse(p_test_iucn_all$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_iucn_all$p.value, digits = 2)))`].
+This was also the case for birds [$X^2$ (df = `r p_test_iucn_bird$parameter`, *N* = `r aoh_gain_by_iucn_tmp %>% filter(vert_class == "bird") %>% .$N %>% sum()`) = `r round(p_test_iucn_bird$statistic, digits = 2)`, *p* `r ifelse(p_test_iucn_bird$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_iucn_bird$p.value, digits = 2)))`] and mammals [$X^2$ (df = `r p_test_iucn_mam$parameter`, *N* = `r aoh_gain_by_iucn_tmp %>% filter(vert_class == "mam") %>% .$N %>% sum()`) = `r round(p_test_iucn_mam$statistic, digits = 2)`, *p* `r ifelse(p_test_iucn_mam$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_iucn_mam$p.value, digits = 2)))`] individually.
 When looking at individual IUCN statuses, we found a similar weak pattern, given that the number of species in each category was relatively low (Fig. \@ref(fig:aoh-by-iucn)).
 
 We also compared proportions of winners and losers across three calculations of AOH with progressively wider temporal and spatial scope (see Fig. \@ref(fig:aoh-sample-trajectories)).
