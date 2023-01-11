@@ -415,6 +415,23 @@ common_names <- read_csv(file = paste0(p_derived, "iucn_common_names_subset.csv"
 habitat_age_req <- read_csv(paste0(p_derived, "habitat_age_req/iucn_habitat_age_req.csv"))
 habitat_age_req_coded <- read_csv(paste0(p_derived, "habitat_age_req/", "habitat_age_req_coded.csv"))
 #
+# habitat_age_req_coded %>%
+#   filter(str_detect(mature_forest_obl, "NA") | is.na(mature_forest_obl))
+# habitat_age_req_coded %>%
+  # filter(str_detect(binomial, "Inia"))
+# filter(str_detect(common_names, "(?i)dolphin")) # the (?i) included here makes this case-insensitive
+
+# aoh_feols_trends %>%
+  # aoh_feols_trends_by_sp %>%
+  # aoh_trends %>%
+  # aoh_trends_by_sp %>%
+  # filter(
+  #   str_detect(mature_forest_obl, "NA") | is.na(mature_forest_obl),
+  #   vert_class != "amp") # %>% select(mature_forest_obl) %>% unique()
+
+centroids_df <- read_csv(file = paste0(p_derived, "/sf/centroids_df.csv")) %>% 
+  as.data.frame() %>%
+  tibble::as_tibble()
 
 # ------------------------------------------------------------ # 
 # ----------------------------- AOH --------------------- 
@@ -501,13 +518,30 @@ aoh_l <- read_parquet(paste0(p_derived, "aoh_l.parquet"))
 aoh_species_list <- read_parquet(paste0(p_derived, "aoh_species_list.parquet"))
 aoh_filter <- read_parquet(paste0(p_derived, "aoh_filter.parquet"))
 aoh <- read_parquet(paste0(p_derived, "aoh.parquet"))
+
+# added 2022.11.28 after confirming the use of fixest::feols() and the Newey-West estimator to calculate standard errors
+aoh_feols <- read_parquet(paste0(p_derived, "aoh_feols.parquet"))
+aoh_feols_trends <- read_parquet(paste0(p_derived, "aoh_feols_trends.parquet"))
+aoh_feols_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_feols_trends_by_sp.parquet"))
+
 aoh_lm <- read_parquet(paste0(p_derived, "aoh_lm.parquet"))
 aoh_trends <- read_parquet(paste0(p_derived, "aoh_trends.parquet"))
 aoh_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_trends_by_sp.parquet"))
+
 run_indices <- read_parquet(paste0(p_derived, "aoh_run_indices.parquet"))
+
+# absolute effect sizes
 aoh_change_df <- read_parquet(paste0(p_derived, "aoh_change_df.parquet"))
-aoh_p_change_obs_v_pot <- read_csv(paste0(p_derived, "aoh_p_change_obs_v_pot.csv"))
-aoh_p_change_obs_v_pot_summary <- read_csv(paste0(p_derived, "aoh_p_change_obs_v_pot_summary.csv"))
+
+# factor changes
+aoh_start_end_l <- read_parquet(paste0(p_derived, "aoh_start_end_l.parquet"))
+aoh_start_end_trends_l <- read_parquet(paste0(p_derived, "aoh_start_end_trends_l.parquet"))
+
+
+aoh_p_change_obs_v_pot_ols <- read_csv(paste0(p_derived, "aoh_p_change_obs_v_pot_ols.csv"))
+aoh_p_change_obs_v_pot_summary_ols <- read_csv(paste0(p_derived, "aoh_p_change_obs_v_pot_summary_ols.csv"))
+aoh_p_change_obs_v_pot_feols <- read_csv(paste0(p_derived, "aoh_p_change_obs_v_pot_feols.csv"))
+aoh_p_change_obs_v_pot_summary_feols <- read_csv(paste0(p_derived, "aoh_p_change_obs_v_pot_summary_feols.csv"))
 
 i <- "crop_abn_iucn"
 
