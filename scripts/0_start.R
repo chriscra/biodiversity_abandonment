@@ -22,7 +22,7 @@ needed_packages <- c(
 
   
   # modeling:
-  "tidymodels", # metapackage including: rsample, parsnip, recipes, workflows, tune, yardstick, broom, & dials
+  "tidymodels", # metapackage including: infer, rsample, parsnip, recipes, workflows, tune, yardstick, broom, & dials
   "lme4", "brms", 
   "broom.mixed", # nb: broom comes preloaded in the tidymodels; this package is specifically intended for mixed effects models
   "lamW", # to calculate the Lambert's W function, for calculating time to various proportions in abn decay models
@@ -48,6 +48,7 @@ needed_packages <- c(
   "animation", "magick", "ggrepel",
   "plotly", # plotly makes very cool interactive graphics!
   "gridGraphics",
+  "gt", "gtsummary", # for tables, particularly of model outputs
   
   # development
   "tictoc",  "magrittr", "parallel", "knitr", 
