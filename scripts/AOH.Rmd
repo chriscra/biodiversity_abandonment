@@ -5237,9 +5237,27 @@ aoh_trends_by_sp %>%
 
 
 
-```{r set-up-aoh-types-sub}
+```{r set-up-tmp-files-options}
+# see _util_files.R
+aoh_ms_tmp_trends
+aoh_ms_tmp_trends_by_sp
+
 aoh_types_sub <- aoh_types[c(6, 3, 1)]
 threat_statuses <- c("Threatened", "Not Threatened")
+
+
+plot_filter_options_df <- tibble(
+  run = 1:4,
+  passage_opt = c("include_passage", "include_passage", 
+                  "exclude_passage", "exclude_passage"),
+  mature_opt = c("include_mature_forest_obl", "exclude_mature_forest_obl", 
+                  "include_mature_forest_obl", "exclude_mature_forest_obl")
+)
+
+# defaults:
+passage_opt <- "exclude_passage"
+mature_opt <- "exclude_mature_forest_obl"
+
 ```
 
 
@@ -5250,20 +5268,11 @@ threat_statuses <- c("Threatened", "Not Threatened")
 #   passage_opt <- filter(plot_filter_options_df, run == i)$passage_opt
 #   mature_opt <- filter(plot_filter_options_df, run == i)$mature_opt
 
-# gg_aoh_trend_by_vert_aoh_type <-
-  aoh_feols_trends_by_sp %>% # new version, accounting for temporal autocorrelation via NW estimator
+gg_aoh_trend_by_vert_aoh_type <-
+  aoh_ms_tmp_trends_by_sp %>%
   filter(
-    # binomial %in% (filter(species_list, site != "mato_grosso") %>% .$binomial %>% unique()), # all species excluding those only found in Mato Grosso
-    binomial %in% unique(aoh_feols_trends_by_sp %>%
-                            filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage",
-                                   vert_class != "amp", mature_forest_obl < 0.5) %>%
-                            pull(binomial)),
-    passage_type == "exclude_passage",
-    vert_class != "amp", 
-    !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-    !grepl("potential", aoh_type),
-    mature_forest_obl < 0.5
-    ) %>%
+    # binomial %in% (filter(species_list, site != "mato_grosso") %>% .$binomial %>% unique()), # exclude species only found in Mato Grosso
+    !grepl("potential", aoh_type)) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
   summarise(n_sp = n()) %>%
@@ -5301,7 +5310,7 @@ ggsave(gg_aoh_trend_by_vert_aoh_type,
 ```{r trend-summary-overall-mat-for-obl}
 # -------- excluding mature forest obligates ----- ------ #
 gg_aoh_trend_by_vert_aoh_type_no_mat <-
-  aoh_trends_by_sp %>%
+  aoh_feols_trends_by_sp %>%
   filter(passage_type == "exclude_passage",
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
@@ -5309,12 +5318,15 @@ gg_aoh_trend_by_vert_aoh_type_no_mat <-
          # mature_forest_obl < 0.5
          ) %>%
 
-  group_by(aoh_type, vert_class, passage_type,
+  group_by(aoh_type,
+           # vert_class,
+           passage_type,
            mature_forest_obl = mature_forest_obl > 0.5,
            overall_trend, trend_direction, trend_consistency) %>%
     filter(!is.na(mature_forest_obl)) %>%
   summarise(n_sp = n()) %>%
-  arrange(vert_class, aoh_type) %>%
+  arrange(#vert_class, 
+          aoh_type) %>%
   ggplot(data = .,
        mapping = aes(
          x = trend_direction,
@@ -5348,81 +5360,14 @@ ggsave(gg_aoh_trend_by_vert_aoh_type_no_mat,
 ```
 
 
-```{r old-overall-trend-by-sp}
-# plot -- number of each trend type:
-plot_filter_options_df
-i <- 3
-for (i in 1:4) {
-  
-  passage_opt <- filter(plot_filter_options_df, run == i)$passage_opt
-  mature_opt <- filter(plot_filter_options_df, run == i)$mature_opt
-
-  
-# gg_trend_summary_by_sp_old <-
-  aoh_trends_by_sp %>%
-  filter(passage_type == passage_opt,
-         vert_class != "amp", 
-         # aoh_type == "max_abn_iucn"
-         ) %>%
-  {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
-
-  group_by(aoh_type, vert_class, passage_type,
-           overall_trend, trend_direction, trend_consistency) %>%
-  summarise(n_sp = n()) %>%
-  arrange(vert_class, aoh_type) %>%
-
-  ggplot(data = .,
-       mapping = aes(
-         # x = overall_trend, 
-         x = trend_direction,
-                     y = n_sp,
-                     # group = as_factor(trend), 
-                     fill = vert_class,
-                     col = vert_class,
-                     # alpha = as_factor(trend_consistency)
-                     alpha = trend_consistency %>% fct_rev()
-                     )) +
-  geom_col(#position = position_dodge2(width = 0.8, preserve = "single")
-           ) +
-  theme_classic() + 
-  scale_alpha_manual(name = "Trend Consistency",
-                     labels = c("opposite" = "Opposite",
-                                "consistent" = "Consistent",
-                                "weak" = "Weak"),
-                     values = c("consistent" = 1,
-                                "weak" = 0.4,
-                                "opposite" = 0.2)
-                     ) + 
-  theme(legend.position = "right",
-            axis.text.x = element_text(angle = 340, vjust = 1, hjust = 0)) +
-  facet_grid(col = vars(vert_class), rows = vars(aoh_type), 
-             scales = "free", labeller = as_labeller(aoh_type_labels))
-
-
-ggsave(gg_trend_summary_by_sp_old,
-       filename = paste0(p_output, "plots/aoh/", "trend_summary_by_sp_old", aoh_run_date, "_",
-                         "_", mature_opt,
-                         "_", passage_opt,
-                         ".pdf"),
-       width = 6, height = 5, units = "in")
-}
-
-aoh_trends_by_sp$trend_types %>% unique()
-```
-
-
 ```{r overall-stacked-percent}
 # ------------------------------------------------------------ #
 # ------------------------------------------------------------ #
 
 gg_trends_stack_percent <-
-  aoh_trends_by_sp %>%
-  filter(passage_type == passage_opt,
-         vert_class != "amp", 
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         !grepl("potential", aoh_type),
-         mature_forest_obl < 0.5
-         ) %>%
+  # aoh_trends_by_sp %>%
+  aoh_ms_tmp_trends_by_sp %>%
+  filter(!grepl("potential", aoh_type)) %>%
   # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
 
   group_by(aoh_type, vert_class, passage_type,
@@ -5463,7 +5408,8 @@ ggsave(gg_trends_stack_percent,
 # No mature forest obligates:
 # ------------------------------------------------------------ #
 no_mat <-
-  aoh_trends_by_sp %>%
+  aoh_feols_trends_by_sp %>%
+# aoh_trends_by_sp %>%
   filter(passage_type == passage_opt,
          vert_class != "amp", 
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
@@ -5481,29 +5427,24 @@ gg_trends_stack_percent_no_mature <-
   gg_trends_stack_percent %+% no_mat + facet_grid(
     rows = vars(mature_forest_obl), cols = vars(vert_class),
     scales = "free_y", 
-    labeller = as_labeller(c("bird" = "Birds", 
+    labeller = as_labeller(c("bird" = "Birds", "mam" = "Mammals",
                              "TRUE" = "Mature Forest\nObligates",
                              "FALSE" = "Non-Mature\nForest Obligates"))
     )
 
 ggsave(gg_trends_stack_percent_no_mature,
        filename = paste0(p_output, "plots/aoh/", "aoh_trend_overall_stacked_by_mature_obl", aoh_run_date, ".pdf"),
-       width = 5, height = 3, units = "in")
+       width = 7.5, height = 3, units = "in")
 
 
 
 # ------------------------------------------------------------ #
 # flipped:
 # ------------------------------------------------------------ #
-gg_trends_stack_percent_flipped <- 
-  aoh_trends_by_sp %>%
-  filter(passage_type == passage_opt,
-         vert_class != "amp", 
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         !grepl("potential", aoh_type)
-         ) %>%
-  # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
-
+gg_trends_stack_percent_flipped <-
+  aoh_ms_tmp_trends_by_sp %>%
+  # aoh_trends_by_sp %>%
+  filter(!grepl("potential", aoh_type)) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
   summarise(n_sp = n()) %>%
@@ -5550,21 +5491,16 @@ aoh_trends_by_sp$aoh_type %>% unique()
 # Lumped across all sites, threatened vs. non-threatened #
 # ----------------------------------------------------------------------- #
 gg_trend_summary_by_iucn_status_lumped <-
-  aoh_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         redlistCategory != "Data Deficient",
-         mature_forest_obl < 0.5,
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
+  aoh_ms_tmp_trends_by_sp %>%
+  # aoh_trends_by_sp %>%
+  filter(redlistCategory != "Data Deficient",
          !grepl("potential", aoh_type),
          # aoh_type == "crop_abn_iucn"
          ) %>%
 
   group_by(aoh_type, vert_class, passage_type, 
            # redlistCategory,
-           threatened = case_when(
-             redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
-             TRUE ~ "Not Threatened"),
+           threatened,
            overall_trend, trend_direction, trend_consistency) %>%
   summarise(n_sp = n()) %>%
   arrange(vert_class, aoh_type) %>%
@@ -5594,20 +5530,14 @@ ggsave(gg_trend_summary_by_iucn_status_lumped,
 # Stacked, with number of species:
 # -------------------------------------------------------- #
 gg_trend_summary_by_iucn_status_lumped_numeric <-
-  aoh_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         redlistCategory != "Data Deficient",
-         mature_forest_obl < 0.5,
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
+  aoh_ms_tmp_trends_by_sp %>%
+  filter(redlistCategory != "Data Deficient",
          !grepl("potential", aoh_type)
          ) %>%
 
   group_by(aoh_type, vert_class, passage_type, 
            # redlistCategory,
-           threatened = case_when(
-             redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
-             TRUE ~ "Not Threatened"),
+           threatened,
            overall_trend, trend_direction, trend_consistency) %>%
   summarise(n_sp = n()) %>%
   arrange(vert_class, aoh_type) %>%
@@ -5642,12 +5572,9 @@ ggsave(gg_trend_summary_by_iucn_status_lumped_numeric,
 # individual categories
 # -------------------------------------------------------- #
 gg_trend_summary_by_iucn_status <-
-  aoh_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         mature_forest_obl < 0.5,
-         !grepl("potential", aoh_type),
+  aoh_ms_tmp_trends_by_sp %>%
+  # aoh_trends_by_sp %>%
+  filter(!grepl("potential", aoh_type),
          # aoh_type == "crop_abn_iucn"
          redlistCategory != "Data Deficient"
          ) %>%
@@ -5655,9 +5582,7 @@ gg_trend_summary_by_iucn_status <-
 
   group_by(aoh_type, vert_class, passage_type, 
            redlistCategory,
-           # threatened = case_when(
-           #   redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
-           #   TRUE ~ "Not Threatened"),
+           # threatened,
            overall_trend, trend_direction, trend_consistency) %>%
   summarise(n_sp = n()) %>%
   arrange(vert_class, aoh_type) %>%
@@ -5700,23 +5625,15 @@ ggsave(gg_trend_summary_by_iucn_status,
 gg_trend_summary_by_iucn_status_lumped_by_site <- 
   lapply(1:2, function(j) {
     lapply(aoh_types_sub, function(i) {
-      aoh_trends %>%
-        filter(passage_type == "exclude_passage",
-               vert_class != "amp", 
-               # vert_class == class,
-               redlistCategory != "Data Deficient",
-               mature_forest_obl < 0.5,
-               !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
+      aoh_ms_tmp_trends %>%
+      # aoh_trends %>%
+        filter(redlistCategory != "Data Deficient",
                !grepl("potential", aoh_type),
                aoh_type == i
                ) %>%
-        # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
-        
         group_by(aoh_type, vert_class, passage_type, 
                  site,
-                 threatened = case_when(
-                   redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
-                   TRUE ~ "Not Threatened"),
+                 threatened,
                  trend) %>%
         summarise(n_sp = n()) %>% ungroup() %>%
         arrange(vert_class, aoh_type) %>%
@@ -5777,26 +5694,20 @@ i <- "crop_abn_iucn"
 
 gg_aoh_by_iucn_lumped_by_site_bars <- 
   lapply(aoh_types_sub, function(i) {
-    aoh_trends %>%
-        filter(passage_type == "exclude_passage",
-               vert_class != "amp", 
-               redlistCategory != "Data Deficient",
-               aoh_type == i,
-               mature_forest_obl < 0.5
+    aoh_ms_tmp_trends %>%
+      # aoh_trends %>%
+        filter(redlistCategory != "Data Deficient",
+               aoh_type == i
                ) %>%
         group_by(aoh_type, vert_class, passage_type, 
                  site,
-                 threatened = case_when(
-                   redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
-                   TRUE ~ "Not Threatened"),
+                 threatened,
                  trend) %>%
         summarise(n_sp = n()) %>% ungroup() %>%
         arrange(vert_class, aoh_type) %>%
         mutate(site_thr = paste0(site, "\n", threatened)) %>%
-      filter(!is.na(trend)) %>%
-      # filter(threatened == threat_statuses[j]) %>%
-        
-        ggplot(mapping = aes(
+
+      ggplot(mapping = aes(
          x = n_sp, y = fct_relevel(site, rev), # alpha = threatened,
          fill = trend %>% fct_relevel(names(palette_du_jour[c(1, 6, 3)])),
          # group = trend
@@ -5862,18 +5773,14 @@ lapply(aoh_types_sub, function(i) {
   
 gg_aoh_iucn_overall_tmp <-
   lapply(1:2, function(j) {
-  aoh_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         redlistCategory != "Data Deficient",
-         mature_forest_obl < 0.5,
+  aoh_ms_tmp_trends_by_sp %>%
+      # aoh_trends_by_sp %>%
+  filter(redlistCategory != "Data Deficient",
          aoh_type == i
          ) %>%
 
   group_by(aoh_type, vert_class, passage_type, 
-           threatened = case_when(
-             redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
-             TRUE ~ "Not Threatened"),
+           threatened,
            overall_trend, trend_direction, trend_consistency) %>%
   summarise(n_sp = n()) %>%
   arrange(vert_class, aoh_type) %>%
@@ -5920,18 +5827,13 @@ gg_aoh_iucn_overall_tmp <-
 
 
 gg_aoh_by_iucn_lumped_by_site_bars_tmp <-
-  aoh_trends %>%
-        filter(passage_type == "exclude_passage",
-               vert_class != "amp", 
-               redlistCategory != "Data Deficient",
-               aoh_type == i,
-               mature_forest_obl < 0.5
-               ) %>%
+  aoh_ms_tmp_trends %>%
+  # aoh_trends %>%
+        filter(redlistCategory != "Data Deficient",
+               aoh_type == i) %>%
         group_by(aoh_type, vert_class, passage_type, 
                  site,
-                 threatened = case_when(
-                   redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
-                   TRUE ~ "Not Threatened"),
+                 threatened,
                  trend) %>%
         summarise(n_sp = n()) %>% ungroup() %>%
         arrange(vert_class, aoh_type) %>%
@@ -6000,19 +5902,16 @@ ggsave(
 # overall - stacked
 # ------------------------------------------------------------- #
 
-aoh_trends_by_sp %>% select(binomial, total_range_area, range_size_quantile)
+aoh_ms_tmp_trends_by_sp %>%
+# aoh_trends_by_sp %>% 
+  select(binomial, total_range_area, range_size_quantile)
 
 gg_trend_summary_by_range <-
-  aoh_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         # redlistCategory != "Data Deficient",
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         !grepl("potential", aoh_type),
+  aoh_ms_tmp_trends_by_sp %>%
+  # aoh_trends_by_sp %>%
+  filter(!grepl("potential", aoh_type),
          # aoh_type == "crop_abn_iucn",
-         mature_forest_obl < 0.5
          ) %>%
-  # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
 
   group_by(aoh_type, vert_class, passage_type, 
            small = case_when(
@@ -6056,19 +5955,18 @@ ggsave(gg_trend_summary_by_range,
 # overall - side by side
 # ------------------------------------------------------------- #
 
-aoh_trends_by_sp %>% select(binomial, total_range_area, range_size_quantile)
-
 gg_trend_summary_by_range_side <-
-  aoh_trends_by_sp %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
+  aoh_ms_tmp_trends_by_sp %>%
+  # aoh_trends_by_sp %>%
+  filter(
+    # passage_type == "exclude_passage",
+         # vert_class != "amp", 
          # redlistCategory != "Data Deficient",
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
+         # !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
          !grepl("potential", aoh_type),
          # aoh_type == "crop_abn_iucn",
-         mature_forest_obl < 0.5
+         # mature_forest_obl < 0.5
          ) %>%
-  # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
 
   group_by(aoh_type, vert_class, passage_type, 
            small = case_when(
@@ -6078,14 +5976,8 @@ gg_trend_summary_by_range_side <-
   summarise(n_sp = n()) %>%
   arrange(vert_class, aoh_type) %>%
   ggplot(data = .,
-       mapping = aes(
-         # x = threatened, y = n_sp,
-         x = vert_class, #group = trend_direction,
-         # x = trend_direction, group = vert_class,
-         y = n_sp,
-         fill = overall_trend %>% fct_relevel(names(palette_du_jour)),
-         
-         )) +
+         mapping = aes(x = vert_class, y = n_sp,
+                       fill = overall_trend %>% fct_relevel(names(palette_du_jour)))) +
   geom_col(position = position_dodge(preserve = "single"), color = "black", size = .25) +
   theme_classic() + 
   scale_x_discrete(labels = aoh_type_labels) +
@@ -6104,7 +5996,7 @@ gg_trend_summary_by_range_side <-
 
 ggsave(gg_trend_summary_by_range_side,
        filename = paste0(p_output, "plots/aoh/", "trend_summary_by_range_side", aoh_run_date,
-                         ".pdf"),
+                         "x.pdf"),
        width = 5.5, height = 5.25, units = "in")
 
 
@@ -6112,17 +6004,16 @@ ggsave(gg_trend_summary_by_range_side,
 # mature_forest_obligates:
 # ------------------------------------------------------------- #
 no_mat_by_range_size <- 
-  aoh_trends_by_sp %>%
+  aoh_feols_trends_by_sp %>%
+  # aoh_ms_tmp_trends_by_sp %>%
   filter(passage_type == "exclude_passage",
          vert_class != "amp", 
-         # redlistCategory != "Data Deficient",
          !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         !grepl("potential", aoh_type),
-         # aoh_type == "crop_abn_iucn"
+         !grepl("potential", aoh_type)
          ) %>%
-  # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
 
-  group_by(aoh_type, vert_class, passage_type, 
+  group_by(aoh_type, #vert_class, 
+           passage_type, 
            small = case_when(
              range_size_quantile <= 0.5 ~ "Range size <=\nglobal median",
              range_size_quantile > 0.5 ~ "Range size >\nglobal median"),
@@ -6130,7 +6021,8 @@ no_mat_by_range_size <-
            overall_trend, trend_direction, trend_consistency) %>%  
   filter(!is.na(mature_forest_obl)) %>%
   summarise(n_sp = n()) %>%
-  arrange(vert_class, aoh_type)
+  arrange(#vert_class, 
+          aoh_type)
 
 
 gg_trend_summary_by_range_no_mature <-
@@ -6154,16 +6046,10 @@ ggsave(gg_trend_summary_by_range_no_mature,
 
 for(i in aoh_types[c(6, 3, 1)]) {
 gg_trend_summary_range_by_site1 <-
-  aoh_trends %>%
+  aoh_ms_tmp_trends %>%
+  # aoh_trends %>%
     left_join(aoh_species_list) %>%
-  filter(passage_type == "exclude_passage",
-         vert_class != "amp", 
-         aoh_type == i,
-         # redlistCategory != "Data Deficient",
-         mature_forest_obl < 0.5
-         ) %>%
-  # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
-
+  filter(aoh_type == i) %>%
   group_by(aoh_type, vert_class, passage_type, 
            site,
            small = case_when(
@@ -6173,10 +6059,7 @@ gg_trend_summary_range_by_site1 <-
   summarise(n_sp = n()) %>%
   arrange(vert_class, aoh_type) %>%
   ggplot(data = .,
-       mapping = aes(
-         # x = threatened, y = n_sp,
-         y = site, 
-         x = n_sp,
+       mapping = aes(y = site, x = n_sp,
          fill = trend %>% fct_relevel(names(palette_du_jour[c(1, 3, 6)])),
          )) +
   geom_col(position = position_fill(rev = TRUE), color = "black", size = .25) +
@@ -6204,16 +6087,11 @@ ggsave(gg_trend_summary_range_by_site1,
 j <- "bird"
 for(j in c("mam", "bird")) {
 gg_trend_summary_range_by_site2 <-
-  aoh_trends %>%
+  aoh_ms_tmp_trends %>%
+  # aoh_trends %>%
     left_join(aoh_species_list) %>%
-  filter(passage_type == "exclude_passage",
-         vert_class == j, 
-         !aoh_type %in% c("abn_iucn", "potential_abn_iucn"),
-         !grepl("potential", aoh_type),       
-         # redlistCategory != "Data Deficient"
-         mature_forest_obl < 0.5
-         ) %>%
-  # {if (mature_opt == "exclude_mature_forest_obl") filter(., mature_forest_obl < 0.5) else .} %>%
+  filter(vert_class == j, 
+         !grepl("potential", aoh_type)) %>%
 
   group_by(aoh_type, vert_class, passage_type, 
            site,
@@ -6254,11 +6132,12 @@ ggsave(gg_trend_summary_range_by_site2,
 }
 ```
 
-
+XXXSTART HERE IN THE MORNING
 ```{r aoh-trend-distill-old}
 # Distill counts of trends:
 aoh_trend_counts <-
-  aoh_trends %>%
+  aoh_ms_tmp_trends %>%
+  # aoh_trends %>%
   group_by(aoh_type, vert_class, site, 
            redlistCategory, threatened = redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable"),
            passage_type,
@@ -8631,21 +8510,7 @@ plot_grid(gg_sample_trajectory,
 
 
 ## Old Plots
-```{r plot-filter-options-df}
 
-plot_filter_options_df <- tibble(
-  run = 1:4,
-  passage_opt = c("include_passage", "include_passage", 
-                  "exclude_passage", "exclude_passage"),
-  mature_opt = c("include_mature_forest_obl", "exclude_mature_forest_obl", 
-                  "include_mature_forest_obl", "exclude_mature_forest_obl")
-)
-
-# defaults:
-passage_opt <- "exclude_passage"
-mature_opt <- "exclude_mature_forest_obl"
-
-```
 
 
 ```{r hist-percent-changes}
