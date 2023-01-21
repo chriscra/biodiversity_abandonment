@@ -530,10 +530,10 @@ aoh_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_trends_by_sp.parquet"))
 
 run_indices <- read_parquet(paste0(p_derived, "aoh_run_indices.parquet"))
 
-# absolute effect sizes
+# effect sizes (estimated from model trends)
 aoh_change_df <- read_parquet(paste0(p_derived, "aoh_change_df.parquet"))
 
-# factor changes
+# observed effect sizes (derived directly from observations from the start and end of the time series)
 aoh_start_end_l <- read_parquet(paste0(p_derived, "aoh_start_end_l.parquet"))
 aoh_start_end_trends_l <- read_parquet(paste0(p_derived, "aoh_start_end_trends_l.parquet"))
 
@@ -544,6 +544,66 @@ aoh_p_change_obs_v_pot_feols <- read_csv(paste0(p_derived, "aoh_p_change_obs_v_p
 aoh_p_change_obs_v_pot_summary_feols <- read_csv(paste0(p_derived, "aoh_p_change_obs_v_pot_summary_feols.csv"))
 
 i <- "crop_abn_iucn"
+
+
+# ------------------------------------------------------------ # 
+# ------- Temp AOH files for MS and AOH.Rmd --------------------- 
+# ------------------------------------------------------------ # 
+
+aoh_ms_tmp_trends <- 
+  aoh_feols_trends %>%
+  mutate(
+    aoh_type = as_factor(aoh_type),
+    vert_class = as_factor(vert_class),
+    trend = as_factor(trend),
+    threatened = case_when(
+      redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
+      TRUE ~ "Not Threatened")) %>%
+  
+  filter(
+    # exclude all species not affected by abandonment:
+    binomial %in% unique(aoh_feols_trends_by_sp %>%
+                           filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage",
+                                  vert_class != "amp", mature_forest_obl < 0.5) %>%
+                           pull(binomial)),
+    passage_type == "exclude_passage", # exclude passage areas from AOH calculations
+    vert_class != "amp",
+    !aoh_type %in% c("abn_iucn", "potential_abn_iucn"), # exclude unused scenarios
+    # !grepl("potential", aoh_type),
+    mature_forest_obl < 0.5
+  )
+
+
+aoh_ms_tmp_trends_by_sp <- 
+  aoh_feols_trends_by_sp %>%
+  mutate(
+    aoh_type = as_factor(aoh_type),
+    vert_class = as_factor(vert_class),
+    overall_trend = as_factor(overall_trend),
+    threatened = case_when(
+      redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
+      TRUE ~ "Not Threatened")) %>%
+  
+  filter(
+    # exclude all species not affected by abandonment:
+    binomial %in% unique(aoh_feols_trends_by_sp %>%
+                           filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage",
+                                  vert_class != "amp", mature_forest_obl < 0.5) %>%
+                           pull(binomial)),
+    passage_type == "exclude_passage", # exclude passage areas from AOH calculations
+    vert_class != "amp",
+    !aoh_type %in% c("abn_iucn", "potential_abn_iucn"), # exclude unused scenarios
+    # !grepl("potential", aoh_type),
+    mature_forest_obl < 0.5
+  )
+
+# ------------------------------------------------------------ # 
+# ------- Traits: temp files ------- 
+# ------------------------------------------------------------ # 
+# see traits.Rmd
+# note, this is a big file, so only load it if you need it!
+
+# trait_mod_df <- readRDS(file = paste0(p_derived, "traits/", "trait_mod_df.rds")) 
 
 # ------------------------------------------------------------ # 
 # ----------------------------- Basemaps --------------------- 
