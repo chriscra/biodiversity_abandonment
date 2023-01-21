@@ -12,6 +12,7 @@ See <https://github.com/chriscra/biodiversity_abandonment>.
 
 ```{r initialize}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
+
 ```
 
 ```{r load-files}
@@ -1126,6 +1127,42 @@ dev.off()
 
 plot(site_jung_l2_30[[i]], type = "classes")
 ```
+
+```{r plot-max-abn-lcc-iucn}
+site_index <- 3
+
+tmp_classes <- max_abn_lcc_iucn_habitat[[site_index]][[31]] %>% 
+  values() %>% unique() %>% na.omit() %>% 
+  sort() %>% as.vector()
+
+tmp_attributes <- 
+  jung_table %>%
+  arrange(map_code) %>%
+  filter(map_code %in% tmp_classes)
+
+site_jung_l2_freq %>% 
+  filter(site == site_df$site[site_index])
+
+
+plot(max_abn_lcc_iucn_habitat[[site_index]][[31]],
+     maxcell = 5000000,
+     # main = paste0("IUCN Habitat Types, Level 2: ", names(max_abn_lcc_iucn_habitat[2])),
+     # mar = c(mval+0.5, mval, mval + 1.2, mval + 2), # bltr
+     type = "classes", #legend = FALSE,
+     col = tmp_attributes$cols,
+     levels = tmp_attributes$label
+)
+
+freq(max_abn_lcc_iucn_habitat[[2]][[31]])
+
+tmp_attributes %>% left_join(freq(max_abn_lcc_iucn_habitat[[2]][[31]]), by = c("map_code" = "value"))
+
+plot(site_sf[site_index, ]$geometry, add = TRUE, border = "red")
+plot(vert_sites %>% filter(binomial == "Trachypithecus francoisi") %>% st_geometry(), add = TRUE, border = "red")
+
+site_sf[3, ]
+```
+
 
 ```{r misc}
 pdf(file = paste0(p_output, "plots/shaanxi_elevation.pdf"), width = 5, height = 4)
