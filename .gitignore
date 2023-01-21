@@ -51,6 +51,7 @@ scripts/.DS_Store
 
 # Session Data files
 .RData
+.RDataTmp
 
 # User-specific files
 .Ruserdata
