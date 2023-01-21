@@ -13,6 +13,7 @@ p_proj <- "/Users/christophercrawford/work/projects/biodiversity_abn/"
 needed_packages <- c(
   "data.table", "raster", "terra", "rgdal", "sp", "sf", "mapview", 
   "gdalUtils", "gdata", "GISTools", "rgeos", "lwgeom", "fasterize",
+  "units",
   "ncdf4", # for opening NetCDF spatial files
   "arrow", # for reading and writing parquet files
   
@@ -48,7 +49,7 @@ needed_packages <- c(
   "animation", "magick", "ggrepel",
   "plotly", # plotly makes very cool interactive graphics!
   "gridGraphics",
-  "gt", "gtsummary", # for tables, particularly of model outputs
+  "gt", "gtsummary", "flextable", # for tables, particularly of model outputs
   
   # development
   "tictoc",  "magrittr", "parallel", "knitr", 
