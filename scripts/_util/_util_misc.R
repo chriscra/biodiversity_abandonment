@@ -1,11 +1,11 @@
 # --------------------------------------------------------------- #
 #
-# Util miscellaneous
+# Util miscellaneous - primarily for formatting various plots and tables
 # 
 # --------------------------------------------------------------- #
 
 # ------------------------ #
-# capitalize site labels & and add breaks ----
+# Plot labels ----
 # ------------------------ #
 # update site labels
 
@@ -56,7 +56,7 @@ site_labels <-
 
 
 # --------------------------------------------------------------- #
-# ----------------------- plotting colors ------------------------ 
+# ----------------------- Plot colors ------------------------ 
 # --------------------------------------------------------------- #
 
 # from: https://medialab.github.io/iwanthue/
@@ -94,4 +94,68 @@ lc_plot_cols <- data.frame(
   breaks = c(1, 2, 3, 4))
 
 
+# ------------------------------------------------------ #
+## AOH color palette ----
+# ------------------------------------------------------ #
 
+# met.brewer(name = "VanGogh2", 4)
+# met.brewer(name = colorblind_palettes[24], 4)
+# met.brewer(name = colorblind_palettes[6], 4)
+# colorblind_palettes
+
+input_palette <- met.brewer(name = "Kandinsky", 4)[c(1, 4, 3, 2)] # use this one, for now
+# input_palette <- met.brewer(name = "Egypt", 4)[c(3, 2, 4, 1)]
+# input_palette <- met.brewer(name = "Java", 4)[c(4, 1, 3, 2)]
+# show.col(input_palette)
+
+# set up color palettes:
+palette_du_jour <- c(
+  "gain" = input_palette[1],
+  "weak gain" = alpha(input_palette[1], 0.5),
+  "no trend" = input_palette[2],
+  "context dependent" = input_palette[3],
+  "weak loss" = alpha(input_palette[4], 0.5),
+  "loss" = input_palette[4]
+)
+
+palette_du_jour2 <- c(
+  "gain" = input_palette[1],
+  "weak gain" = alpha(input_palette[1], 0.5),
+  "no trend" = "gray60",
+  "context dependent" = input_palette[3],
+  "weak loss" = alpha(input_palette[4], 0.5),
+  "loss" = input_palette[4]
+)
+# 
+# show_col(palette_du_jour)
+# show_col(palette_du_jour2)
+
+palette_labels <- c(
+  "gain" = "Gain",
+  "weak gain" = "Weak Gain",
+  "no trend" = "No Trend",
+  "context dependent" = "Opposites",
+  "weak loss" = "Weak Loss", 
+  "loss" = "Loss"
+)
+
+# ------------------------------------------------------ #
+# Table formatting ----
+# ------------------------------------------------------ #
+
+regression_model_labels <- 
+  list(
+    Trophic_level = "Trophic Level",
+    `log(Body_mass_g)` = "ln(Body Mass, g)",
+    `log(total_range_area)` = "ln(Global Range Area, km2)",
+    forest_occ = "Forest Suitability",
+    savanna_occ = "Savanna Suitability",
+    shrubland_occ = "Shrubland Suitability",
+    grass_occ = "Grassland Suitability",
+    wetlands_occ = "Wetlands Suitability",
+    artificial_occ = "Artificial Suitability",
+    n_hab_occ = "Number of Suitable Habitats",
+    threatened = "Threatened (IUCN)",
+    `abs(centroid_latitude)` = "Abs. Latitude of Range Centroid",
+    max_abn_extent_div_site_area = "Proportion of Site Abandoned"
+  )
