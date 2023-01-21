@@ -43,54 +43,9 @@ source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/_util/
 ```
 
 ```{r set-tmp-files}
-aoh_feols # aoh_lm
-
-aoh_ms_tmp_trends <- 
-  aoh_feols_trends %>%
-  mutate(
-    aoh_type = as_factor(aoh_type),
-    vert_class = as_factor(vert_class),
-    trend = as_factor(trend),
-    threatened = case_when(
-    redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
-    TRUE ~ "Not Threatened")) %>%
-  
-  filter(
-    # exclude all species not affected by abandonment:
-    binomial %in% unique(aoh_feols_trends_by_sp %>%
-                           filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage",
-                                  vert_class != "amp", mature_forest_obl < 0.5) %>%
-                           pull(binomial)),
-    passage_type == "exclude_passage", # exclude passage areas from AOH calculations
-    vert_class != "amp",
-    !aoh_type %in% c("abn_iucn", "potential_abn_iucn"), # exclude unused scenarios
-    # !grepl("potential", aoh_type),
-    mature_forest_obl < 0.5
-  )
-
-
-aoh_ms_tmp_trends_by_sp <- 
-  aoh_feols_trends_by_sp %>%
-  mutate(
-    aoh_type = as_factor(aoh_type),
-    vert_class = as_factor(vert_class),
-    overall_trend = as_factor(overall_trend),
-    threatened = case_when(
-    redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
-    TRUE ~ "Not Threatened")) %>%
-  
-  filter(
-    # exclude all species not affected by abandonment:
-    binomial %in% unique(aoh_feols_trends_by_sp %>%
-                           filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage",
-                                  vert_class != "amp", mature_forest_obl < 0.5) %>%
-                           pull(binomial)),
-    passage_type == "exclude_passage", # exclude passage areas from AOH calculations
-    vert_class != "amp",
-    !aoh_type %in% c("abn_iucn", "potential_abn_iucn"), # exclude unused scenarios
-    # !grepl("potential", aoh_type),
-    mature_forest_obl < 0.5
-  )
+# see _util_files.R
+aoh_ms_tmp_trends
+aoh_ms_tmp_trends_by_sp
 
 
 aoh_ms_tmp_trends %>% filter(is.na(trend))
@@ -1670,7 +1625,9 @@ We analyzed spatial data (maps of land cover, abandonment, IUCN habitat types, s
 
 ```{r aoh-by-site-crop-abn, fig.cap = '(ref:caption-aoh-by-site-crop-abn)', fig.pos = "!ht"}
 knitr::include_graphics(path = paste0(
-  p_plots, "aoh/aoh_overall_w_site_combo_crop_abn_iucn",
+  p_plots, 
+  "aoh/aoh_overall_w_site_combo_crop_abn_iucn",
+  # "aoh/aoh_overall_w_site_prop_combo_crop_abn_iucn" # proportional
   aoh_run_date, "_no_lab.pdf"))
 ```
 
@@ -1697,6 +1654,12 @@ Though relatively few small-ranged birds and mammals were affected by abandonmen
 knitr::include_graphics(path = paste0(
   p_plots, "aoh/aoh_IUCN_by_site_combo_crop_abn_iucn",
   aoh_run_date, ".pdf"))
+```
+
+(ref:caption-aoh-change-proportion-by-site) The distribution of changes in area of habitat (AOH) as a proportion of site area, shown according to directional trend.
+
+```{r aoh-change-proportion-by-site, fig.cap = '(ref:caption-aoh-change-proportion-by-site)'}
+knitr::include_graphics(path = paste0(p_plots, "aoh/effect_size/hist_aoh_change_as_prop_site_area_obs_by_trend_5.pdf"))
 ```
 
 ## Effects of recultivation on habitat area {.unnumbered}
@@ -1760,11 +1723,16 @@ knitr::include_graphics(path = paste0(p_plots, "aoh/aoh_trend_by_vert_aoh_type",
 
 ## Effect size
 
+Though there were a higher number of winners, the species that lost habitat on the whole lost more habitat on average than species that gained habitat gained.
+See Fig. (histogram of )
+
 Key conclusions:
 
 ## Traits
 
 Key conclusions:
+
+These associations are not markedly different when assuming no recultivation took place ("potential abandonment" scenario).
 
 
 
@@ -1963,6 +1931,14 @@ For mammals, the difference between the proportion of consistent winners was sta
 The proportions of consistent losers also showed significant differences for birds between Calculation 1 and 2 [two-sample proportion test: $X^2$ (df = `r p_test_loss_bird_by_calc12$parameter`, *N* = `r aoh_loss_bird_by_calc_tmp$N[1:2] %>% sum()`) = `r round(p_test_loss_bird_by_calc12$statistic, digits = 2)`, *p* `r ifelse(p_test_loss_bird_by_calc12$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_loss_bird_by_calc12$p.value, digits = 2)))`] and Calculation 1 and 3 [two-sample proportion test: $X^2$ (df = `r p_test_loss_bird_by_calc13$parameter`, *N* = `r aoh_loss_bird_by_calc_tmp$N[c(1,3)] %>% sum()`) = `r round(p_test_loss_bird_by_calc13$statistic, digits = 2)`, *p* `r ifelse(p_test_loss_bird_by_calc13$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_loss_bird_by_calc13$p.value, digits = 2)))`], but not for Calculation 2 and 3 [two-sample proportion test: $X^2$ (df = `r p_test_loss_bird_by_calc23$parameter`, *N* = `r aoh_loss_bird_by_calc_tmp$N[2:3] %>% sum()`) = `r round(p_test_loss_bird_by_calc23$statistic, digits = 2)`, *p* `r ifelse(p_test_loss_bird_by_calc23$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_loss_bird_by_calc23$p.value, digits = 2)))`].
 For mammals, the difference between proportion of consistent winners was statistically significant for all pairs of calculations: Calculation 1 and 2 [two-sample proportion test: $X^2$ (df = `r p_test_loss_mam_by_calc12$parameter`, *N* = `r aoh_loss_mam_by_calc_tmp$N[1:2] %>% sum()`) = `r round(p_test_loss_mam_by_calc12$statistic, digits = 2)`, *p* `r ifelse(p_test_loss_mam_by_calc12$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_loss_mam_by_calc12$p.value, digits = 2)))`], Calculation 1 and 3 [two-sample proportion test: $X^2$ (df = `r p_test_loss_mam_by_calc13$parameter`, *N* = `r aoh_loss_mam_by_calc_tmp$N[c(1,3)] %>% sum()`) = `r round(p_test_loss_mam_by_calc13$statistic, digits = 2)`, *p* `r ifelse(p_test_loss_mam_by_calc13$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_loss_mam_by_calc13$p.value, digits = 2)))`], and Calculation 2 and 3 [two-sample proportion test: $X^2$ (df = `r p_test_loss_mam_by_calc23$parameter`, *N* = `r aoh_loss_mam_by_calc_tmp$N[2:3] %>% sum()`) = `r round(p_test_loss_mam_by_calc23$statistic, digits = 2)`, *p* `r ifelse(p_test_loss_mam_by_calc23$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_loss_mam_by_calc23$p.value, digits = 2)))`].
 
+## Dealing with temporal autocorrelation
+
+See Fig. \@ref(fig:dw-stat),
+
+# Traits
+
+
+
 \newpage
 
 # Supplemental Tables
@@ -1998,6 +1974,47 @@ iucn_crosswalk %>%
   column_spec(3, width = "6cm") %>%
   column_spec(4, width = "2cm")
 ```
+
+## Traits model tables
+
+```{r traits-mod-binary-table, echo = FALSE, message = FALSE, eval = TRUE}
+test_gt <- 
+  glm_mod_df %>% 
+  filter(aoh_type == "crop_abn_iucn"#, str_detect(response, "gain")
+         ) %>% 
+  mutate(gt = lapply(mod, function(model) {
+         model %>%
+           tbl_regression(
+             show_single_row = c(contains("occ"), "threatened"),
+             label = regression_model_labels,
+             add_estimate_to_reference_rows = TRUE,
+             intercept = TRUE,
+             conf.int = FALSE) %>%
+           italicize_levels() %>% add_glance_table() %>% bold_p()
+       })) 
+
+
+
+test_gt %>% pull(gt) %>%
+  tbl_merge(tab_spanner = c("Binary Gain", "Binary Gain/Loss", "Binary Loss", "Binary No Trend")) %>%
+  # as_gt() %>%
+  # text_transform(
+  #   locations = cells_body(),
+  #   fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}
+  #   ) %>%
+  as_kable(
+    # col.names = c("Land cover code",
+    #               "Land cover class", 
+    #               "IUCN habitat",
+    #               "IUCN map code"),
+    # align = "r", 
+    format = my_format,
+    booktabs = TRUE,
+    longtable = TRUE
+    # caption = "Crosswalk between land cover classes in Yin et al. 2020 and IUCN habitat types mapped by Jung et al. 2020."
+  )
+```
+
 
 # Supplemental Figures
 
@@ -2155,6 +2172,15 @@ knitr::include_graphics(path = paste0(
   aoh_run_date,".pdf"))
 ```
 
+(ref:caption-aoh-by-site-stacked-crop-abn) Proportion of species at each site with each trend in AOH, shown for abandonment only.
+
+```{r aoh-by-site-stacked-crop-abn, fig.cap = '(ref:caption-aoh-by-site-stacked-crop-abn)'}
+knitr::include_graphics(path = paste0(
+  p_plots, "aoh/trend_summary_by_site_proportion_stacked_crop_abn_iucn",
+  aoh_run_date,".pdf"))
+```
+
+
 (ref:caption-aoh-by-site-crop-abn-potential) Number of species that gain or lose AOH over time across sites, for Calculation 1P (including only pixels that were abandoned during the time series, calculated from the first year of cultivation through 2017, for our scenario of "potential abandonment"). Observed AOH for individual species are shown in Fig. \@ref(fig:aoh-sp-obs-crop-abn-potential).
 
 ```{r aoh-by-site-crop-abn-potential, fig.cap = '(ref:caption-aoh-by-site-crop-abn-potential)'}
@@ -2289,6 +2315,34 @@ knitr::include_graphics(path = paste0(p_plots, "aoh/trend_summary_obs_v_pot_by_s
 knitr::include_graphics(path = paste0(p_plots, "aoh/trend_summary_by_range_side",
                                       aoh_run_date,".pdf"))
 ```
+
+(ref:caption-dw-stat) Durbin-Watson statistics for trends of AOH for Calculation 1.
+
+```{r dw-stat, fig.cap = '(ref:caption-dw-stat)'}
+knitr::include_graphics(path = paste0(p_plots, "aoh/dw_stat_crop_abn_iucn",
+                                      aoh_run_date,".pdf"))
+```
+
+
+## Effect size
+
+(ref:caption-aoh-change-proportion-by-site) The distribution of changes in area of habitat (AOH) as a proportion of site area at each site.
+
+```{r aoh-change-proportion-by-site, fig.cap = '(ref:caption-aoh-change-proportion-by-site)'}
+knitr::include_graphics(path = paste0(p_plots, "aoh/effect_size/hist_aoh_change_as_prop_site_area_obs_by_site_5.pdf"))
+```
+
+
+
+## Traits
+
+(ref:caption-aoh-by-range) Number of species with a given trend in AOH over time, across all sites, grouped by range size. Small-ranged species (with global ranges smaller than the global median range size) are shown in the top row, and species with ranges larger than the global median are shown in the bottom row.
+
+```{r aoh-by-range, fig.cap = '(ref:caption-aoh-by-range)'}
+knitr::include_graphics(path = paste0(p_plots, "aoh/trend_summary_by_range_side",
+                                      aoh_run_date,".pdf"))
+```
+
 
 ## Future Figures (TBD)
 
