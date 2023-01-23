@@ -1025,6 +1025,13 @@ site_sf %>% filter(site == "shaanxi") %>% st_geometry() %>% plot()
   group_by(aoh_type) %>% mutate(N = sum(n_sp)) %>% ungroup() %>%
   arrange(mature_forest_obl, aoh_type, vert_class)
 
+aoh_feols_trends_by_sp %>%
+  filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage") %>%
+  group_by(vert_class, mature_forest_obligates = case_when(
+    mature_forest_obl <= 0.5 ~ "no",
+    mature_forest_obl > 0.5 ~ "yes")) %>%
+  summarise(n = n())
+
 aoh_trends_by_sp %>%
   filter(vert_class == "mam" & mature_forest_obl < 0.5)
 
@@ -3684,7 +3691,7 @@ df_agree %>%
 # ----------------------------------------------------------------- #
 
 # --------- a ----------- #
-aoh_change_df_tmp_plots %>%
+aoh_est_change_tmp %>%
   filter(site != "mato_grosso") %>%
   group_by(vert_class, trend) %>%
   summarise(n = n(), mean = mean(abs_change) / 10^6, median = median(abs_change) / 10^6) %>%
@@ -3698,13 +3705,13 @@ aoh_change_df_tmp_plots %>%
                     values = palette_du_jour[c(1, 3, 6)])
 
 
-aoh_change_df_tmp_plots %>%
+aoh_est_change_tmp %>%
     filter(site != "mato_grosso") %>%
 
       ggplot() +
       # geom_vline(xintercept = 0, linetype = "dashed", col = "gray50") +
       geom_histogram(aes(x = abs(abs_change)/10^6, fill = trend, group = trend), bins = 50, col = "black", size = 0.5) +
-  geom_vline(data = aoh_change_df_tmp_plots %>% 
+  geom_vline(data = aoh_est_change_tmp %>% 
                  filter(site != "mato_grosso") %>%
 
                group_by(trend, vert_class) %>%
@@ -3724,7 +3731,7 @@ aoh_change_df_tmp_plots %>%
 
 
 # --------- b ----------- #
-aoh_change_df_tmp_plots %>%
+aoh_est_change_tmp %>%
   group_by(site, vert_class, trend) %>%
   summarise(n = n(), mean = mean(abs_change), median = median(abs_change)) %>%
   ggplot() + 
@@ -3736,7 +3743,7 @@ aoh_change_df_tmp_plots %>%
 
 
 # --------- c ----------- #
-aoh_change_df_tmp_plots %>%
+aoh_est_change_tmp %>%
   group_by(site, trend) %>%
   summarise(n = n(), mean = mean(abs_change), median = median(abs_change)) %>%
   ggplot() + 
@@ -3746,7 +3753,7 @@ aoh_change_df_tmp_plots %>%
                     values = palette_du_jour[c(1, 3, 6)])
 
 
-aoh_change_df_tmp_plots %>% 
+aoh_est_change_tmp %>% 
   group_by(site, vert_class, trend) %>%
   summary()
 
@@ -6152,6 +6159,8 @@ gg_aoh_sp_obs_by_site <-
       facet_wrap(vars(site), scales = "free_y", labeller = as_labeller(fancy_labels))
     })
 
+aoh_feols_trends$trend %>% as_factor()
+
 names(gg_aoh_sp_obs_by_site) <- aoh_types[c(6, 3, 1, 7, 5, 8)]
 
 
@@ -6220,20 +6229,17 @@ gg_aoh_sp_obs_wisc_crop <-
              passage_type == "exclude_passage", # exclude passage areas from AOH calculations
              vert_class != "amp",
              mature_forest_obl < 0.5
-             
              ) %>%
       left_join(aoh_feols_trends) %>%
       ggplot(aes(x = year, y = aoh/10^6, col = trend, group = binomial)) +
       geom_line(alpha = 0.15) + 
       theme_classic() + 
-      scale_color_manual(labels = palette_labels[c(1, 3, 6)],
-                         values = palette_du_jour[c(1, 3, 6)]) +
-      scale_fill_manual(labels = palette_labels[c(1, 3, 6)],
-                        values = palette_du_jour[c(1, 3, 6)]) +
+      scale_color_manual(labels = palette_labels[c(#1, 
+                                                   3, 6, 1)],
+                         values = palette_du_jour[c(#1, 
+                                                    3, 6, 1)]) +
       labs(y = expression("AOH (10"^{6}*" ha)"),
-           x = "Year", col = "Trend", fill = "Mean Trend",
-           # caption = paste0(filter(aoh_type_df, label == i)$p5)
-           ) + 
+           x = "Year", col = "Trend", fill = "Mean Trend") + 
       guides(color = guide_legend(override.aes = list(alpha = 1, size = 1.5, order = 1))) +
       theme(#legend.position = c(0.9, 0.125),
             legend.background = element_blank(),
@@ -6299,9 +6305,12 @@ ggsave(gg_aoh_sp_obs_wisc_crop_plus3,
        width = 4.5, height = 3.5, units = "in")
 
 ggsave(gg_aoh_sp_obs_wisc_crop_plus3,
-       filename = paste0(p_output, "plots/aoh/", "wisconsin_example_sp_trajectories_highlight",  aoh_run_date,
-                         ".pdf"),
+       filename = paste0(p_output, "plots/aoh/", "wisconsin_example_sp_trajectories_highlight",  aoh_run_date, ".pdf"),
        width = 4.5, height = 3.5, units = "in")
+
+ggsave(gg_aoh_sp_obs_wisc_crop_plus3 + theme(legend.position = "bottom"),
+       filename = paste0(p_output, "plots/aoh/", "wisconsin_example_sp_trajectories_highlight",  aoh_run_date, "_bot.pdf"),
+       width = 3.5, height = 4, units = "in")
 ```
 
 ```{r compare-case-one-site}
@@ -6369,27 +6378,49 @@ aoh_trends %>%
 ## Effect Sizes
 
 ```{r eff-size-tmp-files}
-# set up temp files:
+# estimated effect sizes:
+aoh_est_change_tmp_all # estimated effect sizes, for all aoh_types
+aoh_est_change_tmp # estimated effect sizes, for only crop_abn_iucn
+# see _util_files.R, Traits temp files
 
-aoh_change_df_tmp_plots <- 
-  aoh_change_df %>% 
-  filter(est_type == "estimate", # exclude high and low confidence estimates
-         aoh_type == "crop_abn_iucn", 
-         str_detect(passage_type, "excl"),
-         vert_class != "amp", mature_forest_obl < 0.5,
-         # overall_trend == "gain", rel_change < 0
-         ) 
 
-names(aoh_change_df_tmp_plots)
-
+# observed effect sizes:
 # this is named with "_plots" in order to distinguish from the tmp file in "traits.Rmd"
-aoh_start_end_l_tmp_plots <- 
+# aoh_obs_change_tmp_all (contains all aoh_types), and aoh_obs_change_tmp (only crop_abn_iucn) are subset to window_size == 5, whereas the temp tibble below contains all windows.
+
+aoh_start_end_l_tmp_plots <-
   aoh_start_end_l %>%
   filter(aoh_type == "crop_abn_iucn", 
          str_detect(passage_type, "excl"),
-         vert_class != "amp", mature_forest_obl < 0.5)
+         vert_class != "amp", mature_forest_obl < 0.5) %>%
+  left_join(taxonomy_df) %>%
+  left_join(select(etard_updated,
+                   #dataset, etard_id, 
+                   vert_class, binomial, Body_mass_g, Trophic_level),
+            by = c("vert_class", "binomial")
+  ) %>%
+  left_join(aoh_mod_tmp_trends_by_sp_all %>% 
+              select(binomial, total_range_area) %>%
+              unique()) %>%
+  left_join(centroids_df) %>%
+  # add habitat specialities
+  left_join(habitat_occurrence_df) %>%
+  mutate(max_abn_extent_div_site_area = 
+           area_ever_abn_ha / total_site_area_ha_2017,
+         abs_change_percent_site = abs_change_as_prop_site_area * 100,
+         binary_trend_gain = case_when(trend == "gain" ~ 1, TRUE ~ 0),
+         binary_trend_loss = case_when(trend == "loss" ~ 1, TRUE ~ 0),
+         binary_trend_no_trend = case_when(trend == "no trend" ~ 1, TRUE ~ 0),
+         
+         # create a binary variable with 1 for gain, 0 for loss, and NA for no trend
+         binary_gain_v_loss = case_when(trend == "gain" ~ 1, trend == "loss" ~ 0)
+  ) %>%
+  arrange(aoh_type, vert_class, site, passage_type, run_index)
 
+aoh_obs_change_tmp_all # observed effect sizes, for all aoh_types
+aoh_obs_change_tmp # observed effect sizes, for only crop_abn_iucn
 aoh_start_end_l_tmp_plots %>% filter(window_size == 5)
+
 ```
 
 ```{r plot-aoh-change-est}
@@ -6398,13 +6429,13 @@ aoh_start_end_l_tmp_plots %>% filter(window_size == 5)
 # ------------ absolute AOH change, by site (estimated) --------- #
 # --------------------------------------------------------------- #
 
-gg_abs_change_by_site <-
-  aoh_change_df_tmp_plots %>%
+# gg_abs_change_by_site <-
+  aoh_est_change_tmp %>%
   ggplot() + 
   # geom_vline(xintercept = 0, linetype = "dashed", col = "gray50") +
 
   geom_histogram(aes(x = abs_change/10^3, fill = trend, group = trend), bins = 50, col = "black") +
-  geom_vline(data = aoh_change_df_tmp_plots %>%
+  geom_vline(data = aoh_est_change_tmp %>%
                filter(
                  # site != "mato_grosso", 
                       trend != "no trend") %>%
@@ -6429,12 +6460,12 @@ ggsave(
 # ------------ absolute AOH change, by trend -------------------- #
 # --------------------------------------------------------------- #
 gg_abs_change_by_trend <-
-  aoh_change_df_tmp_plots %>%
+  aoh_est_change_tmp %>%
       ggplot() +
       # geom_vline(xintercept = 0, linetype = "dashed", col = "gray50") +
       geom_histogram(aes(x = abs(abs_change)/10^6, fill = trend, group = trend), bins = 50, col = "black", 
                      size = 0.5) +
-    geom_vline(data = aoh_change_df_tmp_plots %>% 
+    geom_vline(data = aoh_est_change_tmp %>% 
                group_by(trend, vert_class) %>%
                summarise(n = n(), mean = mean(abs_change), median = median(abs_change)) %>% 
                pivot_longer(cols = c("mean", "median"), names_to = "Statistic") %>% ungroup(), 
@@ -6458,7 +6489,7 @@ ggsave(gg_abs_change_by_trend,
 # ------------ AOH change as percent of site area, by trend ----- #
 # --------------------------------------------------------------- #
 # gg_abs_change_as_percent_site_area_by_trend <-
-  aoh_change_df_tmp_plots %>%
+  aoh_est_change_tmp %>%
       ggplot() +
       # geom_vline(xintercept = 0, linetype = "dashed", col = "gray50") +
       geom_histogram(aes(x = abs(abs_change_as_prop_site_area) * 100, fill = trend, group = trend), bins = 50, col = "black", size = 0.5) +
@@ -6480,7 +6511,7 @@ ggsave(gg_abs_change_as_percent_site_area_by_trend,
 # --------------------------------------------------------------- #
 
 gg_abs_change_per_year <- 
-  aoh_change_df_tmp_plots %>%
+  aoh_est_change_tmp %>%
   ggplot() + 
   geom_histogram(aes(x = abs_change_per_yr, fill = trend, group = trend), bins = 50, col = "black") +
   theme_classic() +
@@ -6499,7 +6530,7 @@ ggsave(
 # --------------------------------------------------------------- #
 
 gg_abs_change_as_percent_site_area <- 
-  aoh_change_df_tmp_plots %>%
+  aoh_est_change_tmp %>%
   ggplot() + 
   geom_histogram(aes(x = abs_change_as_prop_site_area * 100, fill = trend, group = trend), bins = 50, col = "black") +
   theme_classic() +
@@ -6519,7 +6550,7 @@ ggsave(
 # --------------------------------------------------------------- #
 
 gg_prop_change <- 
-  aoh_change_df_tmp_plots %>%
+  aoh_est_change_tmp %>%
   ggplot() + 
   geom_histogram(aes(x = prop_change, fill = trend, group = trend), bins = 50, col = "black") +
   theme_classic() +
@@ -6538,12 +6569,12 @@ ggsave(
 # --------------------------------------------------------------- #
 # -------- proportional change in AOH, constrained -------------- #
 # --------------------------------------------------------------- #
-aoh_change_df_tmp_plots %>% 
+aoh_est_change_tmp %>% 
   select(run_index, vert_class, site, trend, contains("change")) %>% 
   filter(abs(prop_change) < 5)
 
 gg_prop_change_constrained <- 
-  aoh_change_df_tmp_plots %>% 
+  aoh_est_change_tmp %>% 
   select(run_index, vert_class, site, trend, contains("change")) %>% 
   filter(abs(prop_change) < 10) %>%
   ggplot() + 
@@ -6565,7 +6596,7 @@ ggsave(
 # ------------ ratio change in AOH ------------------------------ #
 # --------------------------------------------------------------- #
 gg_ratio_change <-
-  aoh_change_df_tmp_plots %>%
+  aoh_est_change_tmp %>%
   ggplot() + 
   geom_histogram(aes(x = ratio_change, fill = trend, group = trend), bins = 50, col = "black") +
   theme_classic() +
@@ -6583,7 +6614,7 @@ ggsave(
 # ------------ ratio change in AOH, constrained ----------------- #
 # --------------------------------------------------------------- #
 gg_ratio_change_constrained <-
-  aoh_change_df_tmp_plots %>%
+  aoh_est_change_tmp %>%
   filter(abs(ratio_change) < 10) %>%
   ggplot() + 
   geom_histogram(aes(x = ratio_change, fill = trend, group = trend), bins = 50, col = "black") +
@@ -6603,7 +6634,7 @@ ggsave(
 # Explore negative ratio winner species
 # ----------------------------------------------------------------- #
 
-aoh_change_df_tmp_plots %>%
+aoh_est_change_tmp %>%
   filter(abs(ratio_change) < 10, site == "belarus") %>%
   ggplot() + 
   geom_histogram(aes(x = ratio_change, fill = trend, group = trend), bins = 50, col = "black") +
@@ -6613,7 +6644,7 @@ aoh_change_df_tmp_plots %>%
   theme(legend.position = "bottom", strip.text.y.right = element_text(size = 8, angle = 0, hjust = 0, vjust = 0)) +
   facet_grid(site ~ ., scales = "free", labeller = as_labeller(fancy_labels))
 
-aoh_change_df_tmp_plots %>%
+aoh_est_change_tmp %>%
   filter(abs(ratio_change) < 10, site == "belarus") %>%
   select(site, aoh_type, passage_type, binomial, mature_forest_obl, aoh_start_est, aoh_end_est, trend, ratio_change)
 
@@ -6753,36 +6784,37 @@ lapply(c(1, 5, 10, 15), function(window_size_) {
   aoh_start_end_l_tmp_plots %>% 
     filter(window_size == window_size_) %>%
     ggplot() + 
-    geom_histogram(aes(x = abs_change_as_prop_site_area, fill = trend, group = trend), bins = 100, col = "black") +
+    geom_histogram(aes(x = abs_change_percent_site, fill = trend, group = trend), bins = 100, col = "black") +
     geom_vline(data = aoh_start_end_l_tmp_plots %>%
                  filter(window_size == window_size_, trend != "no trend") %>%
                  group_by(trend, site) %>%
-                 summarise(n = n(), mean = mean(abs_change_as_prop_site_area), 
-                           median = median(abs_change_as_prop_site_area)) %>%
+                 summarise(n = n(), mean = mean(abs_change_percent_site), 
+                           median = median(abs_change_percent_site)) %>%
                  pivot_longer(cols = c("mean", "median"), names_to = "Statistic") %>% ungroup(),
                mapping = aes(xintercept = value, linetype = Statistic, col = trend), size = 0.75) +
     theme_classic() +
     scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
     scale_color_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
-    labs(x = "Change in observed AOH as a proportion of site area", y = "Count", 
+    labs(x = "Change in observed AOH as a percent of site area", y = "Count", 
          caption = paste0("Comparing mean values in first and last ", window_size_, " years")) + 
     theme(legend.position = "bottom", strip.text.y.right = element_text(size = 8, angle = 0, hjust = 0, vjust = 0)) +
     facet_grid(site ~ ., scales = "free", labeller = as_labeller(fancy_labels)),
 
   filename = paste0(p_output, "plots/aoh/effect_size/", 
-                    "hist_aoh_change_as_prop_site_area_obs_by_site_", 
+                    "hist_aoh_change_percent_site_obs_by_site_", 
                     window_size_, ".pdf"),
   width = 7, height = 8.5, units = "in")
 })
 
 # 
+window_size_ <- 5
 # By trend
 lapply(c(1, 5, 10, 15), function(window_size_) {
   ggsave(
   aoh_start_end_l_tmp_plots %>% 
     filter(window_size == window_size_) %>%
     ggplot() + 
-    geom_histogram(aes(x = abs_change_as_prop_site_area, fill = trend, group = trend), 
+    geom_histogram(aes(x = abs_change_percent_site, fill = trend, group = trend), 
                    # position = position_dodge(),
                    bins = 50, col = "black") +
     geom_vline(data = aoh_start_end_l_tmp_plots %>%
@@ -6791,8 +6823,8 @@ lapply(c(1, 5, 10, 15), function(window_size_) {
                  group_by(trend, 
                           vert_class
                           ) %>%
-                 summarise(n = n(), mean = mean(abs_change_as_prop_site_area), 
-                           median = median(abs_change_as_prop_site_area)) %>%
+                 summarise(n = n(), mean = mean(abs_change_percent_site), 
+                           median = median(abs_change_percent_site)) %>%
                  pivot_longer(cols = c("mean", "median"), names_to = "Statistic") %>% ungroup(),
                mapping = aes(col = trend,
                  # x = value, y = 0, shape = Statistic
@@ -6805,7 +6837,7 @@ lapply(c(1, 5, 10, 15), function(window_size_) {
     scale_x_continuous(n.breaks = 10) +
     scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
     scale_color_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
-    labs(x = "Change in observed AOH as a proportion of site area", y = "Count", 
+    labs(x = "Change in observed AOH as a percent of site area", y = "Count", 
          caption = paste0("Comparing mean values in first and last ", window_size_, " years")) + 
     theme(legend.position = "bottom") +
     facet_grid(
@@ -6814,7 +6846,7 @@ lapply(c(1, 5, 10, 15), function(window_size_) {
                scales = "free", labeller = as_labeller(aoh_type_labels)),
 
   filename = paste0(p_output, "plots/aoh/effect_size/", 
-                    "hist_aoh_change_as_prop_site_area_obs_by_trend_", 
+                    "hist_aoh_change_percent_site_obs_by_trend_", 
                     window_size_, ".pdf"),
   width = 7, height = 5.5, units = "in")
 })
