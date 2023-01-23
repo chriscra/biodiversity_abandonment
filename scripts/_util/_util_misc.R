@@ -157,5 +157,6 @@ regression_model_labels <-
     n_hab_occ = "Number of Suitable Habitats",
     threatened = "Threatened (IUCN)",
     `abs(centroid_latitude)` = "Abs. Latitude of Range Centroid",
-    max_abn_extent_div_site_area = "Proportion of Site Abandoned"
+    max_abn_ext_percent_site = "Percent of Site Abandoned"
+    # max_abn_extent_div_site_area = "Proportion of Site Abandoned"
   )
