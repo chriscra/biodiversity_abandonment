@@ -92,8 +92,9 @@ lcv <- rast(paste0(p_dat_derived, "input_rasters/", site_df$site[10], ".tif"))
 lcv %>% ncell
 
 sapply(lcc, ncell)
-site_df <- site_df %>% mutate(ncell = sapply(lcc, ncell))
-write_csv(site_df, paste0(p_dat_derived, "site_df.csv"))
+# site_df <- site_df %>% mutate(ncell = sapply(lcc, ncell))
+# write_csv(site_df, paste0(p_dat_derived, "site_df.csv"))
+site_df <- read_csv(paste0(p_dat_derived, "site_df.csv"))
 
 # ----------------------------- load abandonment age rasters ---------------------------- #
 
@@ -416,18 +417,9 @@ habitat_age_req <- read_csv(paste0(p_derived, "habitat_age_req/iucn_habitat_age_
 habitat_age_req_coded <- read_csv(paste0(p_derived, "habitat_age_req/", "habitat_age_req_coded.csv"))
 #
 # habitat_age_req_coded %>%
-#   filter(str_detect(mature_forest_obl, "NA") | is.na(mature_forest_obl))
-# habitat_age_req_coded %>%
-  # filter(str_detect(binomial, "Inia"))
-# filter(str_detect(common_names, "(?i)dolphin")) # the (?i) included here makes this case-insensitive
+  # filter(str_detect(mature_forest_obl, "NA") | is.na(mature_forest_obl))
 
-# aoh_feols_trends %>%
-  # aoh_feols_trends_by_sp %>%
-  # aoh_trends %>%
-  # aoh_trends_by_sp %>%
-  # filter(
-  #   str_detect(mature_forest_obl, "NA") | is.na(mature_forest_obl),
-  #   vert_class != "amp") # %>% select(mature_forest_obl) %>% unique()
+# habitat_age_req_coded %>%
 
 centroids_df <- read_csv(file = paste0(p_derived, "/sf/centroids_df.csv")) %>% 
   as.data.frame() %>%
@@ -495,23 +487,23 @@ aoh_type_df <-
          )
 
 
-aoh_type_labels <- c(aoh_type_df$short_desc, "Birds", "Mammals", "Amphibians")
-names(aoh_type_labels) <- c(aoh_type_df$label, "bird", "mam", "amp")
+aoh_type_labels <- c(aoh_type_df$short_desc)
+names(aoh_type_labels) <- c(aoh_type_df$label)
 
-aoh_type_labels <- c(aoh_type_labels, 
-  "TRUE" = "Mature Forest Obligates",
-  "FALSE" = "Non-Mature Forest Obligates",
-  "mature_forest_obligate" = "Mature Forest Obligates",
-  "not_obligate" = "All species but Mature Forest Obligates",
-  "Range size <= global median" = "Range size <= global median",
-  "Range size > global median" = "Range size > global median",
-  "Threatened" = "Threatened", "Not Threatened" = "Not Threatened")
-
-aoh_type_labels <- c(
-  aoh_type_labels, 
-  "gain" = "Gain", 
-  "loss" = "Loss",
-  "no trend" = "No Trend")
+aoh_type_labels <-
+  c(aoh_type_labels,
+    "bird" = "Birds", "mam" = "Mammals", "amp" = "Amphibians",
+    "TRUE" = "Mature Forest Obligates",
+    "FALSE" = "Non-Mature Forest Obligates",
+    "mature_forest_obligate" = "Mature Forest Obligates",
+    "not_obligate" = "All species but Mature Forest Obligates",
+    "Range size <= global median" = "Range size <= global median",
+    "Range size > global median" = "Range size > global median",
+    "Threatened" = "Threatened", 
+    "Not Threatened" = "Not Threatened", 
+    "gain" = "Gain", 
+    "loss" = "Loss",
+    "no trend" = "No Trend")
 
 
 aoh_l <- read_parquet(paste0(p_derived, "aoh_l.parquet"))
@@ -600,10 +592,156 @@ aoh_ms_tmp_trends_by_sp <-
 # ------------------------------------------------------------ # 
 # ------- Traits: temp files ------- 
 # ------------------------------------------------------------ # 
-# see traits.Rmd
+taxonomy_df <- read_parquet(paste0(p_derived, "taxonomy_df.parquet"))
+etard_updated <- read_parquet(paste0(p_derived, "etard_updated.parquet"))
+habitat_occurrence_df <- read_parquet(paste0(p_derived, "habitat_occurrence_df.parquet"))
+
+
+# ---------------------------------------------- #
+# Categorical trends in AOH (one trend per species)
+# ---------------------------------------------- #
+aoh_mod_tmp_trends_by_sp_all <-
+  aoh_feols_trends_by_sp %>% 
+  filter(passage_type == "exclude_passage", 
+         vert_class != "amp", 
+         mature_forest_obl < 0.5
+         # str_starts(aoh_type, "crop|max|full")
+  ) %>% 
+  droplevels() %>%
+  mutate(
+    aoh_type = as_factor(aoh_type),
+    vert_class = as_factor(vert_class),
+    overall_trend = as_factor(overall_trend),
+    # threatened = case_when(
+    # redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
+    # TRUE ~ "Not Threatened"),
+    trend_categorical = case_when(
+      overall_trend == "gain" ~ "gain", # strict only
+      # str_detect(overall_trend, "gain") ~ "gain", # including weak gains too
+      TRUE ~ "non_gain"),
+    binary_trend_gain = case_when(overall_trend == "gain" ~ 1, TRUE ~ 0),
+    binary_trend_loss = case_when(overall_trend == "loss" ~ 1, TRUE ~ 0),
+    binary_trend_no_trend = case_when(overall_trend == "no trend" ~ 1, TRUE ~ 0),
+    binary_gain_v_loss = case_when(overall_trend == "gain" ~ 1, overall_trend == "loss" ~ 0)
+  ) %>%
+  left_join(taxonomy_df) %>% 
+  left_join(select(etard_updated,
+                   #dataset, etard_id, 
+                   vert_class, binomial, Body_mass_g, Trophic_level),
+            by = c("vert_class", "binomial")) %>% 
+  left_join(centroids_df) %>% 
+  # add habitat specialities
+  left_join(habitat_occurrence_df)
+
+aoh_mod_tmp_trends_by_sp <- 
+  aoh_mod_tmp_trends_by_sp_all %>%
+  filter(aoh_type == "crop_abn_iucn")
+
+# ---------------------------------------------- #
+# Estimated changes in AOH based on ols regression with NW estimator.
+# For response variables:
+# Absolute change in AOH, and scaled to site
+# ---------------------------------------------- #
+
+aoh_est_change_tmp_all <-
+  aoh_change_df %>% 
+  filter(est_type == "estimate", 
+         str_detect(passage_type, "excl"),
+         vert_class != "amp", 
+         mature_forest_obl < 0.5
+  ) %>%
+  left_join(taxonomy_df) %>%
+  left_join(select(etard_updated,
+                   #dataset, etard_id, 
+                   vert_class, binomial, Body_mass_g, Trophic_level),
+            by = c("vert_class", "binomial")
+  ) %>%
+  left_join(aoh_mod_tmp_trends_by_sp_all %>%
+              select(binomial, total_range_area) %>%
+              unique()) %>%
+  left_join(centroids_df) %>%
+  # add habitat specialities
+  left_join(habitat_occurrence_df) %>%
+  mutate(max_abn_extent_div_site_area = 
+           area_ever_abn_ha / total_site_area_ha_2017,
+         max_abn_ext_percent_site = 100* max_abn_extent_div_site_area,
+         binary_trend_gain = case_when(trend == "gain" ~ 1, TRUE ~ 0),
+         binary_trend_loss = case_when(trend == "loss" ~ 1, TRUE ~ 0),
+         binary_trend_no_trend = case_when(trend == "no trend" ~ 1, TRUE ~ 0),
+         
+         # create a binary variable with 1 for gain, 0 for loss, and NA for no trend
+         binary_gain_v_loss = case_when(trend == "gain" ~ 1, trend == "loss" ~ 0),
+         slope_prop_site = slope / total_site_area_ha_2017,
+         abs_change_percent_site = abs_change_as_prop_site_area * 100
+  ) %>%
+  arrange(aoh_type, vert_class, site, passage_type, run_index)
+
+# subset these based on aoh_type
+aoh_est_change_tmp <- 
+  aoh_est_change_tmp_all %>%
+  filter(aoh_type == "crop_abn_iucn")
+
+aoh_est_change_potential_tmp <-
+  aoh_est_change_tmp_all %>%
+  filter(aoh_type == "crop_abn_potential_iucn")
+
+
+# ---------------------------------------------- #
+# Observed change in AOH based on mean values for 
+# start and end of time series (for various window sizes).
+# This is used for response variables such as:
+# abs_change (change in AOH)
+# abs_change_as_prop_site_area (change in AOH as proportion of site area)
+# abs_change_percent_site (change in AOH as percent of site area)
+# Ratio change in AOH
+# # ---------------------------------------------- #
+
+aoh_obs_change_tmp_all <-
+  aoh_start_end_l %>%
+  filter(str_detect(passage_type, "excl"),
+         vert_class != "amp", 
+         mature_forest_obl < 0.5,
+         window_size == 5 # filter to only five year window size
+  ) %>%
+  left_join(taxonomy_df) %>%
+  left_join(select(etard_updated,
+                   #dataset, etard_id, 
+                   vert_class, binomial, Body_mass_g, Trophic_level),
+            by = c("vert_class", "binomial")
+  ) %>%
+  left_join(aoh_mod_tmp_trends_by_sp_all %>% 
+              select(binomial, total_range_area) %>%
+              unique()) %>%
+  left_join(centroids_df) %>%
+  # add habitat specialities
+  left_join(habitat_occurrence_df) %>%
+  mutate(max_abn_extent_div_site_area = 
+           area_ever_abn_ha / total_site_area_ha_2017,
+         max_abn_ext_percent_site = 100* max_abn_extent_div_site_area,
+         abs_change_percent_site = abs_change_as_prop_site_area * 100,
+         binary_trend_gain = case_when(trend == "gain" ~ 1, TRUE ~ 0),
+         binary_trend_loss = case_when(trend == "loss" ~ 1, TRUE ~ 0),
+         binary_trend_no_trend = case_when(trend == "no trend" ~ 1, TRUE ~ 0),
+         
+         # create a binary variable with 1 for gain, 0 for loss, and NA for no trend
+         binary_gain_v_loss = case_when(trend == "gain" ~ 1, trend == "loss" ~ 0)
+  ) %>%
+  arrange(aoh_type, vert_class, site, passage_type, run_index)
+
+# subset based on aoh_type
+aoh_obs_change_tmp <- 
+  aoh_obs_change_tmp_all %>%
+  filter(aoh_type == "crop_abn_iucn")
+
+aoh_obs_change_potential_tmp <-
+  aoh_obs_change_tmp_all %>%
+  filter(aoh_type == "crop_abn_potential_iucn")
+
+# -------------------------- #
+# model results: see traits.Rmd
 # note, this is a big file, so only load it if you need it!
 
-# trait_mod_df <- readRDS(file = paste0(p_derived, "traits/", "trait_mod_df.rds")) 
+trait_mod_df <- readRDS(file = paste0(p_derived, "traits/", "trait_mod_df.rds"))
 
 # ------------------------------------------------------------ # 
 # ----------------------------- Basemaps --------------------- 
