@@ -375,25 +375,6 @@ aoh_ms_tmp_trends %>%
                site,
                trend) %>%
       summarise(n_sp = n()) %>% ungroup()
-
-
-# table for MS:
-# A table showing the number of species with the percent of overall in parentheses
-# aoh_ms_tmp_trends %>%
-aoh_ms_tmp_trends_by_sp %>%
-    filter(aoh_type == "crop_abn_iucn") %>%
-    group_by(aoh_type, vert_class, passage_type, 
-             # trend
-             overall_trend
-             ) %>%
-    summarise(n_sp = n()) %>% ungroup() %>%
-    arrange(vert_class, aoh_type) %>% mutate(overall_trend = gsub(" ", "_", overall_trend)) %>%
-  group_by(vert_class) %>% mutate(n = sum(n_sp)) %>% ungroup() %>%
-  mutate(percent = 100*n_sp/n, combo = paste0(n_sp, " (", round(percent, digits = 2), "%)")) %>% 
-
-    pivot_wider(id_cols = c(vert_class), names_from = contains("trend"), values_from = n_sp)# %>%
-    pivot_wider(id_cols = c(vert_class), names_from = contains("trend"), values_from = combo)# %>%
-    mutate(prop_wl = gain/loss, p = (gain + weak_gain) / (loss + weak_loss))
 ```
 
 
@@ -1574,6 +1555,73 @@ Our study also highlights opportunities to improve the biodiversity outcomes of 
 
 # Results {.unnumbered}
 
+(ref:caption-main-aoh-stats-table) Number of bird and mammals with various trends in area of habitat (AOH) across different spatial and temporal calculations of AOH. The number of individual species-site trends are shown in Table \@ref(tab:aoh-stats-table-all-obs).
+
+```{r main-aoh-stats-table, tab.cap = '(ref:caption-main-aoh-stats-table)', echo = FALSE, message = FALSE, eval = TRUE}
+# table for MS:
+# A table showing the number of species with the percent of overall in parentheses
+
+aoh_table_tmp1 <- 
+  aoh_ms_tmp_trends_by_sp %>%
+  # aoh_ms_tmp_trends %>%
+    filter(aoh_type %in% 
+             c("crop_abn_iucn", "crop_abn_potential_iucn", 
+               "max_abn_iucn", "full_iucn")) %>%
+    group_by(aoh_type, vert_class, #passage_type, 
+             # trend
+             overall_trend
+             ) %>%
+    summarise(n_sp = n()) %>% ungroup() %>%
+    arrange(vert_class, aoh_type) %>% 
+  mutate(overall_trend = gsub(" ", "_", overall_trend)) %>%
+  group_by(aoh_type, vert_class) %>% mutate(n = sum(n_sp)) %>% ungroup() %>%
+  mutate(percent = 100*n_sp/n, combo = paste0(n_sp, " (", round(percent, digits = 2), "%)"))
+
+aoh_table_tmp2 <- 
+  aoh_table_tmp1 %>%
+    pivot_wider(id_cols = c(aoh_type, vert_class), 
+                names_from = contains("trend"), values_from = n_sp) %>%
+  mutate(win_loss = round(gain/loss, digits = 2)) %>%
+  mutate(win_loss_weak = round((gain + weak_gain) / (loss + weak_loss), (digits = 2))) %>%
+  select(aoh_type, vert_class, contains("win_loss"))
+
+
+# print kable
+aoh_table_tmp1 %>%
+  pivot_wider(id_cols = c(aoh_type, vert_class), 
+              names_from = contains("trend"), values_from = combo) %>%
+  select(c(1:5, 8, 6:7)) %>%
+  left_join(aoh_table_tmp2) %>%
+  mutate(aoh_type = case_when(
+    aoh_type == "crop_abn_iucn" ~ "Abandonment",
+    aoh_type == "crop_abn_potential_iucn" ~ "Abandonment, w/o recultivation",
+    aoh_type == "max_abn_iucn" ~ "Abandonment, incl. habitat loss prior to cultivation",
+    aoh_type == "full_iucn" ~ "Full site"
+    )) %>%
+  select("AOH Calculation" = aoh_type, "Vert. Class" = vert_class,
+         "Gain" = gain, "Weak Gain" = weak_gain,
+         "Loss" = loss, "Weak Loss" = weak_loss, 
+         "No Trend" = no_trend, "Conflicting" = context_dependent, 
+         "Ratio win/loss" = win_loss,
+         "Ratio win/loss incl. weak trends" = win_loss_weak) %>%
+  flextable() %>% 
+  theme_booktabs() %>%
+  autofit()
+
+  # knitr::kable(
+  #   # col.names = c("AOH Calculation", "Vert. Class",
+  #   #               "Gain", "Weak Gain", "Loss", "Weak Loss",
+  #   #               "No Trend", "Conflicting", "Ratio win/loss",
+  #   #               "Ratio win/loss incl. weak trends"),
+  #            align = "r", 
+  #            #format = "simple",
+  #            # format = my_format,
+  #            booktabs = TRUE,
+  #            # longtable = TRUE,
+  #            caption = "Number of bird and mammals with various trends in area of habitat (AOH) across different spatial and temporal calculations of AOH.") 
+```
+
+
 (ref:caption-global-map-w-wisc) Site locations and example trends of Area of Habitat (AOH) for mammals and birds at one site, Wisconsin, USA, following cropland abandonment. *a*, Locations of our 11 sites from @Yin2020 [map adapted from @Crawford2022]. *b*, trends in AOH (10^6 ha) following cropland abandonment for all birds and mammals occurring in our site in Wisconsin, USA. Trends are colored according to the direction of a species trend in AOH over the course of the time series, with statistically significant increases shown in green, declines in gold, and no trend in black. Bold trend lines highlight species in each category: *c*, House Wren (*Troglodytes aedon*; photo by Tyler Beames, [ML469603381](https://macaulaylibrary.org/asset/469603381)); *d*, Eastern Meadowlark (*Sturnella magna*; photo by Brad Imhoff, [ML225564911](https://macaulaylibrary.org/asset/225564911)); *e*, Downy Woodpecker (*Dryobates pubescens*; photo by Ryan Brady, [ML304722431](https://macaulaylibrary.org/asset/304722431)).
 
 ```{r global-map-w-wisc, fig.cap = '(ref:caption-global-map-w-wisc)', fig.pos = "!ht"}
@@ -1609,7 +1657,7 @@ Though relatively few small-ranged birds and mammals were affected by abandonmen
 
 ### Magnitude of changes in AOH following abandonment {.unnumbered}
 
-```{r effect-size-stats, include = FALSE}
+```{r effect-size-stats, include = FALSE, eval = FALSE}
 # three stats to report
 # 1. overall change in AOH
 # 2. change in AOH as percent of site area
@@ -1619,6 +1667,50 @@ Though relatively few small-ranged birds and mammals were affected by abandonmen
 aoh_est_change_tmp_all
 aoh_obs_change_tmp_all
 # aoh_obs_change_tmp_all %>% group_by(aoh_type) %>% nest()
+
+aoh_start_end_l_tmp_plots %>% filter(window_size == i)
+
+aoh_obs_change_tmp %>%
+  select(aoh_type, vert_class, site, ratio, binomial, trend) %>%
+  group_by(aoh_type, trend, vert_class,
+           factor = case_when(ratio >= 2 ~ "doubled",
+                              ratio <= 0.5 ~ "halved",
+                              TRUE ~ "NA")
+           ) %>%
+  summarise(num = n()) %>% ungroup() %>%
+  group_by(aoh_type, trend, vert_class) %>% mutate(total_sp = sum(num)) %>% ungroup() %>%
+  mutate(share = num/total_sp)
+
+aoh_obs_change_tmp %>%
+  select(aoh_type, vert_class, site, ratio, binomial, trend) %>%
+  group_by(aoh_type, trend, #vert_class,
+           factor = case_when(ratio >= 2 ~ "doubled",
+                              ratio <= 0.5 ~ "halved",
+                              TRUE ~ "NA")
+           ) %>%
+  summarise(num = n()) %>% ungroup() %>%
+  group_by(aoh_type, trend, #vert_class
+           ) %>% mutate(total_sp = sum(num)) %>% ungroup() %>%
+  mutate(share = 100*num/total_sp)
+
+
+
+aoh_obs_change_tmp %>% 
+  filter(window_size == 5) %>%
+  ggplot() + 
+  geom_histogram(aes(x = ratio, fill = trend, group = trend), bins = 100, col = "black") +
+  # geom_vline(xintercept = c(0.5, 2), linetype = "dashed") + 
+  theme_classic() +
+  scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], 
+                    values = palette_du_jour[c(1, 3, 6)]) + 
+  labs(x = "Ratio of ending AOH to starting AOH (observed)", 
+       y = "Count", caption = paste0("Comparing mean values in first and last ", i, " years")) + 
+  # scale_x_continuous() +
+  scale_x_continuous(trans = "log10", breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10, 50, 100)) +
+  theme(legend.position = "bottom", 
+        strip.text.y.right = element_text(size = 8, angle = 0, hjust = 0, vjust = 0)) +
+  facet_grid(site ~ ., scales = "free", labeller = as_labeller(fancy_labels))
+
 ```
 
 Though there were a higher number of winners, the species that lost habitat on the whole lost more habitat on average than species that gained habitat gained.
@@ -1631,7 +1723,7 @@ Key conclusions:
 (ref:caption-aoh-change-percent-by-trend) The distribution of changes in area of habitat (AOH) as a percent of site area, shown according to trend direction. Changes in AOH are calculated using the mean AOH during the first and last 5 years of the time series.
 
 ```{r aoh-change-percent-by-trend, fig.cap = '(ref:caption-aoh-change-percent-by-trend)'}
-knitr::include_graphics(path = paste0(p_plots, "aoh/effect_size/hist_aoh_change_as_prop_site_area_obs_by_trend_5.pdf"))
+knitr::include_graphics(path = paste0(p_plots, "aoh/effect_size/hist_aoh_change_percent_site_obs_by_site_5.pdf"))
 ```
 
 ## Effects of recultivation on habitat area {.unnumbered}
@@ -1991,9 +2083,9 @@ The 2015 global map of IUCN habitat types developed by @Jung2020a is freely avai
 
 <!-- \newpage -->
 
-<!-- # Extended Methods -->
+## Small-ranged species
 
-## Assigning land cover to habitat types {#si-habitat-assignment}
+## Assigning land cover to habitat types {#si-habitat-assignment .unnumbered}
 
 We developed a method for assigning pixels in our coarse land cover classes to finer habitat types to match the habitats used by the IUCN to describe species' habitat preferences.
 This process was based on a 2015 map of IUCN habitat types at 100-m resolution produced by @Jung2020a based on a dynamic crosswalk between the Copernicus land cover maps and the IUCN habitat types.
@@ -2005,7 +2097,7 @@ We then masked each of these potential habitat types maps by the corresponding l
 We then combined these four back together again to produce a map of habitat types at each site in each year, which served as input for our calculation of area of habitat (AOH). 
 See maps below.
 
-### Allocating savanna and shrubland habitats to land cover classes {#si-savanna-shrubland-jac}
+### Allocating savanna and shrubland habitats to land cover classes {#si-savanna-shrubland-jac.unnumbered}
 
 Allocating the finer scale IUCN habitat types to our coarse land cover classes was straightforward for forests, grasslands, non-vegetation habitat types, and arable land, but less so for savanna and shrubland habitats, which are intermediate between entirely open grasslands and closed forests.
 We considered shrubland and savanna habitat types to be a subset of our woody vegetation (i.e., forest) and herbaceous vegetation (i.e., grassland) land cover classes, respectively.
@@ -2038,7 +2130,7 @@ As a result, we conservatively consider shrubland habitats to be a subset of for
 
 <!-- # Extended Results -->
 
-## Results of statistical tests comparing proportion of winners and losers by species group {#si-prop-test-results}
+## Results of statistical tests comparing proportion of winners and losers by species group {#si-prop-test-results .unnumbered}
 
 Throughout this analysis, we used two-sample Z-tests to test whether for equality between proportions of winner species (or loser species) for groups of interest, and applied Yates' continuity correction.
 Mammals and birds showed statistically significant differences in the proportion of both winner and loser species following abandonment (Calculation 1).
@@ -2055,16 +2147,79 @@ For mammals, the difference between the proportion of consistent winners was sta
 The proportions of consistent losers also showed significant differences for birds between Calculation 1 and 2 [two-sample proportion test: $X^2$ (df = `r p_test_loss_bird_by_calc12$parameter`, *N* = `r aoh_loss_bird_by_calc_tmp$N[1:2] %>% sum()`) = `r round(p_test_loss_bird_by_calc12$statistic, digits = 2)`, *p* `r ifelse(p_test_loss_bird_by_calc12$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_loss_bird_by_calc12$p.value, digits = 2)))`] and Calculation 1 and 3 [two-sample proportion test: $X^2$ (df = `r p_test_loss_bird_by_calc13$parameter`, *N* = `r aoh_loss_bird_by_calc_tmp$N[c(1,3)] %>% sum()`) = `r round(p_test_loss_bird_by_calc13$statistic, digits = 2)`, *p* `r ifelse(p_test_loss_bird_by_calc13$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_loss_bird_by_calc13$p.value, digits = 2)))`], but not for Calculation 2 and 3 [two-sample proportion test: $X^2$ (df = `r p_test_loss_bird_by_calc23$parameter`, *N* = `r aoh_loss_bird_by_calc_tmp$N[2:3] %>% sum()`) = `r round(p_test_loss_bird_by_calc23$statistic, digits = 2)`, *p* `r ifelse(p_test_loss_bird_by_calc23$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_loss_bird_by_calc23$p.value, digits = 2)))`].
 For mammals, the difference between proportion of consistent winners was statistically significant for all pairs of calculations: Calculation 1 and 2 [two-sample proportion test: $X^2$ (df = `r p_test_loss_mam_by_calc12$parameter`, *N* = `r aoh_loss_mam_by_calc_tmp$N[1:2] %>% sum()`) = `r round(p_test_loss_mam_by_calc12$statistic, digits = 2)`, *p* `r ifelse(p_test_loss_mam_by_calc12$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_loss_mam_by_calc12$p.value, digits = 2)))`], Calculation 1 and 3 [two-sample proportion test: $X^2$ (df = `r p_test_loss_mam_by_calc13$parameter`, *N* = `r aoh_loss_mam_by_calc_tmp$N[c(1,3)] %>% sum()`) = `r round(p_test_loss_mam_by_calc13$statistic, digits = 2)`, *p* `r ifelse(p_test_loss_mam_by_calc13$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_loss_mam_by_calc13$p.value, digits = 2)))`], and Calculation 2 and 3 [two-sample proportion test: $X^2$ (df = `r p_test_loss_mam_by_calc23$parameter`, *N* = `r aoh_loss_mam_by_calc_tmp$N[2:3] %>% sum()`) = `r round(p_test_loss_mam_by_calc23$statistic, digits = 2)`, *p* `r ifelse(p_test_loss_mam_by_calc23$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_loss_mam_by_calc23$p.value, digits = 2)))`].
 
-# Traits
+# Traits {.unnumbered}
 
 We next investigate how various species traits (e.g., habitat suitability, habitat specialization, threat status, body mass, range size, trophic level, etc.) correlate with changes in AOH that took place following cropland abandonment. We found that
-
-
-
 
 \newpage
 
 # Supplemental Tables
+(ref:caption-aoh-stats-table-all-obs) Number of bird and mammals with various trends in area of habitat (AOH) across different spatial and temporal calculations of AOH, when accounting for each species' trend at every site.
+
+```{r aoh-stats-table-all-obs, tab.cap = '(ref:caption-aoh-stats-table-all-obs)', echo = FALSE, message = FALSE, eval = TRUE}
+# table for MS:
+# A table showing the number of species with the percent of overall in parentheses
+
+aoh_table_all_obs_tmp1 <- 
+  # aoh_ms_tmp_trends_by_sp %>%
+  aoh_ms_tmp_trends %>%
+    filter(aoh_type %in% 
+             c("crop_abn_iucn", "crop_abn_potential_iucn", 
+               "max_abn_iucn", "full_iucn")) %>%
+    group_by(aoh_type, vert_class, #passage_type, 
+             trend
+             # overall_trend
+             ) %>%
+    summarise(n_sp = n()) %>% ungroup() %>%
+    arrange(vert_class, aoh_type) %>% 
+  mutate(trend = gsub(" ", "_", trend)) %>%
+  group_by(aoh_type, vert_class) %>% mutate(n = sum(n_sp)) %>% ungroup() %>%
+  mutate(percent = 100*n_sp/n, combo = paste0(n_sp, " (", round(percent, digits = 2), "%)"))
+
+aoh_table_all_obs_tmp2 <- 
+  aoh_table_all_obs_tmp1 %>%
+    pivot_wider(id_cols = c(aoh_type, vert_class), 
+                names_from = contains("trend"), values_from = n_sp) %>%
+  mutate(win_loss = round(gain/loss, digits = 2)) %>%
+  # mutate(win_loss_weak = round((gain + weak_gain) / (loss + weak_loss), (digits = 2))) %>%
+  select(aoh_type, vert_class, contains("win_loss"))
+
+
+# print kable
+aoh_table_all_obs_tmp1 %>%
+  pivot_wider(id_cols = c(aoh_type, vert_class), 
+              names_from = contains("trend"), values_from = combo) %>%
+  # select(c(1:5, 8, 6:7)) %>%
+  left_join(aoh_table_all_obs_tmp2) %>%
+  mutate(aoh_type = case_when(
+    aoh_type == "crop_abn_iucn" ~ "Abandonment",
+    aoh_type == "crop_abn_potential_iucn" ~ "Abandonment, w/o recultivation",
+    aoh_type == "max_abn_iucn" ~ "Abandonment, incl. habitat loss prior to cultivation",
+    aoh_type == "full_iucn" ~ "Full site"
+    )) %>%
+  select("AOH Calculation" = aoh_type, "Vert. Class" = vert_class,
+         "Gain" = gain, #"Weak Gain" = weak_gain,
+         "Loss" = loss, #"Weak Loss" = weak_loss, 
+         "No Trend" = no_trend, #"Conflicting" = context_dependent, 
+         "Ratio win/loss" = win_loss,
+         # "Ratio win/loss incl. weak trends" = win_loss_weak
+         ) %>%
+  flextable() %>% 
+  theme_booktabs() %>%
+  autofit()
+
+  # knitr::kable(
+  #   # col.names = c("AOH Calculation", "Vert. Class",
+  #   #               "Gain", "Weak Gain", "Loss", "Weak Loss",
+  #   #               "No Trend", "Conflicting", "Ratio win/loss",
+  #   #               "Ratio win/loss incl. weak trends"),
+  #            align = "r", 
+  #            #format = "simple",
+  #            # format = my_format,
+  #            booktabs = TRUE,
+  #            # longtable = TRUE,
+  #            caption = "Number of bird and mammals with various trends in area of habitat (AOH) across different spatial and temporal calculations of AOH.") 
+```
 
 ```{r iucn-crosswalk-table, echo = FALSE, message = FALSE, eval = TRUE}
 iucn_crosswalk %>%
@@ -2098,9 +2253,13 @@ iucn_crosswalk %>%
   column_spec(4, width = "2cm")
 ```
 
+
+
 ## Traits model tables
 
-```{r traits-mod-table-binary, echo = FALSE, message = FALSE, eval = FALSE, cache = TRUE}
+(ref:caption-traits-mod-table-binary) Trait model coefficients for binary trend response variables.
+
+```{r traits-mod-table-binary, tab.cap = '(ref:caption-traits-mod-table-binary)', echo = FALSE, message = FALSE, eval = TRUE, cache = TRUE}
 # Binary trends, one observation per species per site:
 trait_mod_df %>% 
   filter(aoh_type == "crop_abn_iucn", 
@@ -2114,8 +2273,9 @@ trait_mod_df %>%
   autofit()
 ```
 
+(ref:caption-traits-mod-table-magnitude) Trait model coefficients for binary trend response variables.
 
-```{r traits-mod-table-magnitude, echo = FALSE, message = FALSE, eval = FALSE, cache = TRUE}
+```{r traits-mod-table-magnitude, tab.cap = '(ref:caption-traits-mod-table-magnitude)', echo = FALSE, message = FALSE, eval = TRUE, cache = TRUE}
 # change in AOH, absolute and as percent of site area:
 trait_mod_df %>% 
   filter(aoh_type == "crop_abn_iucn", 
@@ -2135,7 +2295,9 @@ trait_mod_df %>%
   autofit()
 ```
 
-```{r traits-mod-table-slope, echo = FALSE, message = FALSE, eval = FALSE, cache = TRUE}
+(ref:caption-traits-mod-table-slope) Trait model coefficients for slope response variables.
+
+```{r traits-mod-table-slope, tab.cap = '(ref:caption-traits-mod-table-slope)', echo = FALSE, message = FALSE, eval = TRUE, cache = TRUE}
 trait_mod_df %>% 
   filter(aoh_type == "crop_abn_iucn", 
          response %in% c("slope", "slope_prop_site*10^4")) %>%
@@ -2147,7 +2309,9 @@ trait_mod_df %>%
 
 ```
 
-```{r traits-mod3-table, echo = FALSE, message = FALSE, eval = FALSE, cache = TRUE}
+(ref:caption-traits-mod3-table) Trait model coefficients for primary response variables, but excluding arable and urban land suitability as predictor variables.
+
+```{r traits-mod3-table, tab.cap = '(ref:caption-traits-mod3-table)', echo = FALSE, message = FALSE, eval = TRUE, cache = TRUE}
 readRDS(file = paste0(p_derived, "traits/", "trait_mod_df_mod3.rds")) %>%
   filter(aoh_type == "crop_abn_iucn", 
          response %in% c("binary_gain_v_loss", "abs_change_percent_site", "log(ratio)")) %>%
@@ -2485,7 +2649,7 @@ knitr::include_graphics(path = paste0(p_plots, "aoh/trend_summary_obs_v_pot_by_s
                                       aoh_run_date,".pdf"))
 ```
 
-(ref:caption-aoh-by-range) Number of species with a given trend in AOH over time, across all sites, grouped by range size. Small-ranged species (with global ranges smaller than the global median range size) are shown in the top row, and species with ranges larger than the global median are shown in the bottom row.
+(ref:caption-aoh-by-range) Number of species with a given trend in AOH over time, across all sites, grouped by range size. Small-ranged species (with global ranges smaller than the global median range size) are shown in the top row, and species with ranges larger than the global median are shown in the bottom row. The lone small-ranged species that lost habitat following abandonment is the Iraq babbler, *Argya altirostris*.
 
 ```{r aoh-by-range, fig.cap = '(ref:caption-aoh-by-range)'}
 knitr::include_graphics(path = paste0(p_plots, "aoh/trend_summary_by_range_side",
@@ -2521,13 +2685,13 @@ knitr::include_graphics(path = paste0(p_plots, "aoh/effect_size/hist_aoh_change_
 knitr::include_graphics(path = paste0(p_plots, "aoh/effect_size/hist_abs_change_obs_5.pdf"))
 ```
 
-(ref:caption-log-ratio-aoh-change-by-site) The distribution of the natural logarithm of the relative change in AOH ("ratio") of final AOH to starting AOH. Changes in AOH are calculated using the mean AOH during the first and last 5 years of the time series.
+(ref:caption-log-ratio-aoh-change-by-site) The distribution of the relative change in AOH ("ratio") of final AOH to starting AOH, shown on a log10 scale. Changes in AOH are calculated using the mean AOH during the first and last 5 years of the time series. Dashed lines indicate ratios corresponding to a halving (left) or a doubling (right) of AOH.
 
 ```{r log-ratio-aoh-change-by-site, fig.cap = '(ref:caption-log-ratio-aoh-change-by-site)'}
-knitr::include_graphics(path = paste0(p_plots, "aoh/effect_size/hist_aoh_log_ratio_obs_5.pdf"))
+knitr::include_graphics(path = paste0(p_plots, "aoh/effect_size/hist_aoh_ratio_obs_log_scale5.pdf"))
 ```
 
-(ref:caption-ratio-aoh-change-by-site) The distribution of the natural logarithm of the relative change in AOH ("ratio") of final AOH to starting AOH. Changes in AOH are calculated using the mean AOH during the first and last 5 years of the time series.
+(ref:caption-ratio-aoh-change-by-site) The distribution of the relative change in AOH ("ratio") of final AOH to starting AOH, shown untransoformed. Changes in AOH are calculated using the mean AOH during the first and last 5 years of the time series.
 
 ```{r ratio-aoh-change-by-site, fig.cap = '(ref:caption-ratio-aoh-change-by-site)'}
 knitr::include_graphics(path = paste0(p_plots, "aoh/effect_size/hist_aoh_ratio_obs_5.pdf"))
