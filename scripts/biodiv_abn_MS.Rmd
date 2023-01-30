@@ -1992,25 +1992,17 @@ This effect was more intense for losers, who lost on average `r obs_v_pot_stats$
 
 ## Abandonment in the context of broader land cover changes {.unnumbered}
 
-When incorporating land cover changes that occurred prior to cultivation (Calculation 2) or across the entire landscape of each site (Calculation 3), we find that the balance of winners to losers becomes much less favorable (Fig. \@ref(fig:aoh-overall)).
-Whereas the majority of bird and mammal species gained habitat from cropland abandonment alone (Calculation 1), many more species had losing trends in AOH when calculated across broader temporal (Calculation 2) and spatial scales (Calculation 3). 
-In both of these broader AOH calculations, there were more bird species that lost habitat than gained (`r aoh_stats_max$n_gain_bird` winners versus `r aoh_stats_max$n_loss_bird` losers in Calculation 2, and `r aoh_stats_full$n_gain_bird` winners versus `r aoh_stats_full$n_loss_bird` losers in Calculation 3).
-Mammals had about equal numbers of winners and losers in both calculations 2 and 3: slightly more mammals gained habitat in Calculation 2 (`r aoh_stats_max$n_gain_mam` winners versus `r aoh_stats_max$n_loss_mam` losers), but more mammals lost habitat overall when incorporating land use changes outside of abandonment in each site (`r aoh_stats_full$n_gain_mam` winners versus `r aoh_stats_full$n_loss_mam` losers; Calculation 3).
-For both vertebrate classes, the number of species with no trend or contrasting trends across sites ("Opposites") increased, and the number of loser species did not reach a majority (Fig. \@ref(fig:aoh-overall-stacked-w-pot)).
-Proportions of winners and losers showed statistically significant differences across all calculations for both birds and mammals, except when comparing the proportion of (i) mammal winners and (ii) bird losers between Calculation 2 and 3 (see Section \@ref(si-prop-test-results)).
+Our analysis so far has focused directly on cropland abandonment by exclusively considering the habitat provided by abandoned croplands during cultivation, subsequent abandonment, and potential recultivation.
+Though abandonment *per se* benefitted many more species than it harmed (Table \@ref(tab:main-aoh-stats-table)), did it compensate for 1) habitat that was cleared for croplands prior to abandonment or 2) habitat loss that occurred throughout through the entire site?
+When considering the net AOH change in lands that experienced abandonment or throughout the entire landscape at each site, the balance of winners to losers becomes much less favorable (Fig. \@ref(fig:aoh-overall)).
+In both of these broader AOH calculations, more bird species lost habitat than gained, and about equal numbers of mammals gained as lost, maintaining a marginally positive ratio of winners to losers (Table \@ref(tab:main-aoh-stats-table), Figs. \@ref(fig:aoh-overall-stacked-w-pot) and \@ref(fig:aoh-overall-w-pot).
+Both of these declines in the proportion of winning species were statistically significant (see SI Section \@ref(si-prop-test-results)).
 
-These trends varied by site, but in general, the number of losing species increased across all sites when incorporating land cover changes that occurred prior to cultivation (Calculation 2; Fig. \@ref(fig:aoh-by-site-max-abn)), or outside of abandonment (Calculation 3; Fig. \@ref(fig:aoh-by-site-full)).
-These trends were much stronger for birds than for mammals.
-At some of the sites with the clearest jump in the number of loser bird species between Calculation 1 and Calculations 2 and 3 (e.g., `r paste0(long_labels[c(1,8, 10)], collapse = "; ")`), the number of winner mammal species still remained higher than the number of loser species (Fig. \@ref(fig:aoh-by-site-stacked); see also Figs. \@ref(fig:aoh-by-site-max-abn) and \@ref(fig:aoh-by-site-full)).
-
-Differences between threatened and non-threatened species were even greater for birds when accounting for habitat loss prior to cultivation and land cover changes outside abandoned croplands that were abandoned (Fig. \@ref(fig:aoh-by-iucn-lumped)).
-In fact, a greater share of threatened birds gained habitat than lost habitat, even in Calculations 2 and 3, in contrast to non-threatened birds.
-On the other hand, a greater share of threatened mammal species gained habitat than lost habitat even when accounting for habitat loss prior to abandonment (Calculation 2), but not when including land cover changes across the entire landscape at each site (Calculation 3). 
-Moreover, though threatened mammal species responded more favorably than non-threatened mammal species in Calculation 2, the opposite was true in Calculation 3, wherein a greater share of threatened species lost habitat than did non-threatened species (Fig. \@ref(fig:aoh-by-iucn-lumped)).
- 
-When considering our scenario of potential abandonment for these broader AOH scenarios, we found that the balance again flipped in favor of winner species when considering habitat losses that occurred prior to cultivation and subsequent abandonment, for both birds and mammals (Figs. \@ref(fig:aoh-overall-w-pot) - \@ref(fig:aoh-overall-stacked-w-pot)).
-The scenario assuming no recultivation also led to a relative increase in the number of species that gained habitat across the entire landscape (Calculation 3P), resulting in slightly more winners than losers for mammals.
-Though the number of birds that gained habitat increased in this potential scenario, it remained lower than the number of losers overall, and there was wide variation in how the ratio of winners to losers changed across individual sites (Fig. \@ref(fig:aoh-by-site-full-potential)).
+While the number of losing species increased at all sites (Fig. \@ref(fig:aoh-by-site-stacked) when factoring in broader land cover changes these increases were most severe in Mato Grosso, Brazil, where relatively less abandonment and relatively more land cover change occurred than at other sites, affecting a large number of tropical forest species (see site-specific results in Figs. \@ref(fig:aoh-by-site-max-abn) and \@ref(fig:aoh-by-site-full)).
+Our sites in Bosnia & Herzegovnia; Chongqing, China; Goiás, Brazil; and Iraq also showed negative ratios of winners to losers, but sites elsewhere managed to narrowly maintain positive ratios (particularly for mammal species), despite these ratios declining on the whole.
+A greater share of threatened species also lost habitat when factoring in habitat loss that occurred prior to or alongside abandonment, but not statistically more so than non-threatened species (Fig. \@ref(fig:aoh-by-iucn-lumped).
+As before, limiting recultivation would have reduced the number of losing species in both of these broader AOH calculations, and in this case would have resulted in a positive ratio of winners to losers even after factoring in habitat clearing for agriculture prior to abandonment (Figs. \@ref(fig:aoh-overall-stacked-w-pot) and \@ref(fig:aoh-overall-w-pot)).
+Limiting recultivation would have had a similar but much smaller effect when considering AOH changes through the full site, however.
 
 (ref:caption-aoh-overall) The number of bird and mammal species with various trends in AOH during our time series. Columns correspond to three different AOH calculations: 1) abandonment only, from first cultivation through 2017; 2) net change in abandoned lands, from 1987-2017 (accounting for habitat clearing for agriculture prior to abandonment); and 3) the entire landscape at each site, from 1987-2017. Results for all AOH calculations, including when recultivation was assumed not to occur, are shown as proportions in Fig. \@ref(fig:aoh-overall-stacked-w-pot) and raw counts in Fig. \@ref(fig:aoh-overall-w-pot). Site specific results are shown in Figs. \@ref(fig:aoh-iucn-by-site-max-abn) and \@ref(fig:aoh-iucn-by-site-full), respectively.
 
@@ -2446,24 +2438,33 @@ aoh_table_all_obs_tmp1 %>%
 
 # print Table
 aoh_ms_tmp_trends %>%
-    filter(str_detect(aoh_type, "crop")) %>%
-    group_by(site, aoh_type, vert_class, trend) %>%
+    group_by(site, aoh_type, vert_class,
+             trend) %>%
     summarise(n_sp = n()) %>% ungroup() %>%
-    arrange(site, vert_class, aoh_type) %>% 
+    arrange(site, aoh_type, vert_class
+            ) %>% 
   mutate(trend = gsub(" ", "_", trend)) %>%
-  group_by(aoh_type, site, vert_class) %>% mutate(total_sp = sum(n_sp)) %>% ungroup() %>%
-  filter(aoh_type == "crop_abn_iucn") %>%
-  pivot_wider(id_cols = c(site, aoh_type, vert_class, total_sp), 
+  group_by(aoh_type, site, vert_class
+           ) %>% mutate(total_sp = sum(n_sp)) %>% ungroup() %>%
+  
+  pivot_wider(id_cols = c(site, aoh_type, vert_class, 
+                          total_sp), 
               names_from = contains("trend"), 
               values_from = n_sp) %>%
   mutate(win_loss = gain/loss) %>%
   left_join(site_df %>% select(site, description)) %>% 
+  filter(aoh_type %in% c(
+    # "max_abn_iucn", "full_iucn",
+        "crop_abn_iucn"
+    )) %>%
   mutate(
-    vert_class = as_factor(case_when(vert_class == "bird" ~ "Birds", 
-                                     vert_class == "mam" ~ "Mammals")),
+    vert_class = as_factor(case_when(vert_class == "bird" ~ "Birds", vert_class == "mam" ~ "Mammals")),
     aoh_type = case_when(
-      aoh_type == "crop_abn_iucn" ~ "Observed",
-      aoh_type == "crop_abn_potential_iucn" ~ "Assuming no recultivation")) %>%
+      aoh_type == "crop_abn_iucn" ~ "Abandonment",
+      aoh_type == "crop_abn_potential_iucn" ~ "Assuming no recultivation",
+      aoh_type == "max_abn_iucn" ~ "Net change in abandoned lands (1987-2017)",
+      aoh_type == "full_iucn" ~ "Full site"
+      )) %>%
   select("Site" = description, 
          # "AOH Calculation" = aoh_type,
          "Vert. Class" = vert_class,
@@ -2474,7 +2475,7 @@ aoh_ms_tmp_trends %>%
          ) %>%
   flextable(.) %>% 
   theme_booktabs(.) %>% 
-  merge_v(., j = c(1,3)) %>%
+  merge_v(., j = c(1,2,3)) %>%
   valign(j = 1, valign = "top") %>%
   colformat_double(., digits = 2) %>%
   fontsize(., size = 10, part = "all") %>%
