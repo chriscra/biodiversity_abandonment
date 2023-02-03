@@ -18,7 +18,7 @@ needed_packages <- c(
   "arrow", # for reading and writing parquet files
   
   # tidyverse includes ggplot2, dplyr, tidyr, readr, purrr, tibble, stringr, and forcats
-  "tidyverse", "lobstr", #"pryr", 
+  "tidyverse", "lobstr", "pryr", 
   "reshape2", "rlang",
 
   
@@ -33,22 +33,23 @@ needed_packages <- c(
   "fixest", # recommended by Tom Bearpark, as a very fast alternative implementation of lm()
   
   # time series analysis
-  "tsibble", "fable", "feasts",
+  # "tsibble", "fable", "feasts",
   "lmtest", # for implementing the Durbin-Watson test for autocorrelation, via lmtest::dwtest()
   
   
   # visualization:
   "rasterVis", "RColorBrewer", "viridis", "scales", "colorspace",
   "MetBrewer", 
-  "dotwhisker",
-  "ggnewscale", # for adding multiple color or fill scales
+  # "dotwhisker",
+  # "ggnewscale", # for adding multiple color or fill scales
   "patchwork", "cowplot", # for combining multiple plots
   "ggridges",
   "ggpubr", # for extracting legends,
   "ggh4x", # for nested facet labels, among other things
-  "animation", "magick", "ggrepel",
-  "plotly", # plotly makes very cool interactive graphics!
-  "gridGraphics",
+  # "animation", "magick",
+  "ggrepel",
+  # "plotly", # plotly makes very cool interactive graphics!
+  # "gridGraphics",
   "gt", "gtsummary", "flextable", # for tables, particularly of model outputs
   
   # development
@@ -56,13 +57,14 @@ needed_packages <- c(
   "devtools", "Hmisc", "acepack",
   
   # spatial, ecological packages, extra:
-  "rnaturalearth", "smoothr", "spatialEco", "maps", #"rangeBuilder",
+  # "rnaturalearth", "smoothr", "spatialEco", "maps", #"rangeBuilder",
   # "rredlist",
-  "landscapemetrics", "landscapetools",
+  # "landscapemetrics", "landscapetools",
   
   # rmarkdown
-  "rmarkdown", "bookdown", "knitr", "kableExtra", 
-  "rticles",
+  "rmarkdown", "bookdown", "knitr", 
+  "kableExtra", 
+  # "rticles",
   "XML"
   )
 
@@ -93,7 +95,6 @@ install_missing_packages <- function(list_of_packages) {
 
 install_missing_packages(needed_packages)
 # update.packages(needed_packages) # every now and then a good idea to update the packages
-
 
 
 # install.packages(needed_packages) # old method

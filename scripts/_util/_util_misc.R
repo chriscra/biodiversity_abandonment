@@ -139,11 +139,14 @@ palette_labels <- c(
   "loss" = "Loss"
 )
 
+
+
+
 # ------------------------------------------------------ #
 # Table formatting ----
 # ------------------------------------------------------ #
 
-regression_model_labels <- 
+regression_model_labels0 <- 
   list(
     Trophic_level = "Trophic Level",
     `log(Body_mass_g)` = "ln(Body Mass, g)",
@@ -156,6 +159,32 @@ regression_model_labels <-
     artificial_occ = "Artificial Suitability",
     n_hab_occ = "Number of Suitable Habitats",
     threatened = "Threatened (IUCN)",
+    `abs(centroid_latitude)` = "Abs. Latitude of Range Centroid",
+    max_abn_ext_percent_site = "Percent of Site Abandoned"
+    # max_abn_extent_div_site_area = "Proportion of Site Abandoned"
+  )
+
+regression_model_labels <- 
+  list(
+    Trophic_level = "Trophic Level",
+    `log10(Body_mass_g)` = "log(Body Mass, g)",
+    `log10(total_range_area)` = "log(Global Range Area, km2)",
+    forest_occ = "Forest Suitability",
+    savanna_occ = "Savanna Suitability",
+    shrubland_occ = "Shrubland Suitability",
+    grassland_occ = "Grassland Suitability",
+    wetlands_occ = "Wetlands Suitability",
+    rocky_occ = "Rocky Areas Suitability",
+    caves_occ = "Caves Suitability",
+    desert_occ = "Desert Suitability",
+    artificial_terrestrial_occ = "Artificial Suitability",
+    arable_occ = "Arable Land Suitability",
+    urban_occ = "Urban Land Suitability",
+    # n_suitable_habitats = "Number of Suitable Habitats",
+    n_suitable_habitats_lvl2 = "Number of Suitable Habitats (IUCN Level 2)",
+    # Habitat_breadth_IUCN = "Habitat Breadth (IUCN Level 2)",
+    threatened = "Threatened (IUCN)",
+    vert_class = "Vertebrate Class",
     `abs(centroid_latitude)` = "Abs. Latitude of Range Centroid",
     max_abn_ext_percent_site = "Percent of Site Abandoned"
     # max_abn_extent_div_site_area = "Proportion of Site Abandoned"
