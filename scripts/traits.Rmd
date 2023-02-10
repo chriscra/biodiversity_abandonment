@@ -233,6 +233,56 @@ missing # missing Inia geoffrensis (Amazon river dolphin), but that's ok, becaus
 
 ```
 
+```{r test-lvl2-suitability}
+habitat_age_req_coded %>%
+  filter(str_detect(suitable_habitats, regex("forest", ignore_case = TRUE)),
+         str_detect(suitable_habitats, regex("heavily degraded", ignore_case = TRUE))) #%>%
+  # select(suitable_habitats) %>% unique()
+
+habitat_occurrence_df %>%
+  filter(forest_occ)
+
+habitat_prefs %>% names
+
+habitat_prefs %>%
+  filter(suitability == "Suitable") %>%
+  select(binomial, #code, name,# majorImportance:suitability,
+         Coarse_Name) %>% unique() %>%
+  group_by(binomial) %>%
+  summarise(count = n()) %>% arrange(desc(count))
+  print(n = 110)
+
+habitat_prefs %>%
+  filter(binomial == "Odocoileus virginianus") %>%
+  select(binomial, code) %>%
+  unique() %>%
+  separate(code, into = c("lvl1", "lvl2"), sep = "\\.", extra = "merge") %>%
+    select(binomial, lvl1) %>% unique() %>% arrange(lvl1)
+
+etard_updated %>% 
+  filter(binomial == "Odocoileus virginianus") %>%
+  select(binomial, Habitat_breadth_IUCN)
+
+
+habitat_prefs %>% #select(binomial, code) %>% #unique() %>% arrange(code) %>%
+  separate(code, into = c("lvl1", "lvl2"), sep = "\\.", extra = "merge") %>%
+  select(binomial, lvl1) %>% unique() %>% mutate(lvl1 = as.integer(lvl1)) %>%
+  arrange(lvl1) %>%
+  group_by(binomial) %>%
+  summarise(n_lvl1_habitats = n(), lvl1_habitats = str_flatten(lvl1, collapse = ", "))
+
+
+aoh_obs_change_tmp %>%
+  select(aoh_type:binomial, trend) %>%
+  left_join(habitat_prefs %>% 
+              separate(code, into = c("lvl1", "lvl2"), sep = "\\.", extra = "merge") %>%
+              select(binomial, lvl1) %>% unique() %>% mutate(lvl1 = as.integer(lvl1)) %>%
+              group_by(binomial) %>%
+              summarise(n_lvl1_habitats = n(), lvl1_habitats = str_flatten(lvl1, collapse = ", ")) %>% ungroup()
+            )
+```
+
+
 ```{r extract-habitat-preferences}
 # -------- #
 # extract habitat specialities:
@@ -241,16 +291,20 @@ habitat_occurrence_df <-
       mutate(
         forest_occ =     str_detect(suitable_habitats, regex("forest", ignore_case = TRUE)),
         forest_plantations =     str_detect(suitable_habitats, regex("forest|plantations", ignore_case = TRUE)),
+        degraded_forest = str_detect(suitable_habitats, regex("plantations|degraded", ignore_case = TRUE)),
         savanna_occ =      str_detect(suitable_habitats, regex("savanna", ignore_case = TRUE)),
         shrubland_occ =      str_detect(suitable_habitats, regex("shrubland", ignore_case = TRUE)),
         grass_occ =      str_detect(suitable_habitats, regex("grassland", ignore_case = TRUE)),
         wetlands_occ =   str_detect(suitable_habitats, regex("wetland", ignore_case = TRUE)),
         # note, that pasture shows up twice, in both grass_occ, and farmland_occ. Therefore, grass_occ and farmland_occ will overlap in some cases
-        farmland_occ =   str_detect(suitable_habitats, regex("arable|pasture|garden", ignore_case = TRUE)),
-        urban_occ =      str_detect(suitable_habitats, regex("urban", ignore_case = TRUE)),
         rocky_occ =      str_detect(suitable_habitats, regex("rocky", ignore_case = TRUE)),
+        caves_occ =      str_detect(suitable_habitats, regex("caves", ignore_case = TRUE)),
         desert_occ =     str_detect(suitable_habitats, regex("desert", ignore_case = TRUE)),
-        artificial_occ =     str_detect(suitable_habitats, regex("artificial", ignore_case = TRUE)),
+        arable_occ =   str_detect(suitable_habitats, regex("arable", ignore_case = TRUE)),
+        farmland_occ =   str_detect(suitable_habitats, regex("arable|pasture|garden", ignore_case = TRUE)),
+        ag_occ =   str_detect(suitable_habitats, regex("arable|pasture|garden", ignore_case = TRUE)),
+        urban_occ =      str_detect(suitable_habitats, regex("urban", ignore_case = TRUE)),
+        # artificial_occ =     str_detect(suitable_habitats, regex("artificial", ignore_case = TRUE)),
         grasslands_plus =    str_detect(suitable_habitats, regex("shrubland|savanna|grassland|pasture",
                                                                  ignore_case = TRUE)),
         n_hab_occ = rowSums(across(contains("occ"))),
@@ -274,8 +328,6 @@ habitat_occurrence_df <-
 
 # --------- save file:
 write_parquet(habitat_occurrence_df, paste0(p_derived, "habitat_occurrence_df.parquet"))
-
-
 
 
 # ------------------------------------------------------------- #
@@ -321,6 +373,13 @@ habitat_age_req_coded %>%
   select(vert_class, binomial, common_names, suitable_habitats) %>%
   mutate(intro = str_detect(suitable_habitats, regex("Introduced", ignore_case = TRUE))) %>%
   filter(intro)
+
+habitat_age_req_coded %>%
+  filter(binomial %in% unique(aoh_ms_tmp_trends_by_sp$binomial)) %>%
+  select(vert_class, binomial, common_names, suitable_habitats) %>%
+  mutate(degraded_forest_occ = str_detect(suitable_habitats, regex("plantations|degraded", ignore_case = TRUE))) %>%
+  filter(degraded_forest_occ)
+
 
 ```
 
@@ -876,6 +935,11 @@ aoh_mod_tmp_trends_by_sp %>%
 # ---------- #
 (exp(1) ^ 12) / (exp(1) ^ 11)
 
+exp(1) ^ 6 
+exp(1) ^ 0.17
+
+log(100)
+log(1000)
 
 # overall
 # gg_range_area_categorical <-
@@ -1040,7 +1104,7 @@ aoh_mod_tmp_trends_by_sp %>%
 # calculate proportion of winners:
 # ---------- #
 # overall
-gg_hab_specialty_p_gain <-
+# gg_hab_specialty_p_gain <-
   aoh_mod_tmp_trends_by_sp %>%
   filter(aoh_type == "crop_abn_iucn") %>% 
   group_by(specialty, aoh_type) %>%
@@ -1118,50 +1182,100 @@ aoh_mod_tmp_trends_by_sp %>%
 # Number of suitable habitats
 gg_n_suitable_habitats_p_gain <-
   aoh_mod_tmp_trends_by_sp %>%
-  filter(aoh_type == "crop_abn_iucn") %>% 
-  group_by(n_hab_occ, aoh_type) %>%
+  filter(aoh_type == "crop_abn_iucn") %>%
+  group_by(aoh_type,
+           n_suitable_habitats_lvl2,
+           # n_suitable_habitats
+           ) %>%
   summarise(p_gain = mean(overall_trend == "gain"), n_sp = n()) %>%
   ungroup() %>%
-  ggplot(aes(x = as_factor(n_hab_occ), y = p_gain, label = n_sp, fill = desc(n_sp))) +
+  ggplot(aes(
+    # x = n_suitable_habitats,
+    x = n_suitable_habitats_lvl2,
+    # x = Habitat_breadth_IUCN,
+    # x = as_factor(n_suitable_habitats),
+    y = p_gain, label = n_sp, fill = desc(n_sp))) +
   theme_classic() +
   geom_col() + 
-  geom_text(size = 3, nudge_y = +0.05) +
+  geom_smooth(method = "lm", alpha = 0.2) + 
+  geom_text(size = 2.25, nudge_y = +0.05) +
   geom_hline(yintercept = 0.5, linetype = "dashed") + 
-  labs(#title = "Impact of habitat specialization on response to abandonment", 
-       y = "Proportion of species gaining habitat", x = "Number of suitable habitats",
+    scale_x_continuous(n.breaks = 7) +
+    labs(#title = "Impact of habitat specialization on response to abandonment", 
+       y = "Proportion of species gaining habitat", x = "Number of suitable habitats (IUCN Level 2)",
        fill = "No. species") + 
   facet_grid(col = vars(aoh_type), labeller = as_labeller(aoh_type_labels))
 
 gg_n_suitable_habitats_p_gain_by_vert_class <-
   aoh_mod_tmp_trends_by_sp %>%
   filter(aoh_type == "crop_abn_iucn") %>% 
-  group_by(n_hab_occ, aoh_type, vert_class) %>%
+  group_by(n_suitable_habitats_lvl2, aoh_type, vert_class) %>%
   summarise(p_gain = mean(overall_trend == "gain"), n_sp = n()) %>%
   ungroup() %>%
-  ggplot(aes(x = as_factor(n_hab_occ), y = p_gain, label = n_sp, fill = desc(n_sp))) +
+    # drop_na() %>%
+  ggplot(aes(
+    # x = as_factor(n_suitable_habitats),
+    # x = n_suitable_habitats,
+    x = n_suitable_habitats_lvl2,
+    # x = Habitat_breadth_IUCN,
+    # x = as_factor(Habitat_breadth_IUCN),
+    y = p_gain, label = n_sp, fill = desc(n_sp))) +
   theme_classic() +
   geom_col() + 
-  geom_text(size = 3, nudge_y = +0.05) +
+    geom_smooth(method = "lm", alpha = 0.2) + 
+      geom_text(size = 2.25, nudge_y = +0.05) +
   labs(#title = "Impact of habitat specialization on response to abandonment", 
-       y = "Proportion of species gaining habitat", x = "Number of suitable habitats",
+       y = "Proportion of species gaining habitat", x = "Number of suitable habitats (IUCN Level 2)",
        fill = "No. species") + 
   geom_hline(yintercept = 0.5, linetype = "dashed") + 
+  scale_x_continuous(n.breaks = 7) +
     # scale_fill_viridis() +
-  facet_grid(col = vars(vert_class), #row = vars(aoh_type),
-             labeller = as_labeller(aoh_type_labels))
+  facet_grid(rows = vars(vert_class), #row = vars(aoh_type),
+             # labeller = as_labeller(aoh_type_labels)
+             )
 
+# combo:
+
+gg_n_suitable_habitats_p_gain_combo <-
+  bind_rows(
+  aoh_mod_tmp_trends_by_sp %>%
+    filter(aoh_type == "crop_abn_iucn") %>%
+    group_by(aoh_type, n_suitable_habitats_lvl2) %>%
+    summarise(p_gain = mean(overall_trend == "gain"), n_sp = n()) %>% ungroup() %>%
+    mutate(vert_class = "Birds + Mammals"),
+  aoh_mod_tmp_trends_by_sp %>%
+  filter(aoh_type == "crop_abn_iucn") %>% 
+  group_by(aoh_type, n_suitable_habitats_lvl2, vert_class) %>%
+  summarise(p_gain = mean(overall_trend == "gain"), n_sp = n()) %>%
+  ungroup()) %>% mutate(vert_class = fct_relevel(vert_class, c("Birds", "Mammals", "Birds + Mammals"))) %>%
+  ggplot(aes(x = n_suitable_habitats_lvl2, y = p_gain, label = n_sp, fill = desc(n_sp))) +
+  theme_classic() +
+  geom_col() + 
+  geom_smooth(method = "lm", alpha = 0.2) + 
+  geom_text(size = 2.25, nudge_y = +0.05) +
+  labs(y = "Proportion of species gaining habitat", x = "Number of suitable habitats (IUCN Level 2)",
+       fill = "No. species") + 
+  geom_hline(yintercept = 0.5, linetype = "dashed") + 
+  scale_x_continuous(n.breaks = 7) +
+  facet_grid(rows = vars(vert_class))
+    
+ggsave(gg_n_suitable_habitats_p_gain_combo,
+       filename = paste0(p_output, "plots/aoh/traits/", 
+                           "n_suitable_habitats_lvl2_p_gain_combo", ".pdf"),
+         width = 7.5, height = 5, units = "in"
+       )
 
 ggsave(gg_n_suitable_habitats_p_gain,
        filename = paste0(p_output, "plots/aoh/traits/", 
-                           "n_suitable_habitats_p_gain", ".pdf"),
-         width = 6, height = 4, units = "in"
+                           "n_suitable_habitats_lvl2_p_gain", ".pdf"),
+         width = 7.5, height = 3, units = "in"
        )
 
 
 ggsave(gg_n_suitable_habitats_p_gain_by_vert_class,
        filename = paste0(p_output, "plots/aoh/traits/", 
-                           "n_suitable_habitats_p_gain_by_vert", ".pdf"),
-         width = 7, height = 3.5, units = "in"
+                           "n_suitable_habitats_lvl2_p_gain_by_vert", ".pdf"),
+         width = 7, height = 4, units = "in"
        )
 
 
@@ -1174,10 +1288,11 @@ aoh_mod_tmp_trends_by_sp %>%
 
 # ---------- #
 # occurrence:
-gg_hab_occurrence_p_gain <-
+# gg_hab_occurrence_p_gain <-
   aoh_mod_tmp_trends_by_sp %>%
   filter(aoh_type == "crop_abn_iucn") %>% 
-    select(aoh_type, vert_class, binomial, overall_trend, contains("occ")) %>%
+    select(aoh_type, vert_class, binomial, overall_trend, contains("occ")#, -n_hab_occ
+           ) %>%
     pivot_longer(cols = contains("occ"), names_to = "occurrence", values_to = "presence") %>%
     mutate(occurrence = gsub("_occ", "", occurrence)) %>%
     filter(presence == TRUE) %>%
@@ -1202,10 +1317,10 @@ ggsave(gg_hab_occurrence_p_gain,
        )
 
 # overall
-gg_hab_occurrence_p_gain_by_vert_class <-
+# gg_hab_occurrence_p_gain_by_vert_class <-
   aoh_mod_tmp_trends_by_sp %>%
   filter(aoh_type == "crop_abn_iucn") %>% 
-    select(aoh_type, vert_class, binomial, overall_trend, contains("occ")) %>%
+    select(aoh_type, vert_class, binomial, overall_trend, contains("occ"), -n_hab_occ) %>%
     pivot_longer(cols = contains("occ"), names_to = "occurrence", values_to = "presence") %>%
     mutate(occurrence = gsub("_occ", "", occurrence)) %>%
     filter(presence == TRUE) %>%
@@ -1345,15 +1460,241 @@ exp(1) ^ 0.12
 
 ```
 
+```{r proportion-ag-users}
+# --------------------------------------------------------------------------------- #
+aoh_mod_tmp_trends_by_sp %>% names() %>% str_subset("occ")
 
-```{r compare-n-hab-occ}
-aoh_mod_tmp_trends_by_sp %>%
-  select(vert_class, binomial, n_hab_occ, Habitat_breadth_IUCN) %>%
-  filter(!is.na(Habitat_breadth_IUCN)) %>%
-  mutate(comparison = n_hab_occ == Habitat_breadth_IUCN) %>%
-  # filter(is.na(comparison)) %>%
+# what proportion of species can use agriculture?
+aoh_mod_tmp_trends_by_sp_all_incl_mature %>%
+  filter(aoh_type == "crop_abn_iucn") %>%
+  # habitat_occurrence_df %>%
+  # left_join(aoh_species_list, by = "binomial") %>%
+  # filter(binomial %in% unique(aoh_feols_trends_by_sp %>%
+  # filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage",
+  #                               vert_class != "amp", #mature_forest_obl < 0.5
+  #                               ) %>%
+  #                        pull(binomial))
+  # ) %>%
+  group_by(aoh_type, 
+           vert_class, 
+           mature_forest_obligate = case_when(
+             mature_forest_obl > 0.5 ~ "yes", 
+             mature_forest_obl < 0.5 ~ "no"
+             )) %>%
+  summarise(n = n(), 
+            p_arable = mean(arable_occ),
+            p_forest = mean(forest_occ),
+            p_savanna = mean(savanna_occ),
+            p_shrubland = mean(shrubland_occ),
+            p_grassland = mean(grassland_occ),
+            p_wetlands = mean(wetlands_occ),
+            p_urban = mean(urban_occ),
+            p_rocky = mean(rocky_occ),
+            p_desert = mean(desert_occ),
+            p_caves = mean(caves_occ),
+            # p_artificial = mean(artificial_occ)
+            )
 
-  summarise(n = sum(comparison))
+
+# aoh_mod_tmp_trends_by_sp %>%
+#   filter(aoh_type == "crop_abn_iucn") %>% 
+habitat_occurrence_df %>%
+  left_join(aoh_species_list, by = "binomial") %>%
+  filter(binomial %in% unique(aoh_feols_trends_by_sp %>% 
+                                filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage",
+                                       vert_class != "amp") %>% pull(binomial))) %>%
+  mutate(cropland_occ = str_detect(suitable_habitats, regex("arable", ignore_case = TRUE))) %>%
+  select(aoh_type, vert_class, binomial, overall_trend, contains("occ"), agriculture_occ = farmland_occ, -n_hab_occ) %>%
+  pivot_longer(cols = contains("occ"), names_to = "occurrence", values_to = "presence") %>%
+  mutate(occurrence = gsub("_occ", "", occurrence)) %>%
+  filter(presence == TRUE) %>%
+  group_by(occurrence, aoh_type) %>%
+  summarise(p_gain = mean(overall_trend == "gain"), n_sp = n()) %>%
+  ungroup() %>%
+  ggplot(aes(x = fct_reorder(occurrence, p_gain), y = p_gain, label = n_sp, fill = occurrence)) +
+  theme_classic() +
+  geom_col() + 
+  geom_text(size = 3.5, nudge_y = -0.05) +
+  theme(axis.text.x = element_text(angle = 340, vjust = 1, hjust = 0)) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", alpha = 0.5) + 
+
+  labs(title = "Proportion of winners by habitat occurrence", 
+       y = "Proportion of winners", x = "habitat occurrence") + 
+  facet_wrap(vars(aoh_type))
+
+
+# gg_prop_sp_w_habitat_suitability <-
+  # aoh_mod_tmp_trends_by_sp_all_incl_mature %>%
+  aoh_est_change_tmp_all_incl_mature %>%
+  filter(aoh_type == "crop_abn_iucn",
+         site == "iraq"
+         ) %>%
+  select(-ag_occ) %>%
+  pivot_longer(cols = contains("occ"), names_to = "occurrence", values_to = "presence") %>%
+  mutate(occurrence = gsub("_occ", "", occurrence)) %>%
+  group_by(aoh_type, vert_class, occurrence, 
+           mature_forest_obligate = #case_when(
+             mature_forest_obl > 0.5# ~ "yes", mature_forest_obl < 0.5 ~ "no")
+           ) %>%
+  summarise(n = n(), p_occ = mean(presence), p_gain = mean(overall_trend == "gain")) %>%
+  ungroup() %>%
+    filter(!occurrence %in% c("farmland", "artificial_aquatic", 
+                              "marine_coastal", "marine_intertidal",
+                              "introduced"),
+           mature_forest_obligate == "FALSE",
+           occurrence == "desert") #%>%
+  ggplot(aes(y = fct_reorder(occurrence, p_occ), x = p_occ)) +
+  theme_classic() +
+  geom_col() + 
+  scale_x_continuous(limits = c(0,1), n.breaks = 6) +
+  labs(x = "Proportion of species with suitability", y = "IUCN Habitat Type",
+       # caption = "Note: 'farmland' includes species that occur in arable, pasture, or rural garden habitats"
+       ) + 
+  facet_grid(cols = vars(vert_class),
+             # rows = vars(mature_forest_obligate),
+             labeller = as_labeller(
+               c("Birds" = "Birds", "Mammals" = "Mammals",
+                 "TRUE" = "Mature Forest Obligates", 
+                 "FALSE" = "Non-Mature Forest Obligates"
+                 # aoh_type_labels
+               )))
+
+
+ggsave(gg_prop_sp_w_habitat_suitability,
+       filename = paste0(p_output, "plots/aoh/traits/", 
+                           "prop_sp_w_habitat_suitability", ".pdf"),
+         width = 5, height = 3, units = "in"
+       )
+
+
+
+
+arable_gg_site_order_tmp <-
+  aoh_est_change_tmp_all_incl_mature %>%
+  filter(aoh_type == "crop_abn_iucn") %>%
+  pivot_longer(cols = contains("occ"), names_to = "occurrence", values_to = "presence") %>%
+  mutate(occurrence = gsub("_occ", "", occurrence)) %>%
+  group_by(aoh_type, site, occurrence, 
+           # vert_class,
+           # trend,
+           mature_forest_obligate = mature_forest_obl > 0.5
+           ) %>%
+  summarise(n = n(), p_occ = mean(presence), p_gain = mean(trend == "gain"),
+            p_loss = mean(trend == "loss")) %>%
+  ungroup() %>%
+  filter(occurrence == "arable", mature_forest_obligate == "FALSE"#, vert_class == "Birds"
+         ) %>%
+  group_by(aoh_type, site) %>% mutate(richness = sum(n)) %>% ungroup() %>%
+  mutate(n_winner = as.integer(p_gain*richness)) %>%
+  select(site, richness, n_winner, p_occ, p_gain, p_loss) %>%
+  arrange(desc(p_gain))
+
+arable_gg_site_order_tmp %>% 
+  select(-p_occ) %>%
+  # arrange(desc(n_winner)) %>%
+  flextable() %>%
+  colformat_double(., digits = 2)
+
+arable_gg_site_order_tmp %>%
+  # filter(trend == "gain") %>%
+  mutate(n_winner = p_gain*richness)
+
+  
+
+aoh_est_change_tmp_all %>%
+  filter(aoh_type %in% c("crop_abn_iucn", "full_iucn")) %>%
+  select(aoh_type, vert_class, site, binomial, trend, contains("occ")) %>%
+  pivot_longer(cols = contains("occ"), names_to = "occurrence", values_to = "presence") %>%
+  mutate(occurrence = gsub("_occ", "", occurrence)) %>%
+  # filter(occurrence == "arable", site == "belarus") #%>%
+  group_by(aoh_type, site, occurrence,    # vert_class
+           ) %>%
+  summarise(n = n(), 
+            p_occ = mean(presence), 
+            p_gain = mean(trend == "gain"),
+            p_loss = mean(trend == "loss"),
+            ) %>%
+  ungroup() %>%
+  # filter(site == "belarus")
+  filter(occurrence == "arable", # vert_class == "Birds"
+         ) %>%
+    select(aoh_type, site, p_occ, p_gain, p_loss) %>%
+  arrange(
+    p_loss
+    # p_gain
+    ) %>%
+  print(n = 30)
+
+
+
+# proportion of winners and species with arable suitability
+ggsave(
+  aoh_est_change_tmp_all_incl_mature %>%
+    # aoh_est_change_tmp %>%
+    filter(aoh_type %in% c("crop_abn_iucn"#, "full_iucn"
+                           )) %>%
+    pivot_longer(cols = contains("occ"), names_to = "occurrence", values_to = "presence") %>%
+    mutate(occurrence = gsub("_occ", "", occurrence)) %>%
+    group_by(aoh_type, vert_class, site, occurrence, 
+             mature_forest_obligate = mature_forest_obl > 0.5
+             ) %>%
+    summarise(n = n(), p_occ = mean(presence), p_gain = mean(trend == "gain")) %>%
+    ungroup() %>%
+    filter(occurrence == "arable", 
+           mature_forest_obligate == "FALSE"
+           ) %>%
+    pivot_longer(cols = c(p_occ, p_gain), names_prefix = "p_", names_to = "p_type", values_to =
+                   "proportion") %>%
+    left_join(arable_gg_site_order_tmp) %>%
+    ggplot(aes(y = fct_reorder(site, #p_gain
+                               p_occ), x = proportion, group = p_type, fill = p_type)) +
+    theme_classic() +
+    geom_col(position = position_dodge()) +
+    scale_y_discrete(labels = fancy_labels) +
+    scale_x_continuous(limits = c(0,1), n.breaks = 6) +
+    labs(x = "Proportion", y = NULL, fill = NULL) +
+    scale_fill_manual(labels = c("gain" = "Proportion with gains",
+                                 "occ" = "Proportion arable suitable"), 
+                      values = c("#3b7c70", "#ce9642")) +
+    facet_grid(cols = vars(vert_class),
+               # rows = vars(aoh_type),
+               # rows = vars(mature_forest_obligate),
+               labeller = as_labeller(c("Birds" = "Birds", "Mammals" = "Mammals",
+                                        "TRUE" = "Mature Forest Obligates", 
+                                        "FALSE" = "Non-Mature Forest Obligates"))) + 
+    theme(legend.position = "bottom"),
+  
+  filename = paste0(p_output, "plots/aoh/traits/", 
+                    "prop_sp_w_arable_suitability", ".pdf"),
+  width = 5, height = 4.5, units = "in"
+  )
+
+
+
+# proportion of winners as a function of the proportion with arable suitability
+aoh_est_change_tmp_all_incl_mature %>%
+  filter(aoh_type == "crop_abn_iucn") %>%
+  pivot_longer(cols = contains("occ"), names_to = "occurrence", values_to = "presence") %>%
+  mutate(occurrence = gsub("_occ", "", occurrence)) %>%
+  group_by(aoh_type, vert_class, site, occurrence, 
+           mature_forest_obligate = mature_forest_obl > 0.5
+           ) %>%
+  summarise(n = n(), p_occ = mean(presence), p_gain = mean(trend == "gain")) %>%
+  ungroup() %>%
+  filter(occurrence == "arable", mature_forest_obligate == "FALSE") %>%
+  # pivot_longer(cols = c(p_occ, p_gain), names_prefix = "p_", names_to = "p_type", values_to = "proportion") %>%
+  left_join(arable_gg_site_order_tmp) %>%
+  ggplot(aes(x = p_occ, y = p_gain, col = vert_class)) +
+  theme_classic() +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_grid(rows = vars(mature_forest_obligate),
+             labeller = as_labeller(c("Birds" = "Birds", "Mammals" = "Mammals",
+                 "TRUE" = "Mature Forest Obligates", 
+                 "FALSE" = "Non-Mature Forest Obligates")))
+
+
+
 
 ```
 
@@ -2050,6 +2391,33 @@ bind_rows(
 # The gain v loss model conclusions are essentially the same, with the exception being that range area does not have a significant coefficient.
 # The no trend coefs change the most between the two calculations.
 # In general, the observed calculation found significant coefs on abandonment extent, whereas the potential did not.
+
+
+
+
+
+glm(binary_gain_v_loss ~ 
+      forest_occ + savanna_occ + shrubland_occ + 
+      grassland_occ + wetlands_occ +
+      rocky_occ + caves_occ + desert_occ +
+      # marine_intertidal_occ + marine_coastal_occ +
+      # artificial_terrestrial_occ +
+      # urban_occ +
+      # farmland_occ +
+      # arable_occ +
+      # ag_occ + 
+      # n_suitable_habitats +
+      n_suitable_habitats_lvl2 +
+      # Habitat_breadth_IUCN +
+      vert_class +
+      threatened + Trophic_level +
+      log(Body_mass_g) + log(total_range_area) + abs(centroid_latitude) +
+      max_abn_ext_percent_site,
+    data = aoh_obs_change_tmp_all %>% filter(aoh_type == "crop_abn_iucn"),
+    family = "binomial") %>%
+  summary()
+
+
 ```
 
 ```{r 2-abs-change-aoh}
@@ -2241,6 +2609,39 @@ aoh_start_end_l_tmp_plots %>%
   summarise(n = n(), 
             mean = mean(abs_change_percent_site), 
             median = median(abs_change_percent_site))
+
+
+# new model spec:
+lm(abs_change_percent_site ~ 
+       forest_occ + savanna_occ + shrubland_occ + grassland_occ + wetlands_occ + 
+            rocky_occ + caves_occ + desert_occ + artificial_terrestrial_occ + 
+            n_suitable_habitats +
+     threatened + Trophic_level + 
+       log(Body_mass_g) + log(total_range_area) + abs(centroid_latitude) + 
+       max_abn_ext_percent_site,
+    data = aoh_obs_change_tmp_all %>% filter(aoh_type == "crop_abn_iucn")
+     ) %>% summary()
+
+lm(abs_change_percent_site ~ 
+     forest_occ + savanna_occ + shrubland_occ + grassland_occ + wetlands_occ +
+     rocky_occ + caves_occ + desert_occ +
+     # marine_intertidal_occ + marine_coastal_occ +
+     # artificial_terrestrial_occ +
+     urban_occ +
+     # farmland_occ +
+     arable_occ +
+     # n_suitable_habitats +
+     n_suitable_habitats_lvl2 +
+     # Habitat_breadth_IUCN +
+     vert_class + 
+     threatened + Trophic_level +
+     log10(Body_mass_g) + log10(total_range_area) + abs(centroid_latitude) +
+       max_abn_ext_percent_site,
+    data = aoh_obs_change_tmp_all %>% filter(aoh_type == "crop_abn_iucn")
+     ) %>%
+  summary()
+  # glance()
+
 ```
 
 ```{r 4-ratio-change-aoh}
@@ -2557,6 +2958,38 @@ lm_response_variables <-
 lm_response_variables_slope <- c("slope", "slope_prop_site*10^4")
 
 
+predictor_variables_all <- c(
+  "forest_occ", "savanna_occ", "shrubland_occ", "grassland_occ", "wetlands_occ",
+  "rocky_occ", "caves_occ", "desert_occ",
+  "urban_occ", "arable_occ", 
+  # "marine_intertidal_occ", "marine_coastal_occ"
+  "artificial_terrestrial_occ",
+  "n_suitable_habitats_lvl2", 
+  "vert_class", "threatened", "Trophic_level", 
+  "log10(Body_mass_g)", "log10(total_range_area)", "abs(centroid_latitude)",
+  "max_abn_ext_percent_site")
+
+# iterate through various specifications:
+predictor_variables <- predictor_variables_all[-c(11)]
+mod_label <- "_mod1"
+
+predictor_variables <- predictor_variables_all[-c(9:10)]
+mod_label <- "_mod2"
+
+predictor_variables <- predictor_variables_all[-c(9:11)]
+mod_label <- "_mod3"
+
+lapply(1, # 1:3, 
+       function(i) 
+  {
+  predictor_variables_l <- list(
+    predictor_variables_all[-c(11)], # final model specification
+    predictor_variables_all[-c(9:10)],
+    predictor_variables_all[-c(9:11)]
+    )
+  predictor_variables <- predictor_variables_l[[i]]
+  mod_label <- paste0("_modx", 1:3)[i]
+  
 # logistic models, one observation per species per site:
 glm_mod_df <- 
   tibble(response = rep(glm_response_variables, times = 2), 
@@ -2564,33 +2997,30 @@ glm_mod_df <-
                         each = length(glm_response_variables))
          ) %>%
   left_join(aoh_obs_change_tmp_all %>% group_by(aoh_type) %>% nest(), by = "aoh_type") %>%
-  mutate(
-    model = map2(
-      data, response, 
-      ~glm(as.formula(paste0(as.character(.y), 
-            " ~ forest_occ + savanna_occ + shrubland_occ + grass_occ + wetlands_occ +
-            artificial_occ + n_hab_occ + threatened + Trophic_level + log(Body_mass_g) +
-            log(total_range_area) + abs(centroid_latitude) + max_abn_ext_percent_site")), 
-           data = .x, family = "binomial")),
-    tidy = lapply(model, tidy),
-    gt = lapply(model, function(mod) {
+  mutate(model = map2(data, response, 
+                      ~glm(as.formula(paste0(
+                        as.character(.y), paste0(" ~ ", paste(predictor_variables, collapse = " + ")))), 
+                      data = .x, family = "binomial")),
+         tidy = lapply(model, tidy),
+         gt = lapply(model, function(mod) {
            mod %>%
-        tbl_regression(
-          show_single_row = c(contains("occ"), "threatened"),
-          label = regression_model_labels,
-          add_estimate_to_reference_rows = TRUE,
-          intercept = TRUE, exponentiate = TRUE,
-          conf.int = FALSE) %>%
-        italicize_levels() %>% 
-        add_glance_table(include = c(
-          # "r.squared", "adj.r.squared",
-          # "statistic", "p.value", "df",
-          "logLik", "AIC", # "BIC",
-          "deviance", "df.residual", "nobs", 
-          "null.deviance", "df.null"#, "sigma"
-          )) %>% 
-        bold_p()
-           }))
+             tbl_regression(
+               show_single_row = c(contains("occ"), "threatened"),
+               label = regression_model_labels,
+               add_estimate_to_reference_rows = TRUE,
+               intercept = TRUE, exponentiate = TRUE,
+               conf.int = FALSE) %>%
+             italicize_levels() %>%
+             add_glance_table(include = c(
+               # "r.squared", "adj.r.squared",
+               # "statistic", "p.value", "df",
+               "logLik", "AIC", # "BIC",
+               "deviance", "df.residual", "nobs",
+               "null.deviance", "df.null"#, "sigma"
+               )) %>%
+             bold_p()
+           })
+         )
 
 # linear models
 lm_mod_df <- 
@@ -2607,40 +3037,28 @@ lm_mod_df <-
                           each = length(lm_response_variables_slope))) %>%
       left_join(aoh_est_change_tmp_all %>% group_by(aoh_type) %>% nest(), by = "aoh_type")
     ) %>%
-  mutate(
-    model = map2(
-      data, response, 
-      ~lm(as.formula(paste0(as.character(.y), 
-          " ~ forest_occ + savanna_occ + shrubland_occ + grass_occ + wetlands_occ +
-          artificial_occ + n_hab_occ + threatened + Trophic_level + log(Body_mass_g) +
-          log(total_range_area) + abs(centroid_latitude) + max_abn_ext_percent_site")), 
-          data = .x)),
-    tidy = lapply(model, tidy),
-    gt = lapply(model, function(mod) {
-      mod %>%
-        tbl_regression(
-          show_single_row = c(contains("occ"), "threatened"),
-          label = regression_model_labels,
-          add_estimate_to_reference_rows = TRUE,
-          intercept = TRUE,
-          conf.int = FALSE) %>%
-        italicize_levels() %>% 
-        add_glance_table(include = c(
-          # "r.squared",
-          "adj.r.squared", "statistic", "p.value", "df", "logLik", "AIC", # "BIC",
-          "deviance", "df.residual", "nobs", #"null.deviance", "df.null", 
-          "sigma")) %>%
-        bold_p()
-      }))
-
-# ------------------------------------- #
-# comparing coefficient estimates
-# ------------------------------------- #
-all.equal(
-  tidy(binary_mod_gain_sp_site)$estimate,
-  glm_mod_df %>% filter(response == "binary_trend_gain", aoh_type == "crop_abn_iucn") %>% 
-    pull(tidy) %>% .[[1]] %>% pull(estimate))
-
+  mutate(model = map2(data, response, 
+                      ~lm(as.formula(paste0(
+                        as.character(.y), paste0(" ~ ", paste(predictor_variables, collapse = " + ")))),
+                      data = .x)),
+         tidy = lapply(model, tidy),
+         gt = lapply(model, function(mod) {
+           mod %>%
+             tbl_regression(
+               show_single_row = c(contains("occ"), "threatened"),
+               label = regression_model_labels,
+               add_estimate_to_reference_rows = TRUE,
+               intercept = TRUE,
+               conf.int = FALSE) %>%
+             italicize_levels() %>%
+             add_glance_table(include = c(
+               # "r.squared",
+               "adj.r.squared", "statistic", "p.value", "df", "logLik", "AIC", # "BIC",
+               "deviance", "df.residual", "nobs", #"null.deviance", "df.null",
+               "sigma")) %>%
+             bold_p()
+           })
+         )
 
 # ------------------------------------- #
 # Combine into one tibble:
@@ -2651,7 +3069,206 @@ trait_mod_df <-
   bind_rows(glm_mod_df, lm_mod_df) %>%
   mutate(glance = lapply(model, glance))
 
+# ------------------------------------- #
+# Save
+# ------------------------------------- #
+saveRDS(trait_mod_df, file = paste0(p_derived, "traits/", "trait_mod_df", mod_label,".rds"))
 
+#```
+
+#```{r iterate-gt-tables}
+
+
+# Binary trends, one observation per species per site: (here the coefficients are exponentiated, so they correspond to Odds Ratios)
+trait_mod_df %>% 
+  filter(aoh_type == "crop_abn_iucn", 
+         response %in% glm_response_variables) %>%
+  pull(gt) %>%
+  tbl_merge(tab_spanner = c("Binary Gain", "Binary Gain/Loss", 
+                          "Binary Loss", "Binary No Trend")) %>%
+  as_gt() %>%
+  text_transform(locations = cells_body(),
+                 fn = function(x) {str_replace_all(x, pattern = "km2", 
+                                                   replacement = "km<sup>2</sup>")}) %>%
+  gtsave(filename = paste0(p_plots, "aoh/traits/", "Table1b_binary_obs", mod_label,".png"))
+
+
+# change in AOH, absolute and as percent of site area:
+trait_mod_df %>% 
+  filter(aoh_type == "crop_abn_iucn", 
+         response %in% lm_response_variables[1:2]) %>%
+  pull(gt) %>%
+  tbl_merge(tab_spanner = c("\U0394 AOH (ha)", "\U0394 AOH / site area (%)")) %>%
+  as_gt() %>%
+  text_transform(
+    locations = cells_body(),
+    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
+  gtsave(filename = paste0(p_plots, "aoh/traits/", "Table2_3_obs_change_AOH_combined", mod_label,".png"))
+
+
+# ratios:
+trait_mod_df %>% 
+  filter(aoh_type == "crop_abn_iucn", 
+         response %in% lm_response_variables[3:4]) %>%
+  pull(gt) %>%
+  tbl_merge(tab_spanner = c("AOH<sub>end</sub>/AOH<sub>start</sub>",
+                            "ln(AOH<sub>end</sub>/AOH<sub>start</sub>)")) %>%
+  as_gt() %>%
+  text_transform(
+    locations = cells_body(),
+    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
+  gtsave(filename = paste0(p_plots, "aoh/traits/", 
+                           "Table4_obs_ratios", mod_label,".png"))
+
+
+# slopes:
+trait_mod_df %>% 
+  filter(aoh_type == "crop_abn_iucn", 
+         response %in% lm_response_variables_slope) %>%
+  pull(gt) %>%
+  tbl_merge(tab_spanner = c("Slope", "Slope/Site Area (%/100)")) %>%
+  as_gt() %>%
+  text_transform(
+    locations = cells_body(),
+    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
+  gtsave(filename = paste0(p_plots, "aoh/traits/", 
+                           "Table7_slopes", mod_label,".png"))
+
+
+# magnitude of AOH change, %, and slope
+trait_mod_df %>% 
+  filter(aoh_type == "crop_abn_iucn", 
+         response %in% c(lm_response_variables[1:2], lm_response_variables_slope)) %>%
+  pull(gt) %>%
+  tbl_merge(tab_spanner = c("\U0394 AOH (ha)", "\U0394 AOH / site area (%)",
+                            "Slope", "Slope/Site Area (%/100)")) %>%
+  as_gt() %>%
+  text_transform(
+    locations = cells_body(),
+    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
+  gtsave(filename = paste0(p_plots, "aoh/traits/", "Table2_3_7_obs_AOH_change", mod_label,".png"))
+
+
+
+#```
+#```{r final-gt-tables}
+
+  # ----------------------------------------------------- #
+# Final Models:
+trait_mod_df %>% 
+  filter(aoh_type == "crop_abn_iucn", 
+         response %in% c(
+           "binary_gain_v_loss",
+           "abs_change",
+           "abs_change_percent_site",
+           "log(ratio)",
+           "slope_prop_site*10^4"
+         )) %>%
+  pull(gt) %>%
+  tbl_merge(tab_spanner = c(
+    "Binary Trend (gain or loss)",
+    "\U0394 AOH (ha)",
+    "\U0394 AOH / site area (%)",
+    "ln(AOH<sub>end</sub>/AOH<sub>start</sub>)",
+    "Slope / site area (%/100)"
+    )) %>%
+  as_gt() %>%
+  text_transform(
+    locations = cells_body(),
+    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
+  gtsave(filename = paste0(p_plots, "aoh/traits/",
+                           "Table_final_models_v2", mod_label,".png"))
+
+# Final Three Models:
+trait_mod_df %>% 
+  filter(aoh_type == "crop_abn_iucn", 
+         response %in% c(
+           "binary_gain_v_loss",
+           "abs_change_percent_site",
+           "log(ratio)"
+           )) %>%
+  pull(gt) %>%
+  tbl_merge(tab_spanner = c(
+    "Binary Trend (gain or loss)",
+    "\U0394 AOH / site area (%)",
+    "ln(AOH<sub>end</sub>/AOH<sub>start</sub>)"
+    )) %>%
+  as_gt() %>%
+  text_transform(
+    locations = cells_body(),
+    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
+  gtsave(filename = paste0(p_plots, "aoh/traits/",
+                           "Table_final_models_v3", mod_label,".png"))
+
+#```
+#```{r iterate-model-diagnostics}
+
+# one plot showing all models' residuals v fitted plots
+pdf(file = paste0(p_plots, "aoh/traits/",
+                  "model_diagnostics_resid_v_fitted_combo", mod_label,".pdf"),
+    width = 6.5, height = 9)
+par(mfrow = c(4,3))
+lapply(1:10, function(i) {
+  plot(trait_mod_df %>% 
+         filter(aoh_type == "crop_abn_iucn") %>% 
+         pull(model) %>% .[[i]], 
+       1, 
+       main = trait_mod_df %>% 
+         filter(aoh_type == "crop_abn_iucn") %>% 
+         pull(response) %>% .[i])
+  })
+dev.off()
+
+# one plot showing all models' qq plots
+pdf(file = paste0(p_plots, "aoh/traits/",
+                  "model_diagnostics_qq_combo", mod_label,".pdf"),
+    width = 6.5, height = 9)
+par(mfrow = c(4,3))
+lapply(1:10, function(i) {
+  plot(trait_mod_df %>% 
+         filter(aoh_type == "crop_abn_iucn") %>% 
+         pull(model) %>% .[[i]], 
+       2, 
+       main = trait_mod_df %>% 
+         filter(aoh_type == "crop_abn_iucn") %>% 
+         pull(response) %>% .[i])
+  })
+dev.off()
+}
+)
+
+# one plot per model
+lapply(
+  1:10, 
+  function(i) {
+  pdf(file = paste0(p_plots, "aoh/traits/", 
+                    "model_diagnostics_",
+                    trait_mod_df %>% filter(aoh_type == "crop_abn_iucn") %>% 
+                      pull(response) %>% .[i],
+                    ".pdf"),
+      width = 6, height = 6)
+  par(mfrow = c(2,2))
+  plot(trait_mod_df %>% 
+         filter(aoh_type == "crop_abn_iucn") %>% 
+         pull(model) %>%
+         .[[i]], 
+       main = trait_mod_df %>% filter(aoh_type == "crop_abn_iucn") %>% 
+                      pull(response) %>% .[i])
+  dev.off()
+})
+```
+
+```{r many-models-bonus}
+# ------------------------------------- #
+# comparing coefficient estimates
+# ------------------------------------- #
+# all.equal(
+#   tidy(binary_mod_gain_sp_site)$estimate,
+#   glm_mod_df %>% filter(response == "binary_trend_gain", aoh_type == "crop_abn_iucn") %>% 
+#     pull(tidy) %>% .[[1]] %>% pull(estimate))
+
+
+trait_mod_df[12, ]$model
 
 trait_mod_df %>%
   select(-c(data, model, gt)) %>%
@@ -2668,8 +3285,13 @@ trait_mod_df %>%
          aoh_type == "crop_abn_iucn") %>% 
   .$gt
 
+# ---------------------------------------------------- #
+# ---- Compare Observed and Potential Abandonment ---- #
+
 # Simplify tables:
 trait_mod_df %>%
+  filter(response %in% c("binary_gain_v_loss", "abs_change_percent_site", "log(ratio)")) %>%
+
   select(-c(data, model, glance, gt)) %>%
   unnest(c(tidy)) %>%
   mutate(aoh_type = case_when(aoh_type == "crop_abn_iucn" ~ "obs", aoh_type == "crop_abn_potential_iucn" ~ "pot"),
@@ -2678,18 +3300,6 @@ trait_mod_df %>%
   pivot_wider(id_cols = c(term, response), names_from = c(aoh_type), values_from = estimate) %>%
   # filter(!is.na(obs)|!is.na(pot)) %>%
   print(n = 80)
-
-# ------------------------------------- #
-# Save
-# ------------------------------------- #
-saveRDS(trait_mod_df, file = paste0(p_derived, "traits/", "trait_mod_df.rds"))
-
-
-
-
-
-
-
 
 
 
@@ -2704,11 +3314,10 @@ glm_mod_by_sp_df <-
          ) %>%
   left_join(aoh_mod_tmp_trends_by_sp_all %>% group_by(aoh_type) %>% nest(), by = "aoh_type") %>%
   mutate(model = map2(data, response, 
-               ~glm(as.formula(paste0(as.character(.y), 
-               " ~ forest_occ + savanna_occ + shrubland_occ + grass_occ + wetlands_occ +
-               artificial_occ + n_hab_occ + threatened + Trophic_level + log(Body_mass_g) +
-               log(total_range_area) + abs(centroid_latitude)")), 
-        data = .x, family = "binomial")),
+                      ~glm(as.formula(paste0(
+                        as.character(.y), 
+                        paste0(" ~ ", paste(predictor_variables[-length(predictor_variables)], collapse = " + ")))), 
+                      data = .x, family = "binomial")),
     tidy = lapply(model, tidy),
     glance = lapply(model, glance),
     gt = lapply(model, function(mod) {
@@ -3163,7 +3772,20 @@ binary_mod_gain_v_loss %>%
 ```
 
 
-```{r iterate-gt-tables}
+```{r bonus-gt-tables}
+# bonus things:
+
+# binary, one observation per species:
+glm_mod_by_sp_df %>%
+  filter(aoh_type == "crop_abn_iucn") %>%
+  pull(gt) %>%
+  tbl_merge(tab_spanner = c("Binary Gain", "Binary Gain/Loss", "Binary Loss", "Binary No Trend")) %>%
+  as_gt() %>%
+  text_transform(
+    locations = cells_body(),
+    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
+  gtsave(filename = paste0(p_plots, "aoh/traits/", "Table1a_binary_est", mod_label,".png"))
+
 trait_mod_df %>%
   select(-c(data, model, gt)) %>%
   unnest(cols = c(glance)) 
@@ -3175,31 +3797,14 @@ trait_mod_df %>%
   select(tidy) %>% unnest(c(tidy)) #%>% pull(estimate)
 
 
-
-# binary, one observation per species:
-glm_mod_by_sp_df %>%
-  filter(aoh_type == "crop_abn_iucn") %>%
-  pull(gt) %>%
-  tbl_merge(tab_spanner = c("Binary Gain", "Binary Gain/Loss", "Binary Loss", "Binary No Trend")) %>%
-  as_gt() %>%
-  text_transform(
-    locations = cells_body(),
-    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
-  gtsave(filename = paste0(p_plots, "aoh/traits/", "Table1a_binary_est.png"))
-
-
-# Binary trends, one observation per species per site: (here the coefficients are exponentiated, so they correspond to Odds Ratios)
-trait_mod_df %>% 
-  filter(aoh_type == "crop_abn_iucn", 
-         response %in% glm_response_variables) %>%
-  pull(gt) %>%
-  tbl_merge(tab_spanner = c("Binary Gain", "Binary Gain/Loss", 
-                          "Binary Loss", "Binary No Trend")) %>%
-  as_gt() %>%
-  text_transform(locations = cells_body(),
-                 fn = function(x) {str_replace_all(x, pattern = "km2", 
-                                                   replacement = "km<sup>2</sup>")}) %>%
-  gtsave(filename = paste0(p_plots, "aoh/traits/", "Table1b_binary_obs.png"))
+# exponentiate log(ratio)
+trait_mod_df[12, ] %>%
+  select(response, aoh_type, tidy) %>%
+  unnest(cols = c(tidy)) %>%
+  mutate(estimate = case_when(p.value < 0.05 ~ estimate),
+         est_exp = exp(1) ^ estimate
+         ) %>%
+  select(term, estimate, est_exp)# %>% pull(est_exp) %>% .[15]
 
 # non-exponentiated
 glm_mod_df %>% 
@@ -3214,180 +3819,117 @@ glm_mod_df %>%
                                                    replacement = "km<sup>2</sup>")}) %>%
   gtsave(filename = paste0(p_plots, "aoh/traits/", "Table1b_binary_obs_non_exp.png"))
 
+```
 
-# change in AOH, absolute and as percent of site area:
-trait_mod_df %>% 
+
+```{r explore-mod-differences}
+
+trait_mod1_df <- readRDS(file = paste0(p_derived, "traits/", "trait_mod_df_lite_mod1.rds")) %>%
+  select(-c(gt)) %>%
+  mutate(mod_run = "mod1")
+
+trait_mod2_df <- readRDS(file = paste0(p_derived, "traits/", "trait_mod_df_lite_mod2.rds")) %>%
+  select(-c(gt)) %>%
+  mutate(mod_run = "mod2")
+
+trait_mod3_df <- readRDS(file = paste0(p_derived, "traits/", "trait_mod_df_lite_mod3.rds")) %>%
+  select(-c(gt)) %>%
+  mutate(mod_run = "mod3")
+
+tmod_df <- 
+  bind_rows(readRDS(file = paste0(p_derived, "traits/", "trait_mod_df_lite_mod1.rds")) %>% 
+              mutate(mod_run = "arable_urban"),
+            readRDS(file = paste0(p_derived, "traits/", "trait_mod_df_lite_mod2.rds")) %>% 
+              mutate(mod_run = "art"),
+            readRDS(file = paste0(p_derived, "traits/", "trait_mod_df_lite_mod3.rds")) %>% 
+              mutate(mod_run = "none")
+            ) %>%
+  select(-c(data, model, glance)) %>%
+  unnest(c(tidy))
+
+lm_response_variables
+
+tmod_df %>%
   filter(aoh_type == "crop_abn_iucn", 
-         response %in% lm_response_variables[1:2]) %>%
-  pull(gt) %>%
-  tbl_merge(tab_spanner = c("\U0394 AOH (ha)", "\U0394 AOH / site area (%)")) %>%
-  as_gt() %>%
-  text_transform(
-    locations = cells_body(),
-    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
-  gtsave(filename = paste0(p_plots, "aoh/traits/", "Table2_3_obs_change_AOH_combined.png"))
+         mod_run != "art",
+         mod_run == "arable_urban"
+         # mod_run == "none"
+         ) %>%
+  mutate(
+    estimate = case_when(p.value < 0.05 ~ estimate),
+    # exponentiate log(ratio) coefs
+    estimate = case_when(response == "log(ratio)" ~ exp(1)^estimate, 
+                         str_detect(response, "binary") ~ exp(1)^estimate, 
+                         TRUE ~ estimate),
+    estimate = round(estimate, digits = 2)
+    ) %>%
+  
+  # recreating final table v3
+  filter(response %in% c("binary_gain_v_loss", "abs_change_percent_site", "log(ratio)")) %>%
+  mutate(response = case_when(response == "binary_gain_v_loss" ~ "binary",
+                              response == "abs_change_percent_site" ~ "percent",
+                              response == "log(ratio)" ~ "log_ratio")) %>%
+  # 
+  # binary variables:
+  # filter(response %in% c("binary_trend_gain", "binary_gain_v_loss", "binary_trend_loss", "binary_trend_no_trend")) %>%
+  # mutate(response = case_when(response == "binary_trend_gain" ~ "gain",
+  #                             response == "binary_gain_v_loss" ~ "gl",
+  #                             response == "binary_trend_loss" ~ "loss",
+  #                             response == "binary_trend_no_trend" ~ "no_trend")) %>%
 
+  # aoh change variables
+  # filter(response %in% c(lm_response_variables[c(1,2,4)], lm_response_variables_slope[2])) %>%
+  # mutate(response = case_when(response == "abs_change" ~ "AOH_change",
+  #                             response == "abs_change_percent_site" ~ "AOH_percent",
+  #                             response == "log(ratio)" ~ "log_ratio",
+  #                             response == "slope_prop_site*10^4" ~ "slope_percent")) %>%
 
-# ratios:
-trait_mod_df %>% 
-  filter(aoh_type == "crop_abn_iucn", 
-         response %in% lm_response_variables[3:4]) %>%
-  pull(gt) %>%
-  tbl_merge(tab_spanner = c("AOH<sub>end</sub>/AOH<sub>start</sub>",
-                            "ln(AOH<sub>end</sub>/AOH<sub>start</sub>)")) %>%
-  as_gt() %>%
-  text_transform(
-    locations = cells_body(),
-    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
-  gtsave(filename = paste0(p_plots, "aoh/traits/", 
-                           "Table4_obs_ratios.png"))
+# all variables:
+  # filter(response %in% c("binary_trend_gain", "binary_gain_v_loss", "binary_trend_loss", "binary_trend_no_trend",
+  #                        lm_response_variables[c(1,2,4)], lm_response_variables_slope[2])) %>%
+  # mutate(response = case_when(response == "binary_trend_gain" ~ "gain",
+  #                             response == "binary_gain_v_loss" ~ "gl",
+  #                             response == "binary_trend_loss" ~ "loss",
+  #                             response == "binary_trend_no_trend" ~ "no_trend",
+  #                             response == "abs_change" ~ "AOH_change",
+  #                             response == "abs_change_percent_site" ~ "AOH_percent",
+  #                             response == "log(ratio)" ~ "log_ratio",
+  #                             response == "slope_prop_site*10^4" ~ "slope_percent")) %>%
+  
+  select(mod_run, response, term, estimate) %>%
+  pivot_wider(id_cols = c(mod_run, term), names_from = "response", values_from = "estimate") %>%
+  # pivot_wider(id_cols = c(response, term), names_from = "mod_run", values_from = "estimate") %>%
+  # arrange(response) %>%
+  mutate(term = fct_relevel(term, c("(Intercept)","forest_occTRUE", "savanna_occTRUE", "shrubland_occTRUE", "grassland_occTRUE", "wetlands_occTRUE", "rocky_occTRUE", "caves_occTRUE", "desert_occTRUE", "urban_occTRUE", "arable_occTRUE", "artificial_terrestrial_occTRUE", "n_suitable_habitats_lvl2", "vert_classMammals", "threatenedThreatened", "Trophic_levelHerbivore", "Trophic_levelOmnivore", "log(Body_mass_g)", "log(total_range_area)", "abs(centroid_latitude)", "max_abn_ext_percent_site"))) %>%
+  arrange(term) %>%
+  flextable() %>%  theme_booktabs() %>%
+  save_as_image(path = paste0(p_plots, "aoh/traits/",
+                              # "Comparing_trait_models_binary.png"
+                              # "Comparing_trait_models_aoh_magnitude.png"
+                              # "Comparing_trait_models_final.png"
+                              # "Comparing_trait_models_all.png"
+                              # "Trait_mod1_table_all.png"
+                              # "Trait_mod3_table_all.png"
+                              "Trait_mod1_table_trim.png"
+                              # "Trait_mod3_table_trim.png"
+                              ))
 
-# exponentiate log(ratio)
+  # print(n = 100)
+  
+
+trait_mod1_df 
+
 trait_mod_df[12, ] %>%
   select(response, aoh_type, tidy) %>%
   unnest(cols = c(tidy)) %>%
   mutate(estimate = case_when(p.value < 0.05 ~ estimate),
          est_exp = exp(1) ^ estimate
          ) %>%
-  select(term, estimate, est_exp) %>% pull(est_exp) %>% .[15]
-
-
-# slopes:
-trait_mod_df %>% 
-  filter(aoh_type == "crop_abn_iucn", 
-         response %in% lm_response_variables_slope) %>%
-  pull(gt) %>%
-  tbl_merge(tab_spanner = c("Slope", "Slope/Site Area (%/100)")) %>%
-  as_gt() %>%
-  text_transform(
-    locations = cells_body(),
-    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
-  gtsave(filename = paste0(p_plots, "aoh/traits/", 
-                           "Table7_slopes.png"))
-
-
-# magnitude of AOH change, %, and slope
-trait_mod_df %>% 
-  filter(aoh_type == "crop_abn_iucn", 
-         response %in% c(lm_response_variables[1:2], lm_response_variables_slope)) %>%
-  pull(gt) %>%
-  tbl_merge(tab_spanner = c("\U0394 AOH (ha)", "\U0394 AOH / site area (%)",
-                            "Slope", "Slope/Site Area (%/100)")) %>%
-  as_gt() %>%
-  text_transform(
-    locations = cells_body(),
-    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
-  gtsave(filename = paste0(p_plots, "aoh/traits/", "Table2_3_7_obs_AOH_change.png"))
-
+  select(term, estimate, est_exp)# %>% pull(est_exp) %>% .[15]
 ```
 
 
-```{r final-gt-tables}
-# ----------------------------------------------------- #
-# Final Models:
-trait_mod_df %>% 
-  filter(aoh_type == "crop_abn_iucn", 
-         response %in% c(
-           "binary_gain_v_loss",
-           "abs_change",
-           "abs_change_percent_site",
-           "log(ratio)",
-           "slope_prop_site*10^4"
-         )) %>%
-  pull(gt) %>%
-  tbl_merge(tab_spanner = c(
-    "Binary Trend (gain or loss)",
-    "\U0394 AOH (ha)",
-    "\U0394 AOH / site area (%)",
-    "ln(AOH<sub>end</sub>/AOH<sub>start</sub>)",
-    "Slope / site area (%/100)"
-    )) %>%
-  as_gt() %>%
-  text_transform(
-    locations = cells_body(),
-    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
-  gtsave(filename = paste0(p_plots, "aoh/traits/",
-                           "Table_final_models_v2.png"))
 
-# Final Three Models:
-trait_mod_df %>% 
-  filter(aoh_type == "crop_abn_iucn", 
-         response %in% c(
-           "binary_gain_v_loss",
-           "abs_change_percent_site",
-           "log(ratio)"
-           )) %>%
-  pull(gt) %>%
-  tbl_merge(tab_spanner = c(
-    "Binary Trend (gain or loss)",
-    "\U0394 AOH / site area (%)",
-    "ln(AOH<sub>end</sub>/AOH<sub>start</sub>)"
-    )) %>%
-  as_gt() %>%
-  text_transform(
-    locations = cells_body(),
-    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
-  gtsave(filename = paste0(p_plots, "aoh/traits/",
-                           "Table_final_models_v3.png"))
-```
-
-```{r iterate-model-diagnostics}
-trait_mod_df %>% filter(aoh_type == "crop_abn_iucn")
-
-# one plot per model
-lapply(
-  1:10, 
-  function(i) {
-  pdf(file = paste0(p_plots, "aoh/traits/", 
-                    "model_diagnostics_",
-                    trait_mod_df %>% filter(aoh_type == "crop_abn_iucn") %>% 
-                      pull(response) %>% .[i],
-                    ".pdf"),
-      width = 6, height = 6)
-  par(mfrow = c(2,2))
-  plot(trait_mod_df %>% 
-         filter(aoh_type == "crop_abn_iucn") %>% 
-         pull(model) %>%
-         .[[i]], 
-       main = trait_mod_df %>% filter(aoh_type == "crop_abn_iucn") %>% 
-                      pull(response) %>% .[i])
-  dev.off()
-})
-
-
-# one plot showing all models' residuals v fitted plots
-pdf(file = paste0(p_plots, "aoh/traits/",
-                  "model_diagnostics_resid_v_fitted_combo.pdf"),
-    width = 6.5, height = 9)
-par(mfrow = c(4,3))
-lapply(1:10, function(i) {
-  plot(trait_mod_df %>% 
-         filter(aoh_type == "crop_abn_iucn") %>% 
-         pull(model) %>% .[[i]], 
-       1, 
-       main = trait_mod_df %>% 
-         filter(aoh_type == "crop_abn_iucn") %>% 
-         pull(response) %>% .[i])
-  })
-dev.off()
-
-# one plot showing all models' qq plots
-pdf(file = paste0(p_plots, "aoh/traits/",
-                  "model_diagnostics_qq_combo.pdf"),
-    width = 6.5, height = 9)
-par(mfrow = c(4,3))
-lapply(1:10, function(i) {
-  plot(trait_mod_df %>% 
-         filter(aoh_type == "crop_abn_iucn") %>% 
-         pull(model) %>% .[[i]], 
-       2, 
-       main = trait_mod_df %>% 
-         filter(aoh_type == "crop_abn_iucn") %>% 
-         pull(response) %>% .[i])
-  })
-dev.off()
-
-```
 
 
 
