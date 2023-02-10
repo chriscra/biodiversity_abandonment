@@ -463,12 +463,12 @@ aoh_type_df <-
            class_type == "iucn" ~ "IUCN"
          ),
          p4 = case_when(
-           map_type == "full" ~ "Entire Landscape\n(1987-2017)", 
-           map_type == "full_potential" ~ "Entire Landscape\n(1987-2017, potential)", 
-           map_type == "max_abn" ~ "Abandonment\n(1987-2017)",
-           map_type == "max_potential_abn" ~ "Potential Abandonment\n(1987-2017)",
+           map_type == "full" ~ "Full site\n(1987-2017)", 
+           map_type == "full_potential" ~ "Full site,\nno recultivation\n(1987-2017)", 
+           map_type == "max_abn" ~ "Net change in\nabandoned land\n(1987-2017)",
+           map_type == "max_potential_abn" ~ "Net change in\nabandoned land,\nno recultivation\n(1987-2017)",
            map_type == "crop_abn" ~ "Abandonment\n(cultivation-2017)",
-           map_type == "crop_abn_potential" ~ "Potential Abandonment\n(cultivation-2017)", #"Cropland through\nabandonment\n(potential)",
+           map_type == "crop_abn_potential" ~ "Abandonment,\nno recultivation\n(cultivation-2017)", #"Cropland through\nabandonment\n(potential)",
            map_type == "abn" ~ "Abn periods only",
            map_type == "potential_abn" ~ "Abn periods only (pot.)"),
          
@@ -486,6 +486,7 @@ aoh_type_df <-
          desc = paste0(p1, "; ", p2)
          )
 
+aoh_types <- aoh_type_df$label[c(4:11)]
 
 aoh_type_labels <- c(aoh_type_df$short_desc)
 names(aoh_type_labels) <- c(aoh_type_df$label)
@@ -542,7 +543,7 @@ i <- "crop_abn_iucn"
 # ------- Temp AOH files for MS and AOH.Rmd --------------------- 
 # ------------------------------------------------------------ # 
 
-aoh_ms_tmp_trends <- 
+aoh_ms_tmp_trends_incl_mature <- 
   aoh_feols_trends %>%
   mutate(
     aoh_type = as_factor(aoh_type),
@@ -561,12 +562,15 @@ aoh_ms_tmp_trends <-
     passage_type == "exclude_passage", # exclude passage areas from AOH calculations
     vert_class != "amp",
     !aoh_type %in% c("abn_iucn", "potential_abn_iucn"), # exclude unused scenarios
-    # !grepl("potential", aoh_type),
-    mature_forest_obl < 0.5
+    # !grepl("potential", aoh_type)
   )
 
+# exclude mature forest obligates
+aoh_ms_tmp_trends <- aoh_ms_tmp_trends_incl_mature %>%
+  filter(mature_forest_obl < 0.5)
 
-aoh_ms_tmp_trends_by_sp <- 
+
+aoh_ms_tmp_trends_by_sp_incl_mature <- 
   aoh_feols_trends_by_sp %>%
   mutate(
     aoh_type = as_factor(aoh_type),
@@ -585,32 +589,78 @@ aoh_ms_tmp_trends_by_sp <-
     passage_type == "exclude_passage", # exclude passage areas from AOH calculations
     vert_class != "amp",
     !aoh_type %in% c("abn_iucn", "potential_abn_iucn"), # exclude unused scenarios
-    # !grepl("potential", aoh_type),
-    mature_forest_obl < 0.5
+    # !grepl("potential", aoh_type)
   )
+
+aoh_ms_tmp_trends_by_sp <- aoh_ms_tmp_trends_by_sp_incl_mature %>%
+  filter(mature_forest_obl < 0.5)
 
 # ------------------------------------------------------------ # 
 # ------- Traits: temp files ------- 
 # ------------------------------------------------------------ # 
 taxonomy_df <- read_parquet(paste0(p_derived, "taxonomy_df.parquet"))
 etard_updated <- read_parquet(paste0(p_derived, "etard_updated.parquet"))
-habitat_occurrence_df <- read_parquet(paste0(p_derived, "habitat_occurrence_df.parquet"))
+habitat_occurrence_df2 <- read_parquet(paste0(p_derived, "habitat_occurrence_df.parquet")) #%>%
+  # left_join(habitat_prefs %>% 
+  #             separate(code, into = c("lvl1", "lvl2"), sep = "\\.", extra = "merge") %>%
+  #             select(binomial, lvl1) %>% unique() %>% mutate(lvl1 = as.integer(lvl1)) %>%
+  #             group_by(binomial) %>%
+  #             summarise(n_lvl1_habitats = n(), lvl1_habitats = str_flatten(lvl1, collapse = ", ")) %>% ungroup()
+  # )
+
+
+habitat_occurrence_df <-
+  habitat_prefs %>% 
+  filter(suitability == "Suitable") %>%
+  separate(code, into = c("lvl1", "lvl2"), sep = "\\.", extra = "merge") %>%
+  select(binomial, lvl1) %>% unique() %>% 
+  mutate(lvl1 = as.integer(lvl1), occurrence = TRUE) %>% arrange(lvl1) %>%
+  pivot_wider(id_cols = binomial, names_from = lvl1, names_prefix = "type_", values_from = occurrence) %>%
+  arrange(binomial) %>%
+  select(binomial, 
+         forest_occ = type_1,
+         savanna_occ = type_2,
+         shrubland_occ = type_3,
+         grassland_occ = type_4,
+         wetlands_occ = type_5,
+         rocky_occ = type_6,
+         caves_occ = type_7,
+         desert_occ = type_8,
+         # marine_neritic_occ = type_9,
+         # marine_oceanic_occ = type_10,
+         marine_intertidal_occ = type_12,
+         marine_coastal_occ = type_13,
+         artificial_terrestrial_occ = type_14,
+         artificial_aquatic_occ = type_15,
+         introduced_occ = type_16,
+         # other_occ = type_17,
+         # unknown_occ = type_18
+         ) %>%
+  replace(is.na(.), FALSE) %>%
+  mutate(n_suitable_habitats = rowSums(across(contains("occ")), na.rm = TRUE)) %>%
+  left_join(
+    habitat_prefs %>% 
+      filter(suitability == "Suitable") %>%
+      select(binomial, code) %>% unique() %>%
+      group_by(binomial) %>% summarise(n_suitable_habitats_lvl2 = n()) %>% ungroup()
+    ) %>%
+  left_join(habitat_occurrence_df2 %>% select(binomial, arable_occ, ag_occ, farmland_occ, urban_occ))
 
 
 # ---------------------------------------------- #
 # Categorical trends in AOH (one trend per species)
 # ---------------------------------------------- #
-aoh_mod_tmp_trends_by_sp_all <-
+aoh_mod_tmp_trends_by_sp_all_incl_mature <- 
+# aoh_mod_tmp_trends_by_sp_all <-
   aoh_feols_trends_by_sp %>% 
   filter(passage_type == "exclude_passage", 
          vert_class != "amp", 
-         mature_forest_obl < 0.5
+         # mature_forest_obl < 0.5
          # str_starts(aoh_type, "crop|max|full")
   ) %>% 
   droplevels() %>%
   mutate(
     aoh_type = as_factor(aoh_type),
-    vert_class = as_factor(vert_class),
     overall_trend = as_factor(overall_trend),
     # threatened = case_when(
     # redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable") ~ "Threatened",
@@ -627,15 +677,29 @@ aoh_mod_tmp_trends_by_sp_all <-
   left_join(taxonomy_df) %>% 
   left_join(select(etard_updated,
                    #dataset, etard_id, 
-                   vert_class, binomial, Body_mass_g, Trophic_level),
+                   vert_class, binomial, Body_mass_g, Trophic_level, Habitat_breadth_IUCN),
             by = c("vert_class", "binomial")) %>% 
   left_join(centroids_df) %>% 
   # add habitat specialities
-  left_join(habitat_occurrence_df)
+  left_join(habitat_occurrence_df) %>%
+  mutate(vert_class = as_factor(case_when(vert_class == "bird" ~ "Birds", vert_class == "mam" ~ "Mammals")))
+
+aoh_mod_tmp_trends_by_sp_all <- 
+  aoh_mod_tmp_trends_by_sp_all_incl_mature %>%
+  filter(mature_forest_obl < 0.5)
+  
 
 aoh_mod_tmp_trends_by_sp <- 
   aoh_mod_tmp_trends_by_sp_all %>%
   filter(aoh_type == "crop_abn_iucn")
+
+aoh_mod_tmp_trends_by_sp %>%
+  select(vert_class, binomial, Habitat_breadth_IUCN, contains("n_suit")) %>%
+  filter(is.na(Habitat_breadth_IUCN))
+
+aoh_mod_tmp_trends_by_sp %>%
+  select(vert_class, binomial, Habitat_breadth_IUCN, n_suitable_habitats_lvl2) %>%
+  filter(Habitat_breadth_IUCN != n_suitable_habitats_lvl2)
 
 # ---------------------------------------------- #
 # Estimated changes in AOH based on ols regression with NW estimator.
@@ -643,17 +707,17 @@ aoh_mod_tmp_trends_by_sp <-
 # Absolute change in AOH, and scaled to site
 # ---------------------------------------------- #
 
-aoh_est_change_tmp_all <-
+aoh_est_change_tmp_all_incl_mature <-
   aoh_change_df %>% 
   filter(est_type == "estimate", 
          str_detect(passage_type, "excl"),
          vert_class != "amp", 
-         mature_forest_obl < 0.5
+         # mature_forest_obl < 0.5
   ) %>%
   left_join(taxonomy_df) %>%
   left_join(select(etard_updated,
                    #dataset, etard_id, 
-                   vert_class, binomial, Body_mass_g, Trophic_level),
+                   vert_class, binomial, Body_mass_g, Trophic_level, Habitat_breadth_IUCN),
             by = c("vert_class", "binomial")
   ) %>%
   left_join(aoh_mod_tmp_trends_by_sp_all %>%
@@ -662,19 +726,24 @@ aoh_est_change_tmp_all <-
   left_join(centroids_df) %>%
   # add habitat specialities
   left_join(habitat_occurrence_df) %>%
-  mutate(max_abn_extent_div_site_area = 
-           area_ever_abn_ha / total_site_area_ha_2017,
-         max_abn_ext_percent_site = 100* max_abn_extent_div_site_area,
-         binary_trend_gain = case_when(trend == "gain" ~ 1, TRUE ~ 0),
-         binary_trend_loss = case_when(trend == "loss" ~ 1, TRUE ~ 0),
-         binary_trend_no_trend = case_when(trend == "no trend" ~ 1, TRUE ~ 0),
-         
-         # create a binary variable with 1 for gain, 0 for loss, and NA for no trend
-         binary_gain_v_loss = case_when(trend == "gain" ~ 1, trend == "loss" ~ 0),
-         slope_prop_site = slope / total_site_area_ha_2017,
-         abs_change_percent_site = abs_change_as_prop_site_area * 100
-  ) %>%
+  mutate(
+    vert_class = as_factor(case_when(vert_class == "bird" ~ "Birds", vert_class == "mam" ~ "Mammals")),
+    max_abn_extent_div_site_area =        
+      area_ever_abn_ha / total_site_area_ha_2017,
+    max_abn_ext_percent_site = 100* max_abn_extent_div_site_area,
+    binary_trend_gain = case_when(trend == "gain" ~ 1, TRUE ~ 0),
+    binary_trend_loss = case_when(trend == "loss" ~ 1, TRUE ~ 0),
+    binary_trend_no_trend = case_when(trend == "no trend" ~ 1, TRUE ~ 0),
+    
+    # create a binary variable with 1 for gain, 0 for loss, and NA for no trend
+    binary_gain_v_loss = case_when(trend == "gain" ~ 1, trend == "loss" ~ 0),
+    slope_prop_site = slope / total_site_area_ha_2017,
+    abs_change_percent_site = abs_change_as_prop_site_area * 100
+    ) %>%
   arrange(aoh_type, vert_class, site, passage_type, run_index)
+
+aoh_est_change_tmp_all <- aoh_est_change_tmp_all_incl_mature %>%
+  filter(mature_forest_obl < 0.5)
 
 # subset these based on aoh_type
 aoh_est_change_tmp <- 
@@ -706,7 +775,7 @@ aoh_obs_change_tmp_all <-
   left_join(taxonomy_df) %>%
   left_join(select(etard_updated,
                    #dataset, etard_id, 
-                   vert_class, binomial, Body_mass_g, Trophic_level),
+                   vert_class, binomial, Body_mass_g, Trophic_level, Habitat_breadth_IUCN),
             by = c("vert_class", "binomial")
   ) %>%
   left_join(aoh_mod_tmp_trends_by_sp_all %>% 
@@ -715,17 +784,19 @@ aoh_obs_change_tmp_all <-
   left_join(centroids_df) %>%
   # add habitat specialities
   left_join(habitat_occurrence_df) %>%
-  mutate(max_abn_extent_div_site_area = 
-           area_ever_abn_ha / total_site_area_ha_2017,
-         max_abn_ext_percent_site = 100* max_abn_extent_div_site_area,
-         abs_change_percent_site = abs_change_as_prop_site_area * 100,
-         binary_trend_gain = case_when(trend == "gain" ~ 1, TRUE ~ 0),
-         binary_trend_loss = case_when(trend == "loss" ~ 1, TRUE ~ 0),
-         binary_trend_no_trend = case_when(trend == "no trend" ~ 1, TRUE ~ 0),
-         
-         # create a binary variable with 1 for gain, 0 for loss, and NA for no trend
-         binary_gain_v_loss = case_when(trend == "gain" ~ 1, trend == "loss" ~ 0)
-  ) %>%
+  mutate(
+    vert_class = as_factor(case_when(vert_class == "bird" ~ "Birds", vert_class == "mam" ~ "Mammals")),
+    max_abn_extent_div_site_area = 
+      area_ever_abn_ha / total_site_area_ha_2017,
+    max_abn_ext_percent_site = 100* max_abn_extent_div_site_area,
+    abs_change_percent_site = abs_change_as_prop_site_area * 100,
+    binary_trend_gain = case_when(trend == "gain" ~ 1, TRUE ~ 0),
+    binary_trend_loss = case_when(trend == "loss" ~ 1, TRUE ~ 0),
+    binary_trend_no_trend = case_when(trend == "no trend" ~ 1, TRUE ~ 0),
+    
+    # create a binary variable with 1 for gain, 0 for loss, and NA for no trend
+    binary_gain_v_loss = case_when(trend == "gain" ~ 1, trend == "loss" ~ 0)
+    ) %>%
   arrange(aoh_type, vert_class, site, passage_type, run_index)
 
 # subset based on aoh_type
@@ -737,11 +808,15 @@ aoh_obs_change_potential_tmp <-
   aoh_obs_change_tmp_all %>%
   filter(aoh_type == "crop_abn_potential_iucn")
 
+
 # -------------------------- #
 # model results: see traits.Rmd
 # note, this is a big file, so only load it if you need it!
+# this model version contains urban_occ, arable_occ, and n_suitable_habitats_lvl2, but not artificial_terrestrial_occ
 
-trait_mod_df <- readRDS(file = paste0(p_derived, "traits/", "trait_mod_df.rds"))
+mod_label <- "_modx1"
+
+# trait_mod_df <- readRDS(file = paste0(p_derived, "traits/", "trait_mod_df", mod_label, ".rds"))
 
 # ------------------------------------------------------------ # 
 # ----------------------------- Basemaps --------------------- 
