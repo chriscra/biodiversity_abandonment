@@ -2796,8 +2796,9 @@ age_profile_df <-
                cumsum_in_year = NA,
                p_hab = 0)
         }) %>% bind_rows())) %>% 
-  arrange(site, desc(year), desc(age)) %>%
-  
+  arrange(site, desc(year), desc(age))
+
+age_profile_df <- age_profile_df %>%
   left_join(age_profile_df %>% 
               filter(year == 2017, age == 20) %>%
               select(site, p_20 = p_hab)) %>%
@@ -2815,14 +2816,14 @@ gg_hab_age_profile <-
   geom_line(size = 1) + 
   scale_x_continuous(breaks = c(5, 10, 15, 20, 25, 30)) +
   scale_color_discrete(labels = fancy_labels) +
-  labs(x = "Habitat Age Requirement (years)", 
-       y = "Proportion of Abandonment that is Suitable Habitat",
-       subtitle = "Year: 2017",
+  labs(x = "Habitat age requirement (years)", 
+       y = "Prop. abandonment that is suitable (as of 2017)",
+       # caption = "Year: 2017",
        color = "Site") 
 
 # save 
 ggsave(gg_hab_age_profile,
-       filename = paste0(p_plots, "habitat_age_profile.pdf"), 
+       filename = paste0(p_plots, "habitat_age_profile_2017.pdf"), 
        width = 5.5, height = 4, units = "in"
 )
 
