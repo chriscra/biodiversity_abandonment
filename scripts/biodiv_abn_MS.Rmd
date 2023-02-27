@@ -1,5 +1,5 @@
 ---
-title: "Cropland abandonment benefits most birds and mammals, but rarely compensates for habitat loss"
+title: "Cropland abandonment benefits most birds and mammals but rarely compensates for habitat loss"
 author: Christopher L. Crawford,$^a$$^*$, R. Alex Wiebe,$^{b}$ He Yin,$^c$ Volker C. Radeloff,$^d$ and David S. Wilcove$^{a, b}$
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 abstract: |
@@ -62,7 +62,9 @@ mod_label # see _util_files.R, Traits: temp files
 ```{r preview-chapter, eval=FALSE, include = FALSE}
 rmarkdown::render(
   "scripts/biodiv_abn_MS.Rmd",
-  output_file = paste0(p_proj, "writing/previews/", "Crawford_bd_abn_MS_draft",
+  output_file = paste0(p_proj, "writing/drafts/",
+                       "Crawford_bd_abn_MS_draft",
+                       # "Crawford_bd_abn_MS+SI_draft",
                        format(Sys.Date(), ("_%Y_%m_%d")), ".docx"),
   output_format = bookdown::word_document2(
     reference_docx = "/Users/christophercrawford/work/projects/writing/scripts/word_style_ref.docx",
@@ -75,7 +77,7 @@ rmarkdown::render(
 # doc_type <- "pdf"
 # doc_type <- "word"
 rmarkdown::render("scripts/biodiv_abn_MS.Rmd",
-                  output_file = paste0(p_proj, "writing/previews/", "Crawford_bd_abn_MS+SI",
+                  output_file = paste0(p_proj, "writing/drafts/", "Crawford_bd_abn_MS+SI_draft",
                            format(Sys.Date(), ("_%Y_%m_%d")), ".pdf"),
                   output_format = "bookdown::pdf_document2"#,
                   # params = list()
@@ -1747,7 +1749,7 @@ Together, these results illuminate the limited but tangible benefits of cropland
 (ref:caption-global-map-w-wisc) Site locations and Area of Habitat (AOH) trends for mammals and birds following cropland abandonment at one site, Wisconsin, USA: *a*, Locations of our 11 sites from Yin et al. 2020 @Yin2020 (map adapted from Crawford et al. 2022 [@Crawford2022]). *b*, trends in AOH ($10^6$ ha) following cropland abandonment for all birds and mammals occurring in our site in Wisconsin, USA. Trends are colored according to the direction of a species trend in AOH over the course of the time series, with statistically significant increases shown in green, declines in gold, and no trend in black. Bold trends highlight representative species in each category: *c*, House Wren (*Troglodytes aedon*; photo by Tyler Beames, [ML469603381](https://macaulaylibrary.org/asset/469603381)); *d*, Eastern Meadowlark (*Sturnella magna*; photo by Brad Imhoff, [ML225564911](https://macaulaylibrary.org/asset/225564911)); *e*, Downy Woodpecker (*Dryobates pubescens*; photo by Ryan Brady, [ML304722431](https://macaulaylibrary.org/asset/304722431)).
 
 ```{r global-map-w-wisc, fig.cap = '(ref:caption-global-map-w-wisc)'}
-knitr::include_graphics(path = paste0(p_proj, "writing/fig_images/wisconsin_example_w_map_v1.pdf"))
+knitr::include_graphics(path = paste0(p_proj, "writing/fig_images/wisconsin_example_w_map_v2.pdf"))
 ```
 
 (ref:caption-main-aoh-stats-table) Breakdown of trends in area of habitat (AOH) for birds and mammals following cropland abandonment, calculated across four spatial and temporal scales: 1) AOH changes directly attributable to cropland abandonment (from the year of first cultivation through 2017), 2) AOH changes from abandonment, assuming no recultivation, 3) net AOH changes in abandoned pixels, factoring in habitat loss that took place prior to initial cultivation (1987-2017), 4) net AOH changes throughout the full site from 1987-2017.
