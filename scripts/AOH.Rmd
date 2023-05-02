@@ -968,17 +968,34 @@ aoh %>%
 # aoh_feols_trends %>%
   filter(
     aoh_type %in% aoh_types[c(1, 3, 6, 7)],
-         aoh > 0,
-         vert_class != "amp",
-         passage_type == "exclude_passage"
-         ) %>%
+    aoh > 0,
+    vert_class != "amp",
+    passage_type == "exclude_passage"
+    ) %>%
   # select(aoh_type, vert_class, binomial, passage_type) %>%
-  group_by(aoh_type, vert_class, passage_type#, trend
+  group_by(aoh_type, vert_class, passage_type,# trend
+           # threatened = redlistCategory %in% c("Critically Endangered", "Endangered", "Vulnerable")
            ) %>%
   summarise(n_sp = length(unique(binomial))) %>% # 1688
-  ungroup() %>% group_by(aoh_type, passage_type) %>%
+  ungroup() %>% group_by(aoh_type, passage_type, 
+                         #threatened
+                         ) %>%
   mutate(total_mammals_and_birds = sum(n_sp)) %>%
   ungroup() %>% group_by(aoh_type) %>% mutate(N = sum(n_sp))
+
+# ===== By site ====== #
+aoh %>%
+  filter(
+    aoh_type %in% aoh_types[c(1, 3, 6, 7)],
+    aoh > 0, vert_class != "amp", passage_type == "exclude_passage") %>%
+  # select(aoh_type, vert_class, binomial, passage_type) %>%
+  group_by(site,
+           aoh_type, vert_class, passage_type#, trend
+    ) %>%
+  summarise(n_sp = length(unique(binomial))) %>% # 1688
+  ungroup() %>% group_by(site, aoh_type, passage_type) %>%
+  mutate(total_mammals_and_birds = sum(n_sp)) %>%
+  filter(site == "wisconsin")
 
 
 # missing one species in the second totaling:
@@ -1025,12 +1042,28 @@ site_sf %>% filter(site == "shaanxi") %>% st_geometry() %>% plot()
   group_by(aoh_type) %>% mutate(N = sum(n_sp)) %>% ungroup() %>%
   arrange(mature_forest_obl, aoh_type, vert_class)
 
+
 aoh_feols_trends_by_sp %>%
   filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage") %>%
   group_by(vert_class, mature_forest_obligates = case_when(
     mature_forest_obl <= 0.5 ~ "no",
     mature_forest_obl > 0.5 ~ "yes")) %>%
   summarise(n = n())
+
+# ------- by site ------- #
+aoh_feols_trends %>%
+  filter(site == "wisconsin", #aoh_type == "crop_abn_iucn", 
+         vert_class != "amp",
+         passage_type == "exclude_passage") %>%
+  group_by(aoh_type, site, vert_class,
+           # mature_forest_obligates = case_when(
+           #   mature_forest_obl <= 0.5 ~ "no",
+           #   mature_forest_obl > 0.5 ~ "yes")
+           ) %>%
+  summarise(n = n()) %>% ungroup() %>%
+  group_by(aoh_type, site, vert_class) %>%
+  mutate(vert_total = sum(n)) %>% ungroup()
+
 
 aoh_trends_by_sp %>%
   filter(vert_class == "mam" & mature_forest_obl < 0.5)
@@ -3499,6 +3532,10 @@ aoh_start_end_trends_l %>%
   filter(run_index %in% unique(pull(filter(aoh, n_unique_obs == 1), run_index))) %>%
   select(site:trend_threshold) %>% pull(trend) %>% length()
 
+aoh_start_end_l %>%
+  filter(!(start_year == 1987 & end_year == 2017)) %>%
+  select(start_year, end_year) %>%
+  unique()
 
 # ------------------------------------------------------- #
 # calculate trends, cycling through various thresholds for "significance"
@@ -3902,44 +3939,60 @@ gg_aoh_trend_by_vert_aoh_type <-
   aoh_ms_tmp_trends_by_sp %>%
   filter(
     # binomial %in% (filter(species_list, site != "mato_grosso") %>% .$binomial %>% unique()), # exclude species only found in Mato Grosso
-    !aoh_type %in% c("max_potential_abn_iucn", "full_potential_iucn")
-    # !grepl("potential", aoh_type)
+    !aoh_type %in% c("max_potential_abn_iucn", "full_potential_iucn"),
+    !grepl("potential", aoh_type)
     ) %>%
   group_by(aoh_type, vert_class, passage_type,
            overall_trend, trend_direction, trend_consistency) %>%
   summarise(n_sp = n()) %>%
   arrange(vert_class, aoh_type) %>%
   ggplot(mapping = aes(x = trend_direction, y = n_sp,
-                       fill = overall_trend %>% 
-                         fct_relevel(names(palette_du_jour)[c(2, 1, 3, 4, 5, 6)])
-         )) +
-  geom_col(color = "black", size = .25) +
+                       fill = overall_trend %>% fct_relevel(names(palette_du_jour)[c(1, 2, 6, 5, 3, 4)]))) +
+  geom_col(color = "black", size = .25, position = position_stack(reverse = TRUE)) +
   theme_classic() +
  scale_x_discrete(labels = palette_labels) +
-  labs(x = "AOH Trend", y = "Number of Species") +
+  scale_y_continuous(n.breaks = 6) +
+  labs(x = NULL, #"AOH Trend", 
+       y = "Number of Species") +
 
-  scale_fill_manual(name = "Trend", 
+  scale_fill_manual(name = "AOH Trend", 
                     labels = palette_labels,
                     values = palette_du_jour) + 
-  theme(legend.position = "right",
-        axis.text.x = element_text(angle = 340, vjust = 1, 
-                                   hjust = 0, size = 8)) +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 335, vjust = 1, 
+                                   hjust = 0, size = 8),
+        panel.spacing.x = unit(0.4, "cm"),
+        legend.box.spacing = unit(0, "mm")
+        ) +
+    guides(fill = guide_legend(nrow = 2)) +
   facet_grid(
     # col = vars(vert_class), rows = vars(aoh_type),
     row = vars(vert_class), col = vars(aoh_type),
-    scales = "free_y", labeller = as_labeller(aoh_type_labels))
+    scales = "free_y", 
+    # labeller = as_labeller(aoh_type_labels)
+    labeller = as_labeller(c(crop_abn_iucn = "1. Abandonment\n(cultivation-2017)",
+                             crop_abn_potential_iucn = "1b. Abandonment,\nno recultivation\n(cultivation-2017)",
+                             max_abn_iucn = "2. Net change in\nabandoned crop-\nlands (1987-2017)",
+                             full_iucn = "3. Entire\nspatial extent\n(1987-2017)",
+                             bird = "Birds", mam = "Mammals"))
+    )
 
 
 ggsave(gg_aoh_trend_by_vert_aoh_type,
        filename = paste0(p_output, "plots/aoh/",
                          "aoh_trend_by_vert_aoh_type", 
                          aoh_run_date,
-                         # "_incl_pot",
-                         
+                         "_ppt",
                          ".pdf"),
-       width = 6.5, height = 4, units = "in")
+       width = 4.5, height = 4, units = "in")
 
-
+ggsave(gg_aoh_trend_by_vert_aoh_type,
+       filename = paste0(p_output, "plots/aoh/",
+                         "aoh_trend_by_vert_aoh_type", 
+                         aoh_run_date,
+                         "_incl_pot",
+                         ".pdf"),
+       width = 5.8, height = 4, units = "in")
 
 ggsave(gg_aoh_trend_by_vert_aoh_type_wo_mg,
        filename = paste0(p_output, "plots/aoh/",
@@ -4131,6 +4184,22 @@ ggsave(gg_trends_stack_percent_flipped,
 
 ```{r by-IUCN-category}
 aoh_trends_by_sp$aoh_type %>% unique()
+
+# how many ? #
+aoh_ms_tmp_trends_by_sp %>%
+  # aoh_trends_by_sp %>%
+  filter(redlistCategory != "Data Deficient",
+         !grepl("potential", aoh_type),
+         # aoh_type == "crop_abn_iucn"
+         ) %>%
+
+  group_by(aoh_type, vert_class, passage_type, 
+           # redlistCategory,
+           threatened,
+           overall_trend, trend_direction, trend_consistency) %>%
+  summarise(n_sp = n()) %>%
+  arrange(vert_class, aoh_type) %>%
+  
 
 # ----------------------------------------------------------------------- #
 # Lumped across all sites, threatened vs. non-threatened #
@@ -4978,7 +5047,7 @@ lapply(1:3, function(i) {
 })
 ```
 
-```{r *overall-plus-by-site-combo}
+```{r overall-plus-by-site-combo}
 lapply(
   aoh_types[c(6,3,1,7,5,8)],
   # "crop_abn_iucn",
@@ -5014,11 +5083,15 @@ lapply(
       geom_col(position = position_dodge(preserve = "single"), color = "black", size = .25) +
       theme_classic() + 
       labs(x = NULL, y = NULL, 
-           # caption = paste0(filter(aoh_type_df, label == i)$p5)
+           caption = paste0(filter(aoh_type_df, label == i)$p5)
            ) +
-      scale_fill_manual(name = "Trend", values = palette_du_jour, 
-                        labels = str_wrap(palette_labels, width = 6)
-                        ) +
+      # scale_fill_manual(name = "Trend", values = palette_du_jour, 
+      #                   labels = str_wrap(palette_labels, width = 6)
+      #                   ) +
+        scale_fill_manual(name = "AOH Trend",
+                    labels = str_wrap(palette_labels, width = 6)[c(1,6,3,2,5,4)],
+                    values = palette_du_jour, 
+                    limits = names(palette_du_jour)[c(1,6,3,2,5,4)]) +
       scale_x_discrete(labels = aoh_type_labels) +
       guides(fill = guide_legend(ncol = 2, nrow = 3)) +
       theme(legend.position = c(0.84, 0.1), legend.text = element_text(size = 7)) +
@@ -5030,18 +5103,18 @@ lapply(
                    ),
          filename = paste0(p_output, "plots/aoh/", "aoh_overall_w_site_combo_",
                            i, aoh_run_date, 
-                           "_no_lab",
+                           # "_no_lab",
                            ".pdf"),
          width = 6, height = 6, units = "in")
 })
 ```
 
-```{r overall-plus-by-site-prop-combo}
+```{r *overall-plus-by-site-prop-combo}
 lapply(
-  aoh_types[c(6,3,1,7,5,8)],
-  # "crop_abn_iucn",
+  # aoh_types[c(6,3,1,7,5,8)],
+  "crop_abn_iucn",
   function(i) {
-  # gg_aoh_overall_tmp <-
+  gg_aoh_overall_tmp <-
     aoh_ms_tmp_trends_by_sp %>%
     filter(aoh_type == i) %>%
     mutate(vert_class = case_when(
@@ -5087,6 +5160,73 @@ lapply(
       arrange(vert_class, aoh_type) %>%
       ggplot(mapping = aes(x = vert_class, y = n_sp/total_sp,
                            # label = total_sp, 
+                           fill = trend
+                           )) +
+      geom_col(
+        position = position_dodge(preserve = "single"),
+        color = "black", size = .25) +
+      # geom_text(size = 3.5, nudge_y = -0.05) +
+      
+      theme_classic() + 
+      labs(x = NULL, y = "Proportion of species", 
+           # caption = paste0(filter(aoh_type_df, label == i)$p5)
+           ) +
+      scale_fill_manual(name = "AOH Trend",
+                        labels = str_wrap(palette_labels, width = 6)[c(1,6,3,2,5,4)],
+                        values = palette_du_jour, 
+                        limits = names(palette_du_jour)[c(1,6,3,2,5,4)]) +
+      scale_y_continuous(limits = c(0, 1), n.breaks = 6) + 
+      # scale_x_discrete(labels = aoh_type_labels) +
+      guides(fill = guide_legend(ncol = 2, nrow = 3)) +
+      facet_wrap(vars(site), scales = "free", nrow = 4, ncol = 3,
+                 labeller = as_labeller(fancy_labels)) +
+      theme(legend.position = c(0.835, 0.0985), legend.background = element_blank(),
+            legend.text = element_text(size = 7),
+            legend.title = element_text(size = 9),
+            strip.background = element_blank(), 
+            strip.text = element_text(hjust = 0, 
+                                      # vjust = 0
+                                      ),
+
+            # panel.border = element_blank(), 
+            # panel.background = element_blank(), 
+            # panel.grid = element_blank(), 
+            # panel.spacing.y = unit(0,"line")
+            )
+    
+  ggsave(plot_grid(gg_aoh_overall_tmp,
+                   gg_aoh_by_site_prop_tmp,
+                   nrow = 1, ncol = 2, 
+                   # labels = "auto",
+                   align = "h", axis= "b",
+                   rel_widths = c(1, 3.3)
+                   ),
+         filename = paste0(p_output, "plots/aoh/", 
+                           "aoh_overall_w_site_prop_combo_",
+                           i, aoh_run_date, 
+                           "_no_lab",
+                           "_no_border",
+                           ".pdf"),
+         width = 6, height = 6, units = "in")
+})
+```
+
+
+
+```{r}
+aoh_ms_tmp_trends %>%
+      filter(aoh_type == i) %>%
+      group_by(aoh_type, vert_class, passage_type, site, trend) %>%
+      summarise(n_sp = n()) %>% ungroup() %>%
+      group_by(aoh_type, vert_class, passage_type, site) %>%
+      mutate(total_sp = sum(n_sp)) %>% ungroup() %>%
+      mutate(vert_class = case_when(vert_class == "bird" ~ "Birds", vert_class == "mam" ~ "Mammals"),
+             vert_class = paste0(vert_class, "\n(n = ", total_sp, ")"),
+             # trend = fct_relevel(trend, names(palette_du_jour))
+             ) %>%
+      arrange(vert_class, aoh_type) %>%
+      ggplot(mapping = aes(x = vert_class, y = n_sp/total_sp,
+                           # label = total_sp, 
                            fill = trend)) +
   geom_col(
     position = position_dodge(preserve = "single"),
@@ -5098,8 +5238,10 @@ lapply(
        caption = paste0(filter(aoh_type_df, label == i)$p5)
        ) +
   scale_fill_manual(name = "Trend",
+                    # labels = palette_labels,
                     labels = str_wrap(palette_labels, width = 6),
-                    values = palette_du_jour
+                    values = palette_du_jour,
+                    limits = names(palette_du_jour)
                     ) +
     scale_y_continuous(limits = c(0, 1), n.breaks = 6) + 
   # scale_x_discrete(labels = aoh_type_labels) +
@@ -5109,22 +5251,8 @@ lapply(
         legend.text = element_text(size = 7)) +
   facet_wrap(vars(site), scales = "free", nrow = 4, ncol = 3,
              labeller = as_labeller(fancy_labels))
-
-  ggsave(plot_grid(gg_aoh_overall_tmp,
-                   gg_aoh_by_site_prop_tmp,
-                   nrow = 1, ncol = 2, 
-                   # labels = "auto",
-                   align = "h", axis= "b",
-                   rel_widths = c(1, 3.3)
-                   ),
-         filename = paste0(p_output, "plots/aoh/", 
-                           "aoh_overall_w_site_prop_combo_",
-                           i, aoh_run_date, 
-                           # "_no_lab",
-                           ".pdf"),
-         width = 6, height = 6, units = "in")
-})
 ```
+
 
 ```{r by-site-proportion-stacked}
 i
@@ -6259,7 +6387,7 @@ gg_aoh_trend_lines_wisc_crop <-
            passage_type == "exclude_passage"
            ) %>%
   pivot_longer(cols = contains("year0"), values_to = "year") %>%
-  mutate(est = year*estimate_slope + estimate_intercept,
+  mutate(est = year*slope + intercept,
          year = year + start_year - 1) %>%
   
   ggplot(aes(x = year, y = est/10^6, col = trend,
@@ -6422,6 +6550,7 @@ gg_aoh_sp_obs_wisc_crop <-
            x = "Year", col = "Trend", fill = "Mean Trend") + 
       guides(color = guide_legend(override.aes = list(alpha = 1, size = 1.5, order = 1))) +
       theme(#legend.position = c(0.9, 0.125),
+        # legend.position = "none",
             legend.background = element_blank(),
             legend.spacing = unit(-4, units = "mm")
             ) +
@@ -6474,15 +6603,17 @@ aoh_feols_trends %>%
 ggsave(gg_aoh_sp_obs_wisc_crop_plus1,
        filename = paste0(p_output, "plots/aoh/", "fpo_sp_obs_wisc_crop_plus1",  aoh_run_date,
                          ".pdf"),
-       width = 4.5, height = 3.5, units = "in")
+       width = 3.5, height = 3.5, units = "in")
+
 ggsave(gg_aoh_sp_obs_wisc_crop_plus2,
        filename = paste0(p_output, "plots/aoh/", "fpo_sp_obs_wisc_crop_plus2",  aoh_run_date,
                          ".pdf"),
-       width = 4.5, height = 3.5, units = "in")
+       width = 3.5, height = 3.5, units = "in")
+
 ggsave(gg_aoh_sp_obs_wisc_crop_plus3,
        filename = paste0(p_output, "plots/aoh/", "fpo_sp_obs_wisc_crop_plus3",  aoh_run_date,
                          ".pdf"),
-       width = 4.5, height = 3.5, units = "in")
+       width = 3.5, height = 3.5, units = "in")
 
 ggsave(gg_aoh_sp_obs_wisc_crop_plus3,
        filename = paste0(p_output, "plots/aoh/", "wisconsin_example_sp_trajectories_highlight",  aoh_run_date, ".pdf"),
@@ -6492,6 +6623,44 @@ ggsave(gg_aoh_sp_obs_wisc_crop_plus3 + theme(legend.position = "bottom"),
        filename = paste0(p_output, "plots/aoh/", "wisconsin_example_sp_trajectories_highlight",  aoh_run_date, "_bot.pdf"),
        width = 3.5, height = 4, units = "in")
 ```
+
+```{r as-per}
+aoh %>%
+      filter(aoh_type == i,
+             
+             # exclude all species not affected by abandonment:
+             binomial %in% unique(aoh_feols_trends_by_sp %>%
+                                    filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage",
+                                           vert_class != "amp", mature_forest_obl < 0.5) %>%
+                                    pull(binomial)),
+             passage_type == "exclude_passage", # exclude passage areas from AOH calculations
+             vert_class != "amp",
+             mature_forest_obl < 0.5
+             ) %>%
+      left_join(aoh_feols_trends) %>% 
+  left_join(area_summary_df, by = "site") %>%
+  mutate(new_var = 
+           100 * aoh / total_crop_extent_ha
+           # 100 * aoh/total_site_area_ha_2017
+         ) %>%
+      ggplot(aes(x = year, y = new_var, col = trend, group = binomial)) +
+      geom_line(alpha = 0.15) + 
+      theme_classic() + 
+      scale_color_manual(labels = palette_labels[c(1, 3, 6)],
+                         values = palette_du_jour[c(1, 3, 6)]) +
+      scale_fill_manual(labels = palette_labels[c(1, 3, 6)],
+                        values = palette_du_jour[c(1, 3, 6)]) +
+      labs(y = expression("AOH (10"^{6}*" ha)"),
+           x = "Year", col = "Trend", fill = "Mean Trend",
+           caption = paste0(filter(aoh_type_df, label == i)$p5)) + 
+      guides(color = guide_legend(override.aes = list(alpha = 1, size = 1.5, order = 1))) +
+      theme(legend.position = c(0.9, 0.125),
+            legend.background = element_blank(),
+            legend.spacing = unit(-4, units = "mm")
+            ) +
+      facet_wrap(vars(site), scales = "free_y", labeller = as_labeller(fancy_labels))
+```
+
 
 ```{r compare-case-one-site}
 aoh_types[c(6, 3, 1)]
@@ -6873,7 +7042,7 @@ lapply(c("TRUE", "FALSE"), function (constrain_) {
         theme_classic() +
         scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
         labs(x = "Proportional change in observed AOH", y = "Count",
-             caption = paste0("Comparing mean values in first and last ", i, " years")) + 
+             caption = paste0("Comparing mean values in first ", i, " and last ", i, " years")) + 
         theme(legend.position = "bottom", 
               strip.text.y.right = element_text(size = 8, angle = 0, hjust = 0, vjust = 0)) +
         facet_grid(site ~ ., scales = "free", labeller = as_labeller(fancy_labels)),
@@ -6903,7 +7072,7 @@ lapply(c("TRUE", "FALSE"), function (constrain_) {
       scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], 
                         values = palette_du_jour[c(1, 3, 6)]) + 
       labs(x = "Ratio of ending AOH to starting AOH (observed)", 
-           y = "Count", caption = paste0("Comparing mean values in first and last ", i, " years")) + 
+           y = "Count", caption = paste0("Comparing mean values in first ", i, " and last ", i, " years")) + 
       # scale_x_continuous() +
       scale_x_continuous(trans = "log10") +
       theme(legend.position = "bottom", 
@@ -6923,18 +7092,28 @@ lapply(c("TRUE", "FALSE"), function (constrain_) {
 # --------------------------------------------------------------- #
 # apply across multiple window sizes:
 
-lapply(c(1, 5, 10, 15), function(i) {
+lapply(
+  # c(1, 
+    5
+    # , 10, 15)
+  , function(i) {
   ggsave(
     aoh_start_end_l_tmp_plots %>% 
       filter(window_size == i) %>%
+      # filter(site %in% site_df$site[1:6]) %>%
+      # filter(site %in% site_df$site[c(1, 7:11)]) %>%
       ggplot() + 
       geom_histogram(aes(x = ratio, fill = trend, group = trend), bins = 100, col = "black") +
       geom_vline(xintercept = c(0.5, 2), linetype = "dashed") +
       theme_classic() +
       scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], 
                         values = palette_du_jour[c(1, 3, 6)]) + 
-      labs(x = "Ratio of ending AOH to starting AOH (shown on a log10 scale)", 
-           y = "Count", caption = paste0("Comparing mean AOH values for first and last ", i, " years")) + 
+      labs(
+        x = expression(AOH["end"]~"/"~AOH["start"]~(shown~on~a~log["10"]~scale)),
+        # x = expression(Ratio~of~ending~AOH~to~starting~AOH~(shown~on~a~log["10"]~scale)), 
+        y = "Number of Species", 
+        caption = paste0("Comparing mean AOH values for first and last ", i, " years")
+        ) + 
       # scale_x_continuous() +
       scale_x_continuous(trans = "log10", breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10, 50, 100)) +
       theme(legend.position = "bottom", 
@@ -6970,7 +7149,7 @@ lapply(c(1, 5, 10, 15), function(i) {
       scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], 
                         values = palette_du_jour[c(1, 3, 6)]) + 
       labs(x = "Natural Log Ratio of ending AOH to starting AOH (observed)", 
-           y = "Count", caption = paste0("Comparing mean values in first and last ", window_size_, " years")) + 
+           y = "Count", caption = paste0("Comparing mean values in first ", window_size_, " and last ", window_size_, " years")) + 
       # scale_x_continuous(trans = "log10") +
       theme(legend.position = "bottom", 
             strip.text.y.right = element_text(size = 8, angle = 0, hjust = 0, vjust = 0)) +
@@ -7006,7 +7185,7 @@ lapply(c(1, 5, 10, 15), function(window_size_) {
     scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
     scale_color_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
     labs(x = "Change in AOH (% of site area)", y = "Count", 
-         caption = paste0("Comparing mean values in first and last ", window_size_, " years")) + 
+         caption = paste0("Comparing mean values in first ", window_size_, " and last ", window_size_, " years")) + 
     theme(legend.position = "bottom", strip.text.y.right = element_text(size = 8, angle = 0, hjust = 0, vjust = 0)) +
     facet_grid(site ~ ., scales = "free", labeller = as_labeller(fancy_labels)),
 
@@ -7018,7 +7197,9 @@ lapply(c(1, 5, 10, 15), function(window_size_) {
 
 # 
 window_size_ <- 5
-# By trend
+# ------------------------------------------------------ #
+# AOH Change as a percent of site area, by trend
+# ------------------------------------------------------ #
 lapply(c(1, 5, 10, 15), function(window_size_) {
   ggsave(
   aoh_start_end_l_tmp_plots %>% 
@@ -7047,8 +7228,9 @@ lapply(c(1, 5, 10, 15), function(window_size_) {
     scale_x_continuous(n.breaks = 10) +
     scale_fill_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
     scale_color_manual(name = "Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
-    labs(x = "Change in AOH (% of site area)", y = "Count", 
-         caption = paste0("Comparing mean values in first and last ", window_size_, " years")) + 
+    labs(x = "Change in AOH (% of site area)", y = "Number of Species-Site Trends", 
+         caption = paste0("Comparing mean values in first ", window_size_, " and last ", window_size_, " years")
+         ) + 
     theme(legend.position = "bottom") +
     facet_grid(
       trend ~ vert_class,
@@ -7057,6 +7239,58 @@ lapply(c(1, 5, 10, 15), function(window_size_) {
 
   filename = paste0(p_output, "plots/aoh/effect_size/", 
                     "hist_aoh_change_percent_site_obs_by_trend_", 
+                    window_size_, ".pdf"),
+  width = 7, height = 5.5, units = "in")
+})
+
+
+
+# ------------------------------------------------------ #
+# AOH Change ratio, by trend
+# ------------------------------------------------------ #
+lapply(c(1, 5, 10, 15), function(window_size_) {
+  ggsave(
+  aoh_start_end_l_tmp_plots %>% 
+    filter(window_size == window_size_) %>%
+    ggplot() + 
+    geom_vline(xintercept = c(0.5, 2), linetype = "dashed", col = "red") +
+    geom_histogram(aes(x = ratio, fill = trend, group = trend), 
+                   # position = position_dodge(),
+                   bins = 50, col = "black") +
+    geom_vline(data = aoh_start_end_l_tmp_plots %>%
+                 filter(window_size == window_size_) %>%
+                 group_by(trend, vert_class) %>%
+                 summarise(n = n(), mean = mean(ratio), 
+                           median = median(ratio)) %>%
+                 pivot_longer(cols = c("mean", "median"), names_to = "Statistic") %>% ungroup(),
+               mapping = aes(col = trend,
+                 # x = value, y = 0, shape = Statistic
+                 xintercept = value, linetype = Statistic
+                 ), 
+               # size = 3
+               size = 0.75
+               ) +
+    theme_classic() +
+    scale_fill_manual(name = "AOH Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
+    scale_color_manual(name = "AOH Trend", labels = palette_labels[c(1, 3, 6)], values = palette_du_jour[c(1, 3, 6)]) + 
+    labs(
+        x = expression(AOH["end"]~"/"~AOH["start"]~(shown~on~a~log["10"]~scale)),
+        y = "Number of Species-Site Trends", 
+         caption = paste0("Comparing mean values in first ", window_size_, " and last ", window_size_, " years")
+        ) + 
+      scale_x_continuous(trans = "log10", 
+                         breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10, 25, 50, 100),
+                         labels = c("0.1", "0.2", "0.5", "1", "2",
+                                    "5", "10", "25", "50", "100")
+                         ) +
+        theme(legend.position = "bottom") +
+    facet_grid(
+      trend ~ vert_class,
+      # rows = vars(vert_class),
+               scales = "free", labeller = as_labeller(aoh_type_labels)),
+
+  filename = paste0(p_output, "plots/aoh/effect_size/", 
+                    "hist_aoh_change_ratio_obs_by_trend_", 
                     window_size_, ".pdf"),
   width = 7, height = 5.5, units = "in")
 })
@@ -7863,12 +8097,12 @@ ggsave(plot = gg_aoh_example_sp,
 
 ```
 
-```{r fpo-figs-ols}
+```{r fpo-figs-ols-old}
 # ------------------------------------ #
 # overall, just crop_abn_iucn
 # ------------------------------------ #
 aoh_types
-gg_fpo_overall_crop <-
+# gg_fpo_overall_crop <-
   aoh_trends_by_sp %>%
   filter(
     # binomial %in% (filter(species_list, site != "mato_grosso") %>% .$binomial %>% unique()), # all species excluding those only found in Mato Grosso
@@ -8151,13 +8385,13 @@ ggsave(plot_grid(gg_tmp_total_b_obs_pot, gg_tmp_total_m_obs_pot,
        width = 5, height = 4, units = "in")
 ```
 
-```{r fpo-figs-feols-nw}
+```{r fpo-figs}
 # same as above chunk, but now with standard errors adjusted with NW estimator.
 
 # ------------------------------------ #
 # overall, just crop_abn_iucn
 # ------------------------------------ #
-gg_fpo_overall_feols_nw_crop <-
+gg_fpo_overall_crop <-
   aoh_ms_tmp_trends_by_sp %>%
   filter(
     # binomial %in% (filter(species_list, site != "mato_grosso") %>% .$binomial %>% unique()), # all species excluding those only found in Mato Grosso
@@ -8169,19 +8403,19 @@ gg_fpo_overall_feols_nw_crop <-
   arrange(vert_class, aoh_type) %>%
   filter(aoh_type %in% c("crop_abn_iucn"#, "crop_abn_potential_iucn"
                        )) %>%
-  ggplot(mapping = aes(x = trend_direction, 
-                       y = n_sp,
-                       fill = overall_trend %>% 
-                         fct_relevel(names(palette_du_jour)[c(2, 1, 3, 4, 5, 6)]),
-                       # group = aoh_type
+  ggplot(mapping = aes(
+    x = trend_direction, y = n_sp,
+    fill = 
+    overall_trend %>% fct_relevel(names(palette_du_jour)[c(1, 2, 6, 5, 3, 4)])
+    # group = aoh_type
          )) +
-  geom_col(color = "black", size = .25) +
+  geom_col(color = "black", size = 0.25, position = position_stack(reverse = TRUE)) +
   theme_classic() +
  scale_x_discrete(labels = palette_labels) +
   scale_y_continuous(n.breaks = 10) +
   labs(x = "AOH Trend", y = "Number of Species") +
 
-  scale_fill_manual(name = "Trend", 
+  scale_fill_manual(name = "AOH Trend", 
                     labels = palette_labels,
                     values = palette_du_jour) + 
   theme(legend.position = "right",
@@ -8193,13 +8427,13 @@ gg_fpo_overall_feols_nw_crop <-
     scales = "free_y", labeller = as_labeller(aoh_type_labels))
 
 
-ggsave(gg_fpo_overall_feols_nw_crop,
-       filename = paste0(p_output, "plots/aoh/", "fpo_overall_feols_nw_crop_abn", aoh_run_date,
+ggsave(gg_fpo_overall_crop,
+       filename = paste0(p_output, "plots/aoh/", "fpo_overall_crop_abn", aoh_run_date,
                          ".pdf"),
        width = 3.5, height = 3.5, units = "in")
 
 
-gg_fpo_overall_feols_nw_crop_w_full <-
+gg_fpo_overall_crop_w_full <-
   aoh_ms_tmp_trends_by_sp %>%
   filter(
     # binomial %in% (filter(species_list, site != "mato_grosso") %>% .$binomial %>% unique()), # all species excluding those only found in Mato Grosso
@@ -8216,10 +8450,10 @@ gg_fpo_overall_feols_nw_crop_w_full <-
   ggplot(mapping = aes(x = trend_direction, 
                        y = n_sp,
                        fill = overall_trend %>% 
-                         fct_relevel(names(palette_du_jour)[c(2, 1, 3, 4, 5, 6)]),
+                         fct_relevel(names(palette_du_jour)[c(1, 2, 6, 5, 3, 4)]),
                        # group = aoh_type
          )) +
-  geom_col(color = "black", size = .25) +
+  geom_col(color = "black", size = 0.25, position = position_stack(reverse = TRUE)) +
   theme_classic() +
   scale_x_discrete(labels = palette_labels) +
   scale_y_continuous(n.breaks = 10) +
@@ -8233,18 +8467,27 @@ gg_fpo_overall_feols_nw_crop_w_full <-
     # col = vars(vert_class), rows = vars(aoh_type),
     row = vars(vert_class), 
     col = vars(aoh_type),
-    scales = "free_y", labeller = as_labeller(aoh_type_labels))
+    scales = "free_y", 
+    # labeller = as_labeller(aoh_type_labels),
+    labeller = as_labeller(c(crop_abn_iucn = "1. Abandonment\n(cultivation-2017)",
+                             crop_abn_potential_iucn = "1b. Abandonment,\nno recultivation\n(cultivation-2017)",
+                             max_abn_iucn = "2. Net change in\nabandoned crop-\nlands (1987-2017)",
+                             full_iucn = "3. Entire spatial \nextent (1987-2017)",
+                             bird = "Birds", mam = "Mammals"))
+    
+    
+    )
 
 
-ggsave(gg_fpo_overall_feols_nw_crop_w_full,
-       filename = paste0(p_output, "plots/aoh/", "fpo_overall_feols_nw_crop_abn_w_full", aoh_run_date,
+ggsave(gg_fpo_overall_crop_w_full,
+       filename = paste0(p_output, "plots/aoh/", "fpo_overall_crop_abn_w_full", aoh_run_date,
                          ".pdf"),
        width = 4.5, height = 3.5, units = "in")
 
 # -----
 # overall stacked:
 # -----
-gg_tmp_total_b_feols_nw <- 
+gg_tmp_total_b <-
   aoh_ms_tmp_trends_by_sp %>%
     filter(aoh_type == "crop_abn_iucn", vert_class == "bird") %>%
     mutate(vert_class = case_when(vert_class == "mam" ~ "Mammals",
@@ -8276,7 +8519,7 @@ gg_tmp_total_b_feols_nw <-
     scales = "free_y", #labeller = as_labeller(c(i = "Overall","mam" = "Mammals", "bird" = "Birds"))
     )
 
-gg_tmp_total_m_feols_nw <-
+gg_tmp_total_m <-
   aoh_ms_tmp_trends_by_sp %>%
     filter(aoh_type == "crop_abn_iucn", vert_class == "mam") %>%
     mutate(vert_class = case_when(
@@ -8311,16 +8554,17 @@ gg_tmp_total_m_feols_nw <-
     scales = "free_y", #labeller = as_labeller(c(i = "Overall","mam" = "Mammals", "bird" = "Birds"))
     )
 
-plot_grid(gg_tmp_total_b_feols_nw, gg_tmp_total_m_feols_nw, 
-          ggpubr::get_legend(gg_tmp_total_m_feols_nw + theme(legend.position = "right")),
+plot_grid(gg_tmp_total_b, gg_tmp_total_m, 
+          ggpubr::get_legend(gg_tmp_total_m + theme(legend.position = "right")),
           rel_widths = c(1, 1, 0.6),
           ncol = 3)
 
-ggsave(plot_grid(gg_tmp_total_b_feols_nw, gg_tmp_total_m_feols_nw, 
-          ggpubr::get_legend(gg_tmp_total_m_feols_nw + theme(legend.position = "right")),
+ggsave(plot_grid(gg_tmp_total_b, gg_tmp_total_m, 
+          ggpubr::get_legend(gg_tmp_total_m + theme(legend.position = "right")),
           rel_widths = c(1, 1, 0.6),
           ncol = 3),
-       filename = paste0(p_output, "plots/aoh/", "fpo_overall_feols_nw_crop_abn_stacked", aoh_run_date,
+       filename = paste0(p_output, "plots/aoh/", 
+                         "fpo_overall_crop_abn_stacked", aoh_run_date,
                          ".pdf"),
        width = 4.25, height = 4, units = "in")
 
@@ -8332,7 +8576,7 @@ ggsave(plot_grid(gg_tmp_total_b_feols_nw, gg_tmp_total_m_feols_nw,
 #obs v pot
 aoh_feols_trends_by_sp$aoh_type %>% unique()
 
-gg_tmp_total_b_obs_pot_feols_nw <-
+gg_tmp_total_b_obs_pot <-
   aoh_ms_tmp_trends_by_sp %>%
   filter(str_detect(aoh_type, "crop"), vert_class == "bird") %>%
   mutate(vert_class = case_when(vert_class == "mam" ~ "Mammals", vert_class == "bird" ~ "Birds")) %>%
@@ -8361,7 +8605,7 @@ gg_tmp_total_b_obs_pot_feols_nw <-
     scales = "free_y", #labeller = as_labeller(c(i = "Overall","mam" = "Mammals", "bird" = "Birds"))
     )
 
-gg_tmp_total_m_obs_pot_feols_nw <-
+gg_tmp_total_m_obs_pot <-
   aoh_ms_tmp_trends_by_sp %>%
     filter(str_detect(aoh_type, "crop"), vert_class == "mam") %>%
     mutate(vert_class = case_when(vert_class == "mam" ~ "Mammals", vert_class == "bird" ~ "Birds")) %>%
@@ -8388,18 +8632,18 @@ gg_tmp_total_m_obs_pot_feols_nw <-
     scales = "free_y", #labeller = as_labeller(c(i = "Overall","mam" = "Mammals", "bird" = "Birds"))
     )
 
-plot_grid(gg_tmp_total_b_obs_pot_feols_nw, 
-          gg_tmp_total_m_obs_pot_feols_nw, 
-          ggpubr::get_legend(gg_tmp_total_m_obs_pot_feols_nw + theme(legend.position = "right")),
+plot_grid(gg_tmp_total_b_obs_pot, 
+          gg_tmp_total_m_obs_pot, 
+          ggpubr::get_legend(gg_fpo_overall_crop + theme(legend.position = "right")),
           rel_widths = c(1, 1, 0.7),
           ncol = 3)
 
-ggsave(plot_grid(gg_tmp_total_b_obs_pot_feols_nw, 
-                 gg_tmp_total_m_obs_pot_feols_nw, 
-          ggpubr::get_legend(gg_tmp_total_m_obs_pot_feols_nw + theme(legend.position = "right")),
+ggsave(plot_grid(gg_tmp_total_b_obs_pot, 
+                 gg_tmp_total_m_obs_pot, 
+          ggpubr::get_legend(gg_fpo_overall_crop + theme(legend.position = "right")),
           rel_widths = c(1, 1, 0.6),
           ncol = 3),
-       filename = paste0(p_output, "plots/aoh/", "fpo_overall_feols_nw_crop_w_pot_stacked", aoh_run_date,
+       filename = paste0(p_output, "plots/aoh/", "fpo_overall_crop_w_pot_stacked", aoh_run_date,
                          ".pdf"),
        width = 5, height = 4, units = "in")
 ```
@@ -8593,6 +8837,18 @@ aoh_species_list_by_site <-
       mature_forest_obl <= 0.5 ~ "no",
       mature_forest_obl > 0.5 ~ "yes"))
 
+# how many #
+aoh_species_list_by_site %>%
+  # select(vert_class, mature, threatened, binomial) %>% unique() %>%
+  group_by(#vert_class, 
+           site, threatened, mature) %>%
+  summarise(n_sp = n()) %>% ungroup() %>%
+  pivot_wider(id_cols = c(#vert_class, 
+                          site, mature), names_from = threatened, values_from = n_sp) %>% 
+  replace_na(replace = list(`Not Threatened` = 0, Threatened = 0, `Data Deficient` = 0)) %>%
+  arrange(mature) %>%
+  print(n = 50)
+(75/(2188+75))
 # ------------------------------------------------ #
 # MS version
 # New category
@@ -8628,6 +8884,12 @@ gg_n_sp_by_site_w_iucn_cat_and_mat <-
 ggsave(plot = gg_n_sp_by_site_w_iucn_cat_and_mat,
        filename = paste0(p_plots, "richness_by_site_w_iucn_cat_and_mat.pdf"),
        width = 5.5, height = 6, units = "in")
+
+ggsave(plot = gg_n_sp_by_site_w_iucn_cat_and_mat + 
+         guides(fill = guide_legend(ncol = 1)) +
+         theme(legend.position = "right"),
+       filename = paste0(p_plots, "richness_by_site_w_iucn_cat_and_mat_preso.pdf"),
+       width = 7, height = 5, units = "in")
 
 
 # ------------------------------------------------ #
@@ -8684,7 +8946,12 @@ ggsave(plot = gg_n_sp_by_site_w_iucn_cat_and_small,
        device = cairo_pdf)
 
 
-
+ggsave(plot = gg_n_sp_by_site_w_iucn_cat_and_small + 
+         guides(fill = guide_legend(ncol = 1)) +
+         theme(legend.position = "right"),
+       filename = paste0(p_plots, "richness_by_site_w_iucn_cat_and_small_preso.pdf"),
+       width = 7, height = 5, units = "in",
+       device = cairo_pdf)
 
 
 
@@ -8692,7 +8959,7 @@ ggsave(plot = gg_n_sp_by_site_w_iucn_cat_and_small,
 # threatened:
 # --------------------------------------------------- #
 
-# gg_n_sp_by_cat <-
+gg_n_sp_by_cat <-s
   aoh_species_list_by_site %>%
   group_by(vert_class, site, threatened#, mature
            ) %>%
