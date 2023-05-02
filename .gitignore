@@ -5,13 +5,10 @@ derived/
 output/
 presentations/
 resources/
-scripts/AOH
-scripts/ee
-scripts/old/
+scripts/dev/
 scripts/cluster/old/
 scripts/cluster/slurm_out/
 scripts/ref/
-scripts/backups/
 writing/
 
 # specific files to ignore
