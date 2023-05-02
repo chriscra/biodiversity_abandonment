@@ -1692,9 +1692,40 @@ aoh_est_change_tmp_all_incl_mature %>%
              labeller = as_labeller(c("Birds" = "Birds", "Mammals" = "Mammals",
                  "TRUE" = "Mature Forest Obligates", 
                  "FALSE" = "Non-Mature Forest Obligates")))
+# -------------------------------------------------------- #
+# Latitude v. Arable suitability
+ggsave(
+  aoh_est_change_tmp_all_incl_mature %>%
+  select(binomial, arable_occ, artificial_terrestrial_occ,
+         centroid_latitude, mature_forest_obl#, trend, passage_type, aoh_type
+         ) %>%
+  unique() %>%
+  ggplot(mapping = aes(#x = artificial_terrestrial_occ,
+                       x = arable_occ,
+                       y = abs(centroid_latitude))) + 
+    # geom_violin() + 
+  geom_boxplot(notch = TRUE, width = 0.9) +
+  geom_point(position = position_jitter(width = 0.3), alpha = 0.15) + 
+  theme_classic() + coord_flip() +
+  labs(y = "Distance of range centroid from \nEquator (degrees latitude)", x = "Able to occupy arable land"),
+
+  filename = paste0(p_output, "plots/aoh/traits/", 
+                    "arable_suitability_v_latitude", ".pdf"),
+  width = 3, height = 2.5, units = "in"
+  )
 
 
-
+aoh_est_change_tmp_all_incl_mature %>%
+  select(binomial, arable_occ, artificial_terrestrial_occ,
+         centroid_latitude, mature_forest_obl#, trend, passage_type, aoh_type
+         ) %>%
+  unique() %>%
+  ggplot(mapping = aes(#x = artificial_terrestrial_occ,
+                       x = abs(centroid_latitude))) + 
+  geom_histogram() +
+  theme_classic() +
+  labs(x = "Distance of range centroid from \nEquator (degrees latitude)") +
+  facet_grid(vars(arable_occ))
 
 ```
 
@@ -3341,6 +3372,18 @@ glm_mod_by_sp_df <-
 
 
 ```
+
+```{r coef-plots}
+
+aoh_obs_change_tmp_all %>%
+  select(latitude)
+
+tibble(latitude = 1:9)
+ggplot() +
+  geom_line()
+
+```
+
 
 # Tables
 
