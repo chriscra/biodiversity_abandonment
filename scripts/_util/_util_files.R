@@ -45,9 +45,13 @@ area_summary_df <- read_csv(file = paste0(p_derived2, "area_summary_df", run_lab
   left_join(site_labels)
 
 area_summary_df %>%
-  select(site, total_site_area_ha_2017, area_abn_ha_2017, total_crop_extent_ha) %>%
-  arrange(total_site_area_ha_2017) %>%
-  mutate(total = round(total_site_area_ha_2017 / 10^6, digits = 2)) %>% .$total
+  select(site, total_site_area_ha_2017, area_abn_ha_2017, total_crop_extent_ha, area_2017_as_prop_site, area_2017_as_prop_total_crop) %>%
+  arrange(
+    area_2017_as_prop_total_crop
+    # area_2017_as_prop_site
+    # total_site_area_ha_2017
+    ) #%>%
+  # mutate(total = round(total_site_area_ha_2017 / 10^6, digits = 2)) %>% .$total
 
 area_dat <- read_csv(file = paste0(p_derived2, "area_dat", run_label, ".csv"))
 
@@ -94,6 +98,7 @@ lcv %>% ncell
 sapply(lcc, ncell)
 # site_df <- site_df %>% mutate(ncell = sapply(lcc, ncell))
 # write_csv(site_df, paste0(p_dat_derived, "site_df.csv"))
+# 
 site_df <- read_csv(paste0(p_dat_derived, "site_df.csv"))
 
 # ----------------------------- load abandonment age rasters ---------------------------- #

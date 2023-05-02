@@ -2533,6 +2533,7 @@ abn_lcc_freq <- lapply(1:11, function(i) {
   rename(lc = value)
   }) %>% bind_rows()
 write_csv(abn_lcc_freq, file = paste0(p_derived, "freq/abn_lcc_freq.csv"))
+abn_lcc_freq <- read_csv(file = paste0(p_derived, "freq/abn_lcc_freq.csv"))
 
 # -------------------------- #
 max_abn_lcc_freq <- lapply(1:11, function(i) {
@@ -2576,8 +2577,15 @@ max_potential_abn_lcc_iucn_habitat
 
 
 # sort out
+
 abn_lcc_iucn_habitat_freq %>% group_by(site) %>% summarise(my_codes = unique(map_code)) %>%
   .$my_codes %>% unique() %>% sort()
+
+abn_lcc_iucn_habitat_freq %>%
+  filter(site == "iraq") %>%
+  select(site, map_code) %>% unique() %>%
+  left_join(iucn_crosswalk)
+
 iucn_crosswalk %>% 
   filter(map_code %in% (abn_lcc_iucn_habitat_freq %>% 
                           group_by(site) %>% 
@@ -2602,10 +2610,13 @@ max_abn_lcc_iucn_habitat_freq %>%
   ungroup() %>% select(site, sum) %>% unique() %>%
   arrange(site)
 
-freq_cols <- plot_cols[1:4]
+lc_plot_cols$color
+freq_cols <- lc_plot_cols$color #plot_cols[1:4]
 names(freq_cols) <- 1:4
 
-ggplot(data = max_abn_lcc_freq #%>% filter(site == "belarus")
+ggplot(data = 
+         abn_lcc_iucn_habitat_freq
+       # max_abn_lcc_freq #%>% filter(site == "belarus")
          ) +
   theme_classic() +
   # theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
@@ -2613,17 +2624,20 @@ ggplot(data = max_abn_lcc_freq #%>% filter(site == "belarus")
        x = "Year", 
        color = NULL) + 
   geom_line(mapping = aes(x = year, y = count / (10^6), # convert to millions of ha
-                          group = as_factor(lc), color = as_factor(lc)),
+                          # group = as_factor(lc), color = as_factor(lc)
+                          group = as_factor(map_code), color = as_factor(map_code)
+                          ),
             size = 1.5) + 
-  theme(legend.position = c(0.9, 0.12),
+  theme(#legend.position = c(0.9, 0.12),
         legend.title = element_text(size = 10)) +
   
-  scale_color_manual(
-    values = freq_cols
-    # values = as.vector(plot_cols[2:4]),    #c("#276419" , "#E8C32E" , "#7FBC41"),
-    # labels = names(plot_cols[2:4])   #, breaks = 2:4
-                     ) +
-  guides(color = guide_legend(ncol = 1)) +
+  # scale_color_manual(
+  #   values = lc_plot_cols$color,
+  #   labels = lc_plot_cols$name
+  #   # values = as.vector(plot_cols[2:4]),    #c("#276419" , "#E8C32E" , "#7FBC41"),
+  #   # labels = names(plot_cols[2:4])   #, breaks = 2:4
+  #                    ) +
+  # guides(color = guide_legend(ncol = 1)) +
   facet_wrap(vars(site),
              labeller = as_labeller(fancy_labels),
              scales = "free")
