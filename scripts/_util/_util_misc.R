@@ -102,11 +102,14 @@ lc_plot_cols <- data.frame(
 # met.brewer(name = colorblind_palettes[24], 4)
 # met.brewer(name = colorblind_palettes[6], 4)
 # colorblind_palettes
+show.col(colorblind_palettes[1])
+met.brewer(name = colorblind_palettes[8], 3)
 
 input_palette <- met.brewer(name = "Kandinsky", 4)[c(1, 4, 3, 2)] # use this one, for now
 # input_palette <- met.brewer(name = "Egypt", 4)[c(3, 2, 4, 1)]
 # input_palette <- met.brewer(name = "Java", 4)[c(4, 1, 3, 2)]
 # show.col(input_palette)
+
 
 # set up color palettes:
 palette_du_jour <- c(
@@ -134,7 +137,7 @@ palette_labels <- c(
   "gain" = "Gain",
   "weak gain" = "Weak Gain",
   "no trend" = "No Trend",
-  "context dependent" = "Opposites",
+  "context dependent" = "Conflicting",
   "weak loss" = "Weak Loss", 
   "loss" = "Loss"
 )
@@ -188,4 +191,53 @@ regression_model_labels <-
     `abs(centroid_latitude)` = "Abs. Latitude of Range Centroid",
     max_abn_ext_percent_site = "Percent of Site Abandoned"
     # max_abn_extent_div_site_area = "Proportion of Site Abandoned"
+  )
+
+
+regression_model_flextable_labels <- 
+  c(
+    forest_occTRUE = "Forest",
+    savanna_occTRUE = "Savanna",
+    shrubland_occTRUE = "Shrubland",
+    grassland_occTRUE = "Grassland",
+    wetlands_occTRUE = "Wetlands",
+    rocky_occTRUE = "Rocky Areas",
+    caves_occTRUE = "Caves",
+    desert_occTRUE = "Desert",
+    artificial_terrestrial_occTRUE = "Artificial",
+    arable_occTRUE = "Arable Land",
+    urban_occTRUE = "Urban Land",
+    # n_suitable_habitats = "Number of Suitable Habitats",
+    n_suitable_habitats_lvl2 = "Number of Suitable Habitats (IUCN Level 2)",
+    # Habitat_breadth_IUCN = "Habitat Breadth (IUCN Level 2)",
+    vert_class = "Vertebrate Class",
+    vert_classBirds = "Bird",
+    vert_classMammals = "Mammal",
+    threatenedThreatened = "Threatened (IUCN)",
+    Trophic_level = "Trophic Level",
+    Trophic_levelCarnivore = "Carnivore",
+    Trophic_levelHerbivore = "Herbivore",
+    Trophic_levelOmnivore = "Omnivore",
+    `log(Body_mass_g)` = "ln(Body Mass, g)",
+    `log(total_range_area)` = "ln(Global Range Area, km2)", 
+    `log10(Body_mass_g)` = "log(Body Mass, g)",
+    `log10(total_range_area)` = "log(Global Range Area, km2)",
+    `abs(centroid_latitude)` = "Abs. Latitude of Range Centroid",
+    max_abn_ext_percent_site = "Percent of Site Abandoned",
+    # max_abn_extent_div_site_area = "Proportion of Site Abandoned"
+    "term" = "Term",
+    "binary_estimate" = "OR",
+    "percent_estimate" = "Beta", 
+    "logratio_estimate" = "Beta", 
+    "binary_p.value" = "p-value", 
+    "percent_p.value" = "p-value", 
+    "logratio_p.value" = "p-value",
+    "logLik" = "Log-likelihood",
+    "deviance" = "Deviance",
+    "df.residual" = "Residual df",
+    "nobs" = "No. Obs.",
+    "null.deviance" = "Null deviance",
+    "df.null" = "Null df",
+    "adj.r.squared" = "Adjusted R²",
+    "sigma" = "Sigma"
   )
