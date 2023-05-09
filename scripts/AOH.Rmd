@@ -5142,8 +5142,16 @@ lapply(
                     values = palette_du_jour) + 
   theme(legend.position = "none",
         axis.text.x = element_blank(),
-        axis.ticks.x = element_blank()) +
-  facet_grid(
+        axis.ticks.x = element_blank(),
+        strip.background = element_blank(),
+        strip.clip = "on",
+        panel.margin = unit(0, "lines"),
+        plot.margin = unit(c(0,0,0,2), "mm"),
+        
+        # strip.placement = "inside"#,
+        strip.text = element_text(vjust = -2)
+        ) +
+  facet_grid(#switch = "y",
     row = vars(vert_class), col = vars(aoh_type),
     scales = "free_y", #labeller = as_labeller(c(i = "Overall","mam" = "Mammals", "bird" = "Birds"))
     )
@@ -5199,7 +5207,7 @@ lapply(
                    nrow = 1, ncol = 2, 
                    # labels = "auto",
                    align = "h", axis= "b",
-                   rel_widths = c(1, 3.3)
+                   rel_widths = c(1, 3.6)
                    ),
          filename = paste0(p_output, "plots/aoh/", 
                            "aoh_overall_w_site_prop_combo_",
@@ -5207,7 +5215,7 @@ lapply(
                            "_no_lab",
                            "_no_border",
                            ".pdf"),
-         width = 6, height = 6, units = "in")
+         width = 5.75, height = 6, units = "in")
 })
 ```
 
@@ -8849,6 +8857,14 @@ aoh_species_list_by_site %>%
   arrange(mature) %>%
   print(n = 50)
 (75/(2188+75))
+
+
+# calculate the number of unique "threatened" species that occur at one of my sites
+aoh_species_list_by_site %>%
+  select(vert_class, binomial, threatened, mature) %>% unique() %>%
+  group_by(threatened, mature) %>%
+  summarise(n_sp = n()) %>% ungroup()
+
 # ------------------------------------------------ #
 # MS version
 # New category
