@@ -12,7 +12,6 @@ See <https://github.com/chriscra/biodiversity_abandonment>.
 
 ```{r initialize}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
-
 ```
 
 ```{r load-files}
@@ -2774,9 +2773,420 @@ lapply(1:11, function(i) {
 
 ```
 
+## Fragmentation
+
+Using the R package `landscapemetrics` to calculate various metrics related to landscape configuration, fragmentation, etc. Note that `landscapemetrics` uses calculates metrics from the popular FRAGSTATS program.
+
+We seek to answer three primary questions:
+1.	Are patches become more aggregated, connected? -- Clumpiness Index (Aggregation metric)
+2.	Are patches getting larger? -- Mean Patch Area (area and edge metric)
+3.	Are resulting habitats subject to less fragmentation? -- Perimeter-Area Ratio, mean (shape metric)
+
+
+```{r landscapemetrics-dev}
+
+list_lsm(level = "class") %>% print(n = 55)
+
+metrics_list <- c(
+  "lsm_c_clumpy", # clumpiness index, class (aggregation metric)
+  "lsm_c_area_mn", # patch area, mean, per class (area and edge metric)
+  "lsm_c_para_mn" # perimeter-area ratio, mean (shape metric) # note, shape metrics take much more memory than others
+)
+
+
+# ------------------------------- set up test rasters --------------------------------------- #
+site_df
+input_r <- 
+  #lcc[[6]][[31]]
+  lcc[[9]]
+
+plot(input_r)
+ext(input_r)
+test_ext <- draw(x="extent", col="red")
+test_ext <- ext(c(111.187271305267, 111.256538167369, 38.8572368478675, 38.9201864595141))
+test_r <- terra::crop(input_r, test_ext)
+plot(test_r)
+
+lcc_ext <- lapply(lcc, ext)
+
+site_projections <- 
+  lapply(lcc, function(x) as.vector(ext(x))) %>% 
+  bind_rows() %>%
+  bind_cols(site_df, .) %>%
+  mutate(lon = round((xmin + xmax) / 2, 0),
+         lat = round((ymin + ymax) / 2, 0),
+         lat = case_when(
+           site %in% c("goias", "mato_grosso") ~ 1,
+           TRUE ~ lat
+         ),
+         proj = paste0("+proj=bonne +lon_0=", lon, " +lat_1=", lat)) %>%
+  select(site, proj)
+
+site_projections
+
+```
+
+```{r frag-trends}
+# see _util_files.R
+
+frag_df %>%
+  select(site, metric, layer) %>%
+  unique() %>%
+  pivot_wider(id_cols = c("site", "layer"), names_from = metric)
+
+
+# Checking whether cluster script completed the landscapemetrics calculations
+frag_df %>%
+  select(site, metric, layer) %>%
+  unique() %>%
+  group_by(site, metric) %>%
+  summarise(n = n()) %>%
+  print(n = 40)
+
+
+
+gg_frag_trends <-
+  frag_df %>%
+    filter(year > 1986, year < 2018, class > 1) %>%
+    mutate(class = factor(class, levels = c(3, 4, 2)),
+           metric = factor(metric, levels = c("clumpy", "area_mn", "para_mn"))) %>%
+    ggplot(aes(x = year, y = value, col = class)) +
+    geom_point() + 
+    geom_smooth(method = "lm", se = 0.95) +
+    geom_line() +
+    theme_classic() + 
+    scale_color_manual(labels = lc_plot_cols$name[c(3,4,2)],
+                       values = lc_plot_cols$color[c(3,4,2)],
+                       breaks = lc_plot_cols$breaks[c(3,4,2)]) +
+    labs(y = "Value", x = "Year", col = "Land Cover"#, fill = "Mean Trend",
+         ) + 
+    facet_grid(cols = vars(site), rows = vars(metric), scales = "free_y",
+               labeller = as_labeller(c(fancy_labels,
+                                        "clumpy" = "Clumpiness Index\n(Aggregation)",
+                                        "area_mn" = "Mean Patch Area",
+                                        "para_mn" = "Perimeter-Area\nRatio"
+                                        ))
+               ) + 
+    theme(
+      legend.position = "bottom",
+      axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0),
+      strip.text.x = element_text(size = 6)
+      )
+
+ggsave(gg_frag_trends,
+       filename = paste0(p_output, "plots/", 
+                           "frag_mod_trends", ".pdf"),
+         width = 10, height = 5, units = "in"
+       )
+
+
+# -------------- by metric ------------- #
+
+gg_frag_trends_clumpy <-
+  frag_df %>%
+    filter(year > 1986, year < 2018, class > 1, metric == "clumpy") %>%
+    mutate(class = factor(class, levels = c(3, 4, 2)),
+           metric = factor(metric, levels = c("clumpy", "area_mn", "para_mn"))) %>%
+    ggplot(aes(x = year, y = value, col = class)) +
+    geom_point() + 
+    geom_smooth(method = "lm", se = 0.95) +
+    geom_line() +
+    theme_classic() + 
+    scale_color_manual(labels = lc_plot_cols$name[c(3,4,2)],
+                       values = lc_plot_cols$color[c(3,4,2)],
+                       breaks = lc_plot_cols$breaks[c(3,4,2)]) +
+    labs(y = "Clumpiness Index (Aggregation)", 
+         x = "Year", col = "Land Cover") + 
+    facet_wrap(vars(site), scales = "free_y",
+               labeller = as_labeller(c(fancy_labels))) + 
+  theme(legend.position = c(0.88, 0.13))
+
+ggsave(gg_frag_trends_clumpy,
+     filename = paste0(p_output, "plots/", 
+                         "frag_mod_trends_clumpy", ".pdf"),
+       width = 7, height = 5, units = "in"
+     )
+ 
+
+gg_frag_trends_area_mn <- frag_df %>%
+  filter(year > 1986, year < 2018, class > 1, metric == "area_mn") %>%
+  mutate(class = factor(class, levels = c(3, 4, 2)),
+         metric = factor(metric, levels = c("clumpy", "area_mn", "para_mn"))) %>%
+  ggplot(aes(x = year, y = value, col = class)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = 0.95) +
+  geom_line() +
+  theme_classic() + 
+  scale_color_manual(labels = lc_plot_cols$name[c(3,4,2)],
+                     values = lc_plot_cols$color[c(3,4,2)],
+                     breaks = lc_plot_cols$breaks[c(3,4,2)]) +
+  labs(y = "Mean Patch Area", 
+       x = "Year", col = "Land Cover") + 
+  facet_wrap(vars(site), scales = "free_y",
+             labeller = as_labeller(c(fancy_labels))) + 
+  theme(legend.position = c(0.88, 0.13))
+
+
+ ggsave(gg_frag_trends_area_mn,
+       filename = paste0(p_output, "plots/", 
+                           "frag_mod_trends_area_mn", ".pdf"),
+         width = 7, height = 5, units = "in"
+       )
+ 
+gg_frag_trends_para_mn <-
+  frag_df %>%
+  filter(year > 1986, year < 2018, class > 1, metric == "para_mn") %>%
+  mutate(class = factor(class, levels = c(3, 4, 2)),
+         metric = factor(metric, levels = c("clumpy", "area_mn", "para_mn"))) %>%
+  ggplot(aes(x = year, y = value, col = class)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = 0.95) +
+  geom_line() +
+  theme_classic() + 
+  scale_color_manual(labels = lc_plot_cols$name[c(3,4,2)],
+                     values = lc_plot_cols$color[c(3,4,2)],
+                     breaks = lc_plot_cols$breaks[c(3,4,2)]) +
+  labs(y = "Perimeter-Area Ratio", 
+       x = "Year", col = "Land Cover") + 
+  facet_wrap(vars(site), scales = "free_y",
+             labeller = as_labeller(c(fancy_labels))) + 
+  theme(legend.position = c(0.88, 0.13))
+
+
+ggsave(gg_frag_trends_para_mn,
+       filename = paste0(p_output, "plots/", 
+                         "frag_mod_trends_para_mn", ".pdf"),
+       width = 7, height = 5, units = "in"
+       )
+```
+
+```{r frag-lm}
+frag_lm_test <- 
+  frag_df %>%
+  filter(year > 1986, year < 2018,
+         class > 1,
+         class == 2,
+         site == "shaanxi",
+         # metric == "area_mn"
+         metric == "clumpy"
+         # metric == "para_mn"
+         ) %>%
+  mutate(class = as_factor(class)) %>%
+  lm(value ~ year, data = .)
+
+tidy(frag_lm_test)
+
+
+frag_nest <- 
+  frag_df %>%
+  filter(year > 1986, year < 2018,
+         class > 1) %>%
+  mutate(class = as_factor(class)) %>%
+  group_by(site, metric, name, class) %>% nest()
+
+frag_mod <- 
+  frag_nest %>%
+  mutate(model = map(data, function(df) {
+    # lm(value ~ year, data = df)
+    feols(value ~ year, data = df, vcov = vcov_NW(time = ~year)) # to account for temporal autocorrelation
+    }),
+         tidy = lapply(model, tidy, conf.int = TRUE),
+         glance = lapply(model, glance))
+
+
+# ------- plot heatmap -------- #
+
+gg_frag_heatmap <- 
+  frag_mod %>% 
+  unnest(tidy) %>%
+  filter(#site == "belarus", metric == "clumpy",
+         term == "year"
+  ) %>%
+  select(class:site, term, estimate, p.value) %>%
+  mutate(
+    sig = p.value < 0.05,
+    direction = estimate > 0,
+    trend = case_when(
+    estimate > 0 & p.value < 0.05 ~ "increase", # Statistically significant gain of AOH
+    estimate < 0 & p.value < 0.05 ~ "decrease", # Statistically significant loss of AOH
+    p.value >= 0.05 ~ "no trend" # no significant trend
+    ),
+    land_cover = case_when(
+      class == 2 ~ "forest",
+      class == 3 ~ "cropland",
+      class == 4 ~ "grassland"
+    ),
+    land_cover = factor(land_cover, levels = c("cropland", "grassland", "forest")),
+    metric = factor(metric, levels = c("clumpy", "area_mn", "para_mn"))) %>%
+  
+  # ggplot heatmap
+  ggplot(aes(x = land_cover, y = fct_rev(site))) +
+  geom_tile(aes(fill = trend)) +
+  # geom_text(aes(label = round(AVGreturns, 3)))
+  theme_classic() +
+  scale_y_discrete(labels = fancy_labels) +
+  scale_x_discrete(labels = c("cropland" = "Cropland",
+                              "forest" = "Forest",
+                              "grassland" = "Grassland")) +
+  labs(x = "Land Cover", y = NULL, fill = NULL) +
+  scale_fill_manual(name = "Linear Trend",
+                  labels = frag_palette_labels,
+                  values = frag_palette) +
+  facet_wrap(vars(metric), 
+             labeller = as_labeller(c(
+               "clumpy" = "Clumpiness Index\n(Aggregation)",
+               "area_mn" = "Mean Patch Area",
+               "para_mn" = "Perimeter-Area\nRatio"
+             ))) +
+  theme(
+    # legend.position = "bottom",
+        axis.text.x = element_text(angle = 40, vjust = 1, hjust = 1)
+)
+
+ggsave(gg_frag_heatmap,
+       filename = paste0(p_output, "plots/", 
+                           "frag_mod_heatmap", ".pdf"),
+         width = 6, height = 4.5, units = "in"
+       )
+
+
+
+# land cover colors: 
+frag_mod %>% 
+  unnest(tidy) %>%
+  filter(#site == "belarus", metric == "clumpy",
+         term == "year"
+  ) %>%
+  select(class:site, term, estimate, p.value) %>%
+  mutate(
+    sig = p.value < 0.05,
+    direction = estimate > 0,
+    trend = case_when(
+    estimate > 0 & p.value < 0.05 ~ "increase", # Statistically significant gain of AOH
+    estimate < 0 & p.value < 0.05 ~ "decrease", # Statistically significant loss of AOH
+    p.value >= 0.05 ~ "no trend" # no significant trend
+    ),
+    land_cover = case_when(
+      class == 2 ~ "forest",
+      class == 3 ~ "cropland",
+      class == 4 ~ "grassland"
+    )) %>%
+  # ggplot heatmap
+  ggplot(aes(x = class, y = fct_rev(site))) +
+  geom_tile(aes(alpha = sig, fill = class)) +
+  geom_text(aes(label = round(estimate, 3))) +
+  theme_classic() +
+  scale_y_discrete(labels = fancy_labels) +
+  labs(x = "Land Cover", y = NULL, fill = NULL) +
+  scale_fill_manual(labels = lc_plot_cols$name,
+                     values = lc_plot_cols$color, 
+                     breaks = lc_plot_cols$breaks) +
+  facet_wrap(vars(name))
+  # facet_grid(cols = vars(site), rows = vars(metric), scales = "free_y",
+                 # # labeller = as_labeller(fancy_labels)
+                 # )
+```
+
+```{r hypo-2017}
+# comparing 2017 observed and hypothetical
+frag_hypo_df
+
+
+# gg_frag_trends <-
+  frag_hypo_df %>% mutate(id = "hypo") %>%
+    bind_rows(frag_df %>% mutate(id = "obs")) %>%
+    filter(class > 1, year == 2017) %>%
+    mutate(class = factor(class, levels = c(3, 4, 2)),
+           metric = factor(metric, levels = c("clumpy", "area_mn", "para_mn"))) %>%
+    ggplot(aes(x = id, y = value, col = class, fill = class)) +
+    geom_col(position = position_dodge(preserve = "single"),
+             col = "black") + 
+    theme_classic() + 
+    scale_fill_manual(labels = lc_plot_cols$name[c(3,4,2)],
+                       values = lc_plot_cols$color[c(3,4,2)],
+                       breaks = lc_plot_cols$breaks[c(3,4,2)]) +
+    labs(y = "Value", x = "Year", col = "Land Cover"#, fill = "Mean Trend",
+         ) + 
+    facet_grid(cols = vars(site), rows = vars(metric), scales = "free_y",
+               labeller = as_labeller(c(fancy_labels,
+                                        "clumpy" = "Clumpiness Index\n(Aggregation)",
+                                        "area_mn" = "Mean Patch Area",
+                                        "para_mn" = "Perimeter-Area\nRatio"
+                                        ))
+               ) + 
+    theme(
+      legend.position = "bottom",
+      axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0),
+      strip.text.x = element_text(size = 6)
+      )
+  
+  
+  
+  # just subtracting to two
+frag_hypo_df %>% mutate(id = "hypo") %>%
+    bind_rows(frag_df %>% mutate(id = "obs")) %>%
+    filter(class > 1, year == 2017) %>%
+    mutate(class = factor(class, levels = c(3, 4, 2)),
+           metric = factor(metric, levels = c("clumpy", "area_mn", "para_mn"))) %>%
+  select(id, class, metric, value, site, year) %>%
+  pivot_wider(id_cols = c(class, metric, site, year),
+              values_from = value, names_from = id) %>%
+  mutate(diff = hypo - obs,
+         trend = case_when(
+    diff > 0 ~ "increase", # Statistically significant gain of AOH
+    diff < 0 ~ "decrease" # Statistically significant loss of AOH
+    ),
+    land_cover = case_when(
+      class == 2 ~ "forest",
+      class == 3 ~ "cropland",
+      class == 4 ~ "grassland"
+    ),
+    land_cover = factor(land_cover, levels = c("cropland", "grassland", "forest")),
+    metric = factor(metric, levels = c("clumpy", "area_mn", "para_mn"))) %>%
+  
+  ggplot(aes(x = land_cover, y = fct_rev(site))) +
+  geom_tile(aes(fill = trend)) +
+  # geom_text(aes(label = round(AVGreturns, 3)))
+  theme_classic() +
+  scale_y_discrete(labels = fancy_labels) +
+  scale_x_discrete(labels = c("cropland" = "Cropland",
+                              "forest" = "Forest",
+                              "grassland" = "Grassland")) +
+  labs(x = "Land Cover", y = NULL, fill = NULL) +
+  scale_fill_manual(name = "Linear Trend",
+                  labels = frag_palette_labels,
+                  values = frag_palette) +
+  facet_wrap(vars(metric), 
+             labeller = as_labeller(c(
+               "clumpy" = "Clumpiness Index\n(Aggregation)",
+               "area_mn" = "Mean Patch Area",
+               "para_mn" = "Perimeter-Area\nRatio"
+             ))) +
+  theme(
+    # legend.position = "bottom",
+        axis.text.x = element_text(angle = 40, vjust = 1, hjust = 1)
+)
+```
+
+
+```{r si-tab-1}
+
+
+```
+
+
+
 ## Habitat age profile
 
 ```{r habitat-age-profile}
+persistence_dat <- 
+  read_csv(file = paste0(p_derived2, "persistence_dat", run_label, ".csv")) %>%
+  mutate(site = as.factor(site),
+         bins = as.factor(bins),
+         year_abn_bins = as.factor(year_abn_bins),
+         cohort = as.factor(cohort))
+
+
 ggplot(data = persistence_dat) + 
     theme_classic() +
     labs(y = expression("Area abandoned (10"^{3}*" ha)") , 
@@ -2845,8 +3255,8 @@ ggsave(gg_hab_age_profile,
 
 
 # animation:
-library(gganimate)
-library(transformr)
+# library(gganimate)
+# library(transformr)
 
 
 gg_hab_age_profile_animate <-
