@@ -2123,7 +2123,7 @@ plot_grid(gg_predictor_aoh_percent)
 ```
 
 
-# Models
+# Model Development
 
 ```{r 1-binary-win-or-not-logistic}
 # ---------- #
@@ -2300,6 +2300,19 @@ cc_save_model_table(
 
 
 
+# temp #
+trait_mod_df[2,]$model[[1]]
+trait_mod_df[2,]$model[[1]]$deviance
+trait_mod_df[2,]$model[[1]]$null.deviance
+summary(trait_mod_df[2,]$model[[1]])
+tidy(trait_mod_df[2,]$model[[1]])
+glance(trait_mod_df[2,]$model[[1]])
+
+100 * (1-839.49/1495.68)
+
+100*with(summary(trait_mod_df[2,]$model[[1]]), 1 - deviance/null.deviance)
+
+# temp #
 # ---------------------------------------------------------------------------------------------- #
 # 1c.--------------------- binary model where 1 is gain and 0 is loss -------------------------- #
 # ---------------------------------------------------------------------------------------------- #
@@ -2309,9 +2322,9 @@ aoh_est_change_tmp %>%
   select(trend, contains("binary")) %>%
   unique()
 
-binary_mod_gain_v_loss <- 
+binary_mod_gain_v_loss <-
   glm(binary_gain_v_loss ~ 
-        forest_occ + savanna_occ + shrubland_occ + grass_occ + wetlands_occ + artificial_occ + n_hab_occ +
+        forest_occ + savanna_occ + shrubland_occ + grassland_occ + wetlands_occ + artificial_occ + n_hab_occ +
         threatened + Trophic_level + 
         log(Body_mass_g) + log(total_range_area) + abs(centroid_latitude) + 
         max_abn_extent_div_site_area,
@@ -2450,6 +2463,7 @@ glm(binary_gain_v_loss ~
 
 
 ```
+
 
 ```{r 2-abs-change-aoh}
 # ------------------------ #
@@ -2973,6 +2987,7 @@ plot(aoh_latitude_aoh_percent_lm, 2)
 
 ```
 
+# Final Models
 
 ```{r many-models}
 # Define response variables, and run models based on the datasets that are required, the glm family, etc.
@@ -3010,7 +3025,17 @@ mod_label <- "_mod2"
 predictor_variables <- predictor_variables_all[-c(9:11)]
 mod_label <- "_mod3"
 
-lapply(1, # 1:3, 
+
+# ------------------------------------- #
+# Run glm and lm models --------------- #
+# ------------------------------------- #
+# This lapply call iterates through three subsets of predictor variables.
+# The first, predictor_variables_all[-c(11)], is the final subset.
+# This lapply call runs the glm models, with glm_response_variables, and stores the models in a tibble.
+# It then runs the lm models, and then combines those models into a single data frame to be saved.
+# It also saves a bunch of gt tables with the model outcomes, and a few diagnostic plots.
+
+lapply(1, # 1:3, # only for exploration, determining the final predictor variable mix
        function(i) 
   {
   predictor_variables_l <- list(
@@ -3265,6 +3290,10 @@ lapply(1:10, function(i) {
          pull(response) %>% .[i])
   })
 dev.off()
+
+
+# END lapply() call
+
 }
 )
 
@@ -3382,6 +3411,219 @@ tibble(latitude = 1:9)
 ggplot() +
   geom_line()
 
+```
+
+# Site & Species controls
+
+```{r test-site-sp-controls}
+# ---------------------------------------------------------------------------------------------- #
+# 1c.--------------------- binary model where 1 is gain and 0 is loss -------------------------- #
+# ---------------------------------------------------------------------------------------------- #
+names(aoh_obs_change_tmp)
+
+aoh_obs_change_tmp %>%
+  select(trend, contains("binary")) %>%
+  unique()
+
+aoh_obs_change_tmp %>% 
+  select(aoh_type, vert_class, site, binomial) %>%
+  group_by(binomial) %>%
+  summarise(#p_gain = mean(overall_trend == "gain"),
+            n_sp = n()) %>% ungroup() %>%
+  arrange(desc(n_sp))
+
+
+# data:
+aoh_obs_change_tmp # see _util_files.R, this is just for "crop_abn_iucn"
+
+binary_mod_site_sp_id <-
+  glm(binary_gain_v_loss ~
+        site + binomial +
+        forest_occ + savanna_occ + shrubland_occ + grassland_occ + wetlands_occ + 
+        rocky_occ + caves_occ + desert_occ + urban_occ + arable_occ + 
+        n_suitable_habitats_lvl2 + vert_class + 
+        threatened + Trophic_level + 
+        log10(Body_mass_g) + log10(total_range_area) + abs(centroid_latitude) + 
+        max_abn_ext_percent_site,
+      data = aoh_obs_change_tmp,
+      family = "binomial")
+
+
+c("binomialAccipiter nisus", "binomialAccipiter soloensis", "binomialAccipiter virgatus",
+  "binomialAcridotheres cristatellus", "binomialAcrocephalus bistrigiceps") %>%
+  str_extract(., "binomial")
+
+binary_mod_site_sp_id %>%
+  tidy() %>% mutate(id = 1:nrow(.)) %>% arrange(desc(id))
+  print(n = 30) # %>%
+  mutate(site = str_extract(term, "^site[a-z,_]*") %>% gsub("site", "", .),
+         # term = gsub(" ", "_", term),
+         sit = str_detect(term, "^site"),
+         bin = str_detect(term, "^binomial"),
+         binomial = str_replace(term, "binomial", "")) %>%
+  arrange(sit, bin)
+
+
+binary_mod_site_sp_id %>%
+    tidy() %>%
+    mutate(OR = exp(1)^estimate, # exponentiate coefs so that they correspond to Odds Ratios
+           site = str_extract(term, "^site[a-z,_]*") %>% gsub("site", "", .),
+           binomial = str_extract(term, "binomial[a-z]") %>%
+             gsub("binomial", "", .),
+           # common = str_extract(term, ".[0-9]+.[0-9]+.")
+           ) %>% 
+  # arrange(site, binomial) %>%
+  print(n = 50)
+
+
+
+aoh_obs_change_tmp %>% group_by(Trophic_level) %>% summarise(n = n())
+aoh_obs_change_tmp %>% group_by(binary_gain_v_loss) %>% summarise(n = n())
+
+tidy(binary_mod_gain_v_loss, conf.int = TRUE)
+glance(binary_mod_gain_v_loss)
+summary(binary_mod_gain_v_loss)
+
+```
+
+# Phylogenetic Models
+
+```{r}
+install.packages("phylolm")
+install.packages("ape")
+# install.packages("ggtree")
+install.packages("phylobase")
+install.packages("phytools")
+install.packages("phangorn")
+
+library(phylolm)
+library(ape)
+# library(ggtree)
+library(phylobase)
+library(phangorn)
+
+
+# load the phylogenetic trees for use in phyloglm() and phylolm()
+bt <- read.tree("/Users/christophercrawford/Downloads/mnt/data/projects/birdphylo/Tree_sets/Stage2_full_data/CombinedTrees/AllBirdsHackett1.tre")
+
+
+# produce consensus trees from a sample of many trees:
+phangorn::maxCladeCred()
+
+
+```
+
+```{r species-list}
+species_list
+
+aoh_feols_trends_by_sp %>%
+  filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage", vert_class != "amp",
+         mature_forest_obl <= 0.5) %>%
+  group_by(vert_class) %>%
+  summarise(n = n())
+
+aoh_feols_trends_by_sp %>%
+  filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage", vert_class != "amp",
+         mature_forest_obl <= 0.5)
+
+taxonomy_df
+
+
+aoh_obs_change_tmp %>%
+  select(aoh_type:mature_forest_obl)
+
+# aoh_obs_change_tmp_all
+phylo_sp <- 
+  aoh_obs_change_tmp %>%
+  select(vert_class, binomial) %>%
+  unique()
+
+phylo_sp %>% 
+  write_csv(file = paste0(p_derived, "phylogeny_species_list.csv"))
+
+vl <- read_csv("/Users/christophercrawford/Downloads/vertlife_taxonomies.csv")
+
+vl %>% select(group) %>% unique
+vl %>% filter(group %in% c("Birds", "Mammals"))
+
+phylo_sp %>%
+  left_join(vl %>% filter(group %in% c("Birds", "Mammals")) %>% mutate(test = 1), # VertLife species list
+            by = c("binomial" = "scientificname")
+            ) %>%
+  filter(is.na(test)) %>%
+  group_by(vert_class) %>% summarise(n = n())
+
+vl %>%
+  filter(str_detect(scientificname, "flammea"))
+
+
+```
+
+
+```{r test-phylolm}
+# ---------------------------------------------------------------------------------------------- #
+# 1c.--------------------- binary model where 1 is gain and 0 is loss -------------------------- #
+# ---------------------------------------------------------------------------------------------- #
+
+# data:
+aoh_obs_change_tmp # see _util_files.R, this is just for "crop_abn_iucn"
+
+# explore the data
+names(aoh_obs_change_tmp)
+
+aoh_obs_change_tmp %>%
+  select(trend, contains("binary")) %>%
+  unique()
+
+# calculate the number of sites each species occurrs in:
+aoh_obs_change_tmp %>% 
+  select(aoh_type, vert_class, site, binomial) %>%
+  group_by(binomial) %>%
+  summarise(#p_gain = mean(overall_trend == "gain"),
+            n_sp = n()) %>% ungroup() %>%
+  arrange(desc(n_sp))
+
+aoh_obs_change_tmp %>% group_by(Trophic_level) %>% summarise(n = n())
+aoh_obs_change_tmp %>% group_by(binary_gain_v_loss) %>% summarise(n = n())
+
+
+
+# run the model
+
+phylo_glm_binary <-
+  glm(binary_gain_v_loss ~
+        # site + binomial +
+        forest_occ + savanna_occ + shrubland_occ + grassland_occ + wetlands_occ + 
+        rocky_occ + caves_occ + desert_occ + urban_occ + arable_occ + 
+        n_suitable_habitats_lvl2 + vert_class + 
+        threatened + Trophic_level + 
+        log10(Body_mass_g) + log10(total_range_area) + abs(centroid_latitude) + 
+        max_abn_ext_percent_site,
+      data = aoh_obs_change_tmp,
+      family = "binomial")
+
+
+phylo_glm_binary %>%
+  tidy() %>%
+  head(15)
+
+
+phylo_glm_binary %>%
+    tidy() %>%
+    mutate(OR = exp(1)^estimate, # exponentiate coefs so that they correspond to Odds Ratios
+           site = str_extract(term, "^site[a-z,_]*") %>% gsub("site", "", .),
+           binomial = str_extract(term, "binomial[a-z]") %>%
+             gsub("binomial", "", .),
+           # common = str_extract(term, ".[0-9]+.[0-9]+.")
+           ) %>% 
+  # arrange(site, binomial) %>%
+  print(n = 50)
+
+
+
+tidy(binary_mod_gain_v_loss, conf.int = TRUE)
+glance(binary_mod_gain_v_loss)
+summary(binary_mod_gain_v_loss)
 ```
 
 
@@ -4118,11 +4360,6 @@ ggsave(gg_by_family %+% filter(aoh_trends_by_taxonomic_family, vert_class == "ma
          width = 9, height = 5, units = "in")
 ```
 
-```{r ggtree}
-library(ggtree)
-tree # load data
-
-```
 
 ```{r match-species-old}
 # test for matching binomial names:
