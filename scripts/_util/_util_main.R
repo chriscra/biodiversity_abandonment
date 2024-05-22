@@ -21,6 +21,7 @@ p_plots <- paste0(p_proj, "output/plots/")
 p_tmp <- paste0(p_proj, "derived/tmp/")
 
 p_dat <- "/Users/christophercrawford/Library/CloudStorage/GoogleDrive-clc6@princeton.edu/My Drive/data/"
+
 p_ee <- "/Users/christophercrawford/Library/CloudStorage/GoogleDrive-chris.l.crawford@gmail.com/My Drive/ee/"
 
 

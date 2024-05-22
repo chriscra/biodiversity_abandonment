@@ -11,8 +11,10 @@ p_proj <- "/Users/christophercrawford/work/projects/biodiversity_abn/"
 # ------------------------- #
 
 needed_packages <- c(
-  "data.table", "raster", "terra", "rgdal", "sp", "sf", "mapview", 
-  "gdalUtils", "gdata", "GISTools", "rgeos", "lwgeom", "fasterize",
+  "data.table", "raster", "terra", 
+  "sf", "mapview", 
+  # "rgdal", "sp", "gdalUtils", "gdata", "GISTools", "rgeos", # old geospatial packages
+  "lwgeom", "fasterize",
   "units",
   "ncdf4", # for opening NetCDF spatial files
   "arrow", # for reading and writing parquet files
@@ -27,7 +29,7 @@ needed_packages <- c(
   "lme4", "brms", 
   "broom.mixed", # nb: broom comes preloaded in the tidymodels; this package is specifically intended for mixed effects models
   "lamW", # to calculate the Lambert's W function, for calculating time to various proportions in abn decay models
-  "equatiomatic",
+  # "equatiomatic",
   "olsrr", # for model diagnostics
   "car", "multcomp", # recommended by Oscar Torres-Reyna for stats diagnostics
   "fixest", # recommended by Tom Bearpark, as a very fast alternative implementation of lm()
@@ -59,7 +61,7 @@ needed_packages <- c(
   # spatial, ecological packages, extra:
   # "rnaturalearth", "smoothr", "spatialEco", "maps", #"rangeBuilder",
   # "rredlist",
-  # "landscapemetrics", "landscapetools",
+  "landscapemetrics", "landscapetools",
   
   # rmarkdown
   "rmarkdown", "bookdown", "knitr", 
@@ -136,7 +138,7 @@ github_packages <- c(
   "cowplot", 
   "colorblindr")
 
-github_packages_inst <- sapply(github_packages, library, character.only = TRUE) # load them
+# github_packages_inst <- sapply(github_packages, library, character.only = TRUE) # load them
 
 
 

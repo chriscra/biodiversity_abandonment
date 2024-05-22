@@ -84,6 +84,7 @@ abn_prop_lc_2017 <- read_csv(file = paste0(p_derived2, "abn_prop_lc_2017", run_l
 #   })
 # names(lc) <- site_df$site
 
+
 # ------------------------------- load cleaned land cover maps --------------------------------------- #
 # prepared input rasters, passed through temporal filter
 lcc <- lapply(1:11, function(i) {
@@ -91,11 +92,12 @@ lcc <- lapply(1:11, function(i) {
 })
 names(lcc) <- site_df$site
 
-lcc$volgograd %>% ncell
-lcv <- rast(paste0(p_dat_derived, "input_rasters/", site_df$site[10], ".tif"))
-lcv %>% ncell
+# lcc$volgograd %>% ncell
+# lcv <- rast(paste0(p_dat_derived, "input_rasters/", site_df$site[10], ".tif"))
+# lcv %>% ncell
 
-sapply(lcc, ncell)
+# sapply(lcc, ncell)
+
 # site_df <- site_df %>% mutate(ncell = sapply(lcc, ncell))
 # write_csv(site_df, paste0(p_dat_derived, "site_df.csv"))
 # 
@@ -234,6 +236,33 @@ names(max_abn_lcc) <- site_df$site
 # }
 # )
 # names(abn_lc_2017) <- site_df$site
+
+# ------------------------------------------------------------ # 
+# ---------------- Fragmentation data --------------------------- 
+# ------------------------------------------------------------ # 
+
+frag_df <- 
+  lapply(site_df$site, function(i) {
+    read_csv(file = paste0(p_derived, "frag/frag_", i, ".csv")) %>%
+      mutate(site = i)
+    }) %>% 
+  bind_rows() %>%
+  mutate(year = case_when(
+    site == "nebraska" ~ layer + 1985,
+    TRUE ~ layer + 1986)
+  ) #%>% filter(year > 1986, year < 2018)
+
+
+frag_hypo_df <- 
+  lapply(site_df$site, function(i) {
+    read_csv(file = paste0(p_derived, "frag/frag_", i, "_hypo_no_abn_2017.csv")) %>%
+      mutate(site = i)
+  }) %>% 
+  bind_rows() %>%
+  mutate(year = 2017)
+
+
+
 
 
 # ------------------------------------------------------------ # 
@@ -477,6 +506,16 @@ aoh_type_df <-
            map_type == "abn" ~ "Abn periods only",
            map_type == "potential_abn" ~ "Abn periods only (pot.)"),
          
+         p4_2022 = case_when(
+           map_type == "full" ~ "Entire Landscape\n(1987-2017)", 
+           map_type == "full_potential" ~ "Entire Landscape\n(1987-2017, potential)", 
+           map_type == "max_abn" ~ "Abandonment\n(1987-2017)",
+           map_type == "max_potential_abn" ~ "Potential Abandonment\n(1987-2017)",
+           map_type == "crop_abn" ~ "Abandonment\n(cultivation-2017)",
+           map_type == "crop_abn_potential" ~ "Potential Abandonment\n(cultivation-2017)",
+           map_type == "abn" ~ "Abn periods only",
+           map_type == "potential_abn" ~ "Abn periods only (pot.)"),
+         
          p5 = case_when(
            map_type == "full" ~ "Entire Landscape (1987-2017)", 
            map_type == "full_potential" ~ "Entire Landscape (1987-2017, potential)", 
@@ -488,6 +527,7 @@ aoh_type_df <-
            map_type == "potential_abn" ~ "Abn periods only (pot.)"),
          
          short_desc = paste0(p4),
+         # short_desc = paste0(p4_2022), # added to replicate dissertation, July 2023
          desc = paste0(p1, "; ", p2)
          )
 
@@ -561,7 +601,8 @@ aoh_ms_tmp_trends_incl_mature <-
   filter(
     # exclude all species not affected by abandonment:
     binomial %in% unique(aoh_feols_trends_by_sp %>%
-                           filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage",
+                           filter(aoh_type == "crop_abn_iucn", 
+                                  passage_type == "exclude_passage",
                                   vert_class != "amp", mature_forest_obl < 0.5) %>%
                            pull(binomial)),
     passage_type == "exclude_passage", # exclude passage areas from AOH calculations
@@ -605,6 +646,7 @@ aoh_ms_tmp_trends_by_sp <- aoh_ms_tmp_trends_by_sp_incl_mature %>%
 # ------------------------------------------------------------ # 
 taxonomy_df <- read_parquet(paste0(p_derived, "taxonomy_df.parquet"))
 etard_updated <- read_parquet(paste0(p_derived, "etard_updated.parquet"))
+
 habitat_occurrence_df2 <- read_parquet(paste0(p_derived, "habitat_occurrence_df.parquet")) #%>%
   # left_join(habitat_prefs %>% 
   #             separate(code, into = c("lvl1", "lvl2"), sep = "\\.", extra = "merge") %>%

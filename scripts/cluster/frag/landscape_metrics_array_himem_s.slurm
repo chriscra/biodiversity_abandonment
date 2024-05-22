@@ -16,5 +16,5 @@ echo "Executing on the machine:" $(hostname)
 
 module load gdal # this line loads gdal, which is required for sf
 
-# r script passing array job number to the scrip
+# r script passing array job number to the script
 Rscript /home/clc6/abandonment_trajectories/scripts/landscape_metrics_array_s.R $SLURM_ARRAY_TASK_ID
