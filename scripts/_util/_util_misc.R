@@ -138,8 +138,25 @@ palette_labels <- c(
   "weak gain" = "Weak Gain",
   "no trend" = "No Trend",
   "context dependent" = "Conflicting",
+  # "context dependent" = "Opposites",
   "weak loss" = "Weak Loss", 
   "loss" = "Loss"
+)
+
+
+frag_palette <- c(
+  "increase" = input_palette[1],
+  "no trend" = input_palette[2],
+  "decrease" = input_palette[4]
+)
+# 
+# show_col(frag_palette)
+# show_col(palette_du_jour2)
+
+frag_palette_labels <- c(
+  "increase" = "Increasing",
+  "no trend" = "No Trend",
+  "decrease" = "Decreasing"
 )
 
 
@@ -238,6 +255,7 @@ regression_model_flextable_labels <-
     "nobs" = "No. Obs.",
     "null.deviance" = "Null deviance",
     "df.null" = "Null df",
+    "percent_deviance_explained" = "Deviance explained (%)",
     "adj.r.squared" = "Adjusted R²",
     "sigma" = "Sigma"
   )
