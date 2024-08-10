@@ -137,7 +137,7 @@ palette_labels <- c(
   "gain" = "Gain",
   "weak gain" = "Weak Gain",
   "no trend" = "No Trend",
-  "context dependent" = "Conflicting",
+  "context dependent" = "Mixed",
   # "context dependent" = "Opposites",
   "weak loss" = "Weak Loss", 
   "loss" = "Loss"
