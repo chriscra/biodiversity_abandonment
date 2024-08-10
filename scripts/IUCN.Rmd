@@ -6,10 +6,11 @@ editor_options:
   chunk_output_type: console
 ---
 
+This script is part of the **Effects of cropland abandonment on biodiversity** project, developed by Christopher L. Crawford (chris.L.crawford@gmail.com) at Princeton University beginning in Fall 2021.
+See https://github.com/chriscra/biodiversity_abandonment.
+
 This document contains code used in the prep and development of IUCN data being used in the calculation of AOH, including both assessment data (.csvs) and range map data (sf objects).
 
-This is part of the **Biodiversity Impacts of Abandonment** project, developed by Christopher L. Crawford, starting fall of 2021. 
-See <https://github.com/chriscra/biodiversity_abandonment>.
 
 ```{r initialize}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")

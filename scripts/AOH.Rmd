@@ -6,7 +6,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-This is part of the **Biodiversity Impacts of Abandonment** project, developed by Christopher L. Crawford, starting fall of 2021. 
+This script is part of the **Effects of cropland abandonment on biodiversity** project, developed by Christopher L. Crawford (chris.L.crawford@gmail.com) at Princeton University beginning in Fall 2021.
 See https://github.com/chriscra/biodiversity_abandonment.
 
 ```{r initialize}

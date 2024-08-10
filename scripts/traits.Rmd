@@ -6,6 +6,10 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
+
+This script is part of the **Effects of cropland abandonment on biodiversity** project, developed by Christopher L. Crawford (chris.L.crawford@gmail.com) at Princeton University beginning in Fall 2021.
+See https://github.com/chriscra/biodiversity_abandonment.
+
 ```{r initialize}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/_util/_util_files.R")
