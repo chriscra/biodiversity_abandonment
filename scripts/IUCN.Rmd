@@ -81,6 +81,7 @@ Together, these cleaning steps yielded prepped range map files:
 # _sf_validated.RData and _sf_validated.csv
 paste0(p_dat, "bd/IUCN/ranges_2022_01_04") %>% list.files()
 
+
 # _sites.Rdata and _sites.csv
 paste0(p_derived, "species_ranges") %>% list.files()
 ```
@@ -853,13 +854,14 @@ species_list %>%
 calc_cores
 ```
 
-```{r write-final-species-list}
+```{r write-filtered-species-list}
 # ------------------------------------------------------------- #
 # Step. 5
-# Write out the final, filtered species_list
+# Write out the filtered species_list
 # ------------------------------------------------------------- #
 write_csv(species_list, file = paste0(p_derived, "species_list.csv"))
 
+# see also "AOH.Rmd" chunk {r generate-final-species-list}, which produces the final list of bird and mammal species included in our analysis, along with the overall response to cropland abandonment (overall_trend), the sites where that species had AOH affected by cropland abandonment (sites), the IUCN Red List Category, the obligate_type (i.e., whether a species is a mature forest obligate, or not), the the range size quantile (ranking species by global geographic range size), and common names. Note that mature forest obligates were excluded from our final results.
 ```
 
 

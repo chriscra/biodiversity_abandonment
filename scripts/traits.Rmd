@@ -233,55 +233,6 @@ missing # missing Inia geoffrensis (Amazon river dolphin), but that's ok, becaus
 
 ```
 
-```{r test-lvl2-suitability}
-habitat_age_req_coded %>%
-  filter(str_detect(suitable_habitats, regex("forest", ignore_case = TRUE)),
-         str_detect(suitable_habitats, regex("heavily degraded", ignore_case = TRUE))) #%>%
-  # select(suitable_habitats) %>% unique()
-
-habitat_occurrence_df %>%
-  filter(forest_occ)
-
-habitat_prefs %>% names
-
-habitat_prefs %>%
-  filter(suitability == "Suitable") %>%
-  select(binomial, #code, name,# majorImportance:suitability,
-         Coarse_Name) %>% unique() %>%
-  group_by(binomial) %>%
-  summarise(count = n()) %>% arrange(desc(count))
-  print(n = 110)
-
-habitat_prefs %>%
-  filter(binomial == "Odocoileus virginianus") %>%
-  select(binomial, code) %>%
-  unique() %>%
-  separate(code, into = c("lvl1", "lvl2"), sep = "\\.", extra = "merge") %>%
-    select(binomial, lvl1) %>% unique() %>% arrange(lvl1)
-
-etard_updated %>% 
-  filter(binomial == "Odocoileus virginianus") %>%
-  select(binomial, Habitat_breadth_IUCN)
-
-
-habitat_prefs %>% #select(binomial, code) %>% #unique() %>% arrange(code) %>%
-  separate(code, into = c("lvl1", "lvl2"), sep = "\\.", extra = "merge") %>%
-  select(binomial, lvl1) %>% unique() %>% mutate(lvl1 = as.integer(lvl1)) %>%
-  arrange(lvl1) %>%
-  group_by(binomial) %>%
-  summarise(n_lvl1_habitats = n(), lvl1_habitats = str_flatten(lvl1, collapse = ", "))
-
-
-aoh_obs_change_tmp %>%
-  select(aoh_type:binomial, trend) %>%
-  left_join(habitat_prefs %>% 
-              separate(code, into = c("lvl1", "lvl2"), sep = "\\.", extra = "merge") %>%
-              select(binomial, lvl1) %>% unique() %>% mutate(lvl1 = as.integer(lvl1)) %>%
-              group_by(binomial) %>%
-              summarise(n_lvl1_habitats = n(), lvl1_habitats = str_flatten(lvl1, collapse = ", ")) %>% ungroup()
-            )
-```
-
 
 ```{r extract-habitat-preferences}
 # -------- #
@@ -393,6 +344,8 @@ aoh_est_change_tmp_all # estimated change in AOH based on ols regression with NW
 aoh_obs_change_tmp_all # observed change in AOH based on mean values for start and end of time series (for various window sizes)
 # ---------------------------------------------- #
 
+# exploring:
+
 aoh_mod_tmp_trends_by_sp %>%
   select(#binomial, 
          overall_trend, trend_categorical, binary_trend_gain, binary_trend_loss) %>%
@@ -494,7 +447,6 @@ Ultimately, we decided to focus on only three models:
 1. Binary, proportion of winners to non-winners, with one observation per species per site.
 2. Change in AOH as a proportion of site area (Change in AOH / site area) - one observation for each species at each site
 3. Ratio of AOH at end to AOH at start ($AOH_end / AOH_start$), log transformed.
-4. Slope (?)
 
 ```{r three-response-variables}
 
@@ -515,7 +467,16 @@ aoh_mod_tmp_trends_by_sp %>%
 
 
 # ---------- #
-# 2. factor increase in AOH:
+# 2. absolute increase in AOH:
+# ---------- #
+# response variable: abs_change/10^3
+aoh_est_change_tmp %>%
+  ggplot(aes(x = abs_change/10^3)) +
+  geom_histogram()
+
+
+# ---------- #
+# 3. factor increase in AOH:
 # ---------- #
 # response variable: abs(ratio_mod)
 aoh_obs_change_tmp %>% 
@@ -523,14 +484,6 @@ aoh_obs_change_tmp %>%
          abs(ratio_mod) < 15,
          !is.na(trend))
 
-
-# ---------- #
-# 3. absolute increase in AOH:
-# ---------- #
-# response variable: abs_change/10^3
-aoh_est_change_tmp %>%
-  ggplot(aes(x = abs_change/10^3)) +
-  geom_histogram()
 
 ```
 
@@ -3105,6 +3058,7 @@ lm_mod_df <-
                label = regression_model_labels,
                add_estimate_to_reference_rows = TRUE,
                intercept = TRUE,
+               pvalue_fun = style_pvalue(digits = 3),
                conf.int = FALSE) %>%
              italicize_levels() %>%
              add_glance_table(include = c(
