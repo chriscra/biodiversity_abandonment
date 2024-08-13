@@ -10,7 +10,12 @@ editor_options:
 This script is part of the **Effects of cropland abandonment on biodiversity** project, developed by Christopher L. Crawford (chris.L.crawford@gmail.com) at Princeton University beginning in Fall 2021.
 See https://github.com/chriscra/biodiversity_abandonment.
 
+5 primary sections:
 
+1. Prepping the Jung et al. 2020 map of IUCN Level 2 Habitats (for the year 2015)
+2. Interpolating Yin et al. 2020 Land Covers to IUCN Level 2 Habitat Types (Jung et al. 2020)
+3. Analyzing Landscape Configuration and Fragmentation via {landscapemetrics} (see "cluster/lsm_2024.R" and "cluster/lsm_two_2024.R")
+4. Plotting Ecoregions & Biomes for each site. 
 
 ```{r initialize}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
@@ -44,12 +49,6 @@ raster::removeTmpFiles()
 warnings()
 ```
 
-5 primary sections:
-
-1. Prepping the Jung et al. 2020 map of IUCN Level 2 Habitats (for the year 2015)
-2. Interpolating Yin et al. 2020 Land Covers to IUCN Level 2 Habitat Types (Jung et al. 2020)
-3. Analyzing Landscape Configuration and Fragmentation via {landscapemetrics} (see "cluster/lsm_2024.R" and "cluster/lsm_two_2024.R")
-4. Plotting Ecoregions & Biomes for each site. 
 
 # IUCN Habitat types
 
