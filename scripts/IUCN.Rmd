@@ -9,9 +9,26 @@ editor_options:
 This script is part of the **Effects of cropland abandonment on biodiversity** project, developed by Christopher L. Crawford (chris.L.crawford@gmail.com) at Princeton University beginning in Fall 2021.
 See https://github.com/chriscra/biodiversity_abandonment.
 
-This document contains code used in the prep and development of IUCN data being used in the calculation of AOH, including both assessment data (.csvs) and range map data (sf objects).
+This document contains code used in the prep and development of IUCN data used in the calculation of AOH, including both tabular assessment data (.csvs) and spatial range map data (sf objects).
+
+Components include:
+
+1. IUCN Basics, loading IUCN status and IUCN / Yin et al. Land Cover crosswalk, which are relevant for later code. 
+2. Exploring and prepping the [IUCN](https://www.iucnredlist.org/resources/spatial-data-download) / [BirdLife International](https://datazone.birdlife.org/home) range maps after their processing on the cluster
+3. Loading IUCN Red List Assessment data, including habitat and elevational preferences.
+4. Determining species' habitat age requirements, in order to filter out any species that require habitats older than 30 years (our study length), which we consider to be "mature-forest obligate species."
+5. Miscellaneous development code retained in case it's useful for future Chris. 
 
 
+Relevant cluster scripts include:
+- **crop_sp_ranges_array.R** loads, filters, validates, crops, and saves species range maps. Because bird range maps have so many verticies (many shorelines), they required more specialized code to handle (below), but if you have the computing power and time, this script can be run in place of the follow scripts.
+- **crop_mammal_ranges.R** [optional, development] does the same as "crop_sp_ranges_array.R," but only for mammal species (if birds are done separately, so too can mammals).
+- **save_bird_ranges_as_blocks.R** calculates the number of vertices in each range, then saves small blocks of bird ranges based on the number of vertices in each range.
+- **validate_bird_ranges_array.R** sequentially loads and validates the bird range chunks produced in the previous script.
+- **merge_crop_bird_ranges.R** loads, merges, and crops all individual bird ranges to site locations.
+- **calc_range_area.R** with validated range maps for both brids and mammals, this script loads the validated ranges, calculates the area of each range polygon, and crops to sites again. 
+
+s
 ```{r initialize}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
 ```
@@ -45,48 +62,9 @@ raster::removeTmpFiles()
 warnings()
 ```
 
-# Methods
+# 1. IUCN Basics
 
-The first step is to crop vertebrate species range maps to my eleven sites.
-In order to crop vertebrate species ranges maps to site extents, however, they must first be "validated" - a time consuming process, especially for large range maps with many vertices (which end up being very computationally taxing).
-I wrote scripts to process these range maps using Princeton's Research Computing resources (the "della" cluster).
-
-The script */cluster/crop_sp_ranges_array.R* is designed to:
-- load the range maps for a specific class (i.e., mammals, birds, etc.), as determined by the array index supplied in the sbatch call. 
-- filter based on IUCN information on "presence", "origin", "seasonal", and (where applicable) IUCN "category", and "marine".
-- validate polygons via `sf::st_make_valid()`
-- crop to site extents
-- save validated and cropped range maps to:
-  + paste0(p_derived, vert, "_sites.csv")
-  + paste0(p_derived, vert, "_sites.shp")
-  + paste0(p_derived, vert, "_sites.RData")
-  + paste0(p_range, vert, "_sf_validated.RData")
-
-Bird ranges present a trickier problem than mammals or amphibians, given the size of many bird ranges.
-This required three steps:  
-- *save_bird_ranges_as_blocks.R*: calculate the number of vertices in each range, then save small blocks of bird ranges based on the number of vertices in each range. `r c("_1_70", "_70_80", "_80_90", paste0("_", 90:98, "_", 90:98 + 1), paste0("_", 990:998, "_", 990:998 + 1), paste0("_", 9990:9999, "_", 9990:9999 + 1))`
-- *validate_bird_ranges_array.R*: iteratively load and validate the bird range chunks produced in the previous script. 
-- *merge_crop_bird_ranges.R*: load, merge, and crop all individual bird ranges to site locations, yielding the following:
-  + paste0(p_range, "bird_sf_validated", ".RData") - "bird_sf_validated," or all ranges validated, with the number of vertices listed as a column.
-  + paste0(p_derived, "bird_sites.csv") - just the attribute table of the cropped ranges below.
-  + paste0(p_derived, "bird_sites.RData") - bird ranges cropped to 11 sites.
-  + Note: this script also cleaned up the mammal (mam_sf_validated.Rdata) and amphibian files (amp_sf_validated.Rdata)
-  
-A final step included:
-- *calc_range_area.R*: loading the validated ranges, calculating area of each range polygon, and cropping to sites again. 
-
-
-Together, these cleaning steps yielded prepped range map files:
-
-```{r}
-# _sf_validated.RData and _sf_validated.csv
-paste0(p_dat, "bd/IUCN/ranges_2022_01_04") %>% list.files()
-
-
-# _sites.Rdata and _sites.csv
-paste0(p_derived, "species_ranges") %>% list.files()
-```
-
+These data are needed for the range map scripts below.
 
 ```{r IUCN-status}
 iucn_status <- lapply(c("LC", "nonLC"), function(i) {
@@ -111,26 +89,15 @@ select(habitat_details, binomial, redlistCategory)
 ```
 
 
-```{r dolphins}
-common_names %>% filter(binomial == "Inia geoffrensis")
-habitat_details %>% filter(binomial == "Inia geoffrensis")
-
-habitat_age_req %>% select(binomial, common_names, habitat)
-
-species_ranges %>%
-  st_drop_geometry() %>%
-  filter(freshwater == "true", vert_class %in% c("bird", "mam")) %>%
-  as_tibble() %>%
-  select(site, vert_class, binomial, marine:freshwater) %>%
-  left_join(habitat_age_req %>% select(binomial, common_names, habitat)) %>%
-  print(n = 50)
-```
-
-
 ```{r load-IUCN-crosswalk}
 # ---------------------------------------------- #
 # Jung IUCN habitat types map crosswalk
 # ---------------------------------------------- #
+
+# *** see "_util_files.R" to load the final version of this ***
+
+
+# development
 # iucnHabitatTranslator <- read_csv(paste0(p_proj, "/resources/IUCNhabitatMap_translator.csv"))
 # 
 # iucn_crosswalk <- read_csv(paste0(p_derived, "iucn_lc_crosswalk.csv")) %>%
@@ -139,10 +106,9 @@ species_ranges %>%
 # 
 # iucn_crosswalk %>% write_csv(paste0(p_derived, "iucn_lc_crosswalk.csv"))
 
-iucn_crosswalk <- read_csv(paste0(p_derived, "iucn_lc_crosswalk.csv")) %>%
-  mutate(code = as.character(code)) %>%
-  # fix 5.10 being converted to 5.1 issue:
-  mutate(code = ifelse(map_code == 510, "5.10", code)) 
+# *** see "_util_files.R" to load the final version of this ***
+
+iucn_crosswalk
 
 iucn_crosswalk %>% 
   print(n = 50)
@@ -151,10 +117,52 @@ nrow(iucn_crosswalk)
 iucn_crosswalk$code %>% unique %>% length()
 ```
 
-# IUCN Range Map Data
+# 2. IUCN Range Map Data
 
-```{r validated}
-load(paste0(p_dat, "bd/IUCN/ranges_2022_01_04/mam_sf_validated.RData"), verbose = TRUE)
+The first step is to crop vertebrate species range maps to my eleven sites.
+This ends up being more complicated than you'd expect!
+In order to crop vertebrate species ranges maps to site extents, however, they must first be "validated" - a time consuming process, especially for large range maps with many vertices (which end up being very computationally taxing).
+I wrote scripts to process these range maps using Princeton's Research Computing resources (the "della" cluster).
+
+The script */cluster/crop_sp_ranges_array.R* is designed to:
+- load the range maps for a specific class (i.e., mammals, birds, etc.), as determined by the array index supplied in the sbatch call. 
+- filter based on IUCN information on "presence", "origin", "seasonal", and (where applicable) IUCN "category", and "marine".
+- validate polygons via `sf::st_make_valid()`
+- crop to site extents
+- save validated and cropped range maps to:
+  + paste0(p_derived, vert, "_sites.csv")
+  + paste0(p_derived, vert, "_sites.shp")
+  + paste0(p_derived, vert, "_sites.RData")
+  + paste0(p_range, vert, "_sf_validated.RData")
+
+Bird ranges present a trickier problem than mammals or amphibians, given the size of many bird ranges.
+This required three steps:  
+- */cluster/save_bird_ranges_as_blocks.R*: calculate the number of vertices in each range, then save small blocks of bird ranges based on the number of vertices in each range. `r c("_1_70", "_70_80", "_80_90", paste0("_", 90:98, "_", 90:98 + 1), paste0("_", 990:998, "_", 990:998 + 1), paste0("_", 9990:9999, "_", 9990:9999 + 1))`
+- */cluster/validate_bird_ranges_array.R*: sequentially load and validate the bird range chunks produced in the previous script. 
+- */cluster/merge_crop_bird_ranges.R*: load, merge, and crop all individual bird ranges to site locations, yielding the following:
+  + paste0(p_range, "bird_sf_validated", ".RData") - "bird_sf_validated," or all ranges validated, with the number of vertices listed as a column.
+  + paste0(p_derived, "bird_sites.csv") - just the attribute table of the cropped ranges below.
+  + paste0(p_derived, "bird_sites.RData") - bird ranges cropped to 11 sites.
+
+A final step included:
+- */cluster/calc_range_area.R*: loading the validated ranges, calculating area of each range polygon, and cropping to sites again. 
+
+Together, these cleaning steps yielded prepped range map files:
+
+```{r cluster-files}
+# _sf_validated.RData and _sf_validated.csv
+paste0(p_dat, "bd/IUCN/ranges_2022_01_04") %>% list.files()
+
+# _sites.Rdata and _sites.csv
+paste0(p_derived, "species_ranges") %>% list.files()
+```
+
+
+```{r validated-range-maps}
+# optional: if you want to load and explore the validated species ranges (caution, these files are large!)
+
+# load(paste0(p_dat, "bd/IUCN/ranges_2022_01_04/mam_sf_validated.RData"), verbose = TRUE)
+load(paste0(p_dat, "bd/IUCN/ranges_2022_01_04/mam_sf_validated_2022_03_23.RData"), verbose = TRUE)
 load(paste0(p_dat, "bd/IUCN/ranges_2022_01_04/bird_sf_validated_2022_03_23.RData"), verbose = TRUE)
 
 
@@ -166,6 +174,7 @@ rm(mam_sf_validated)
 ```
 
 ```{r load-and-bind-cropped-ranges}
+# load vertebrate species range maps that have been prepped on the cluster and bind them together into one single file: "vert_sites.RData"
 
 vert_list <- c("amp", "bird", "mam", "gard")
 
@@ -347,7 +356,7 @@ species_ranges %>% filter(binomial == "Pteronura brasiliensis") %>%
 ```
 
 
-# IUCN Assessment Data
+# 3. Load IUCN Assessment Data
 
 ```{r habitat_prefs}
 # make sure this loads with the most recent species_ranges (i.e., with fixed synonyms)
@@ -396,23 +405,8 @@ habitat_prefs %>% select(map_code, code, name) %>% unique() %>% arrange(map_code
 
 iucn_crosswalk %>% select(map_code, code) %>% unique() # unique()
 
-sapply(na_codes, function(i) {
-  grepl(na_codes[1], iucn_crosswalk$code %>% unique()) %>% sum()
-  })
 
-habitat_prefs %>%
-  filter(str_detect(name, "Tundra Wetlands"))
-
-# all species: unnecessary
-
-# habitat_prefs_all <- lapply(c("LC", "nonLC"), function(i) {
-#   read_csv(
-#     file = paste0(p_dat, "bd/IUCN/redlist_2022_01_04_animalia_", i, "/habitats.csv")#, n_max = 10
-#   ) %>% 
-#     select(binomial = scientificName, code, 
-#            name:suitability, assessmentId, internalTaxonId)
-# }) %>% bind_rows()
-
+# habitat_details
 
 habitat_details <- lapply(c("LC", "nonLC"), function(i) {
   read_csv(
@@ -429,7 +423,6 @@ habitat_details <- lapply(c("LC", "nonLC"), function(i) {
 write_csv(habitat_prefs, file = paste0(p_derived, "iucn_habitat_prefs_subset.csv"))
 write_csv(habitat_details, file = paste0(p_derived, "iucn_habitat_details_subset.csv"))
 ```
-
 
 ```{r elevation_prefs}
 # ---------------------------------------------------------- #
@@ -484,7 +477,8 @@ write_csv(elevation_prefs, file = paste0(p_derived, "iucn_elevation_prefs_subset
 
 ```{r species_list}
 # --------------------------------------------------- #
-# create species_list, a list of unique species-site combinations at my sites
+# create species_list, a list of unique species-site combinations at my sites,
+# which can then be used to specify which species to run through the aoh scripts on the HPC.
 # --------------------------------------------------- #
 
 # ------------------------------------------------------------- #
@@ -496,15 +490,7 @@ species_list <- species_ranges %>%
   st_drop_geometry() %>% as_tibble() %>%
   select(site, vert_class, binomial, category) %>%
   arrange(site, vert_class, binomial, category) %>% 
-  unique() # %>% 
-  
-  # no longer necessary
-  # # update list species synonyms:
-  # # filter(binomial %in% species_w_syn$synonym) %>% # for testing only
-  # left_join(select(species_w_syn, new_binomial = binomial, synonym), by = c("binomial" = "synonym")) %>%
-  # mutate(binomial = ifelse(!is.na(new_binomial), new_binomial, binomial)) %>%
-  # left_join(select(species_w_syn, binomial, synonym), by = "binomial") %>% 
-  # select(-new_binomial)
+  unique() 
 
 # at this stage:
 # number of unique runs:
@@ -683,7 +669,7 @@ species_list %>%
   summarise(num_sp = n()) 
 ```
 
-```{r parallelize-aoh}
+```{r parallelize-aoh-for-hpc}
 
 # ------------------------------------------------------------- #
 # Step. 4
@@ -692,7 +678,7 @@ species_list %>%
 
 species_list
 
-
+# examine test results from the cluster:
 aoh_dt_11_test
 aoh_31_df %>% select(site, binomial, time) %>% unique()
 
@@ -867,7 +853,7 @@ write_csv(species_list, file = paste0(p_derived, "species_list.csv"))
 
 
 ```{r common-names}
-# no longer necessary, but could be useful
+# no longer necessary, but could be useful to future chris
 
 common_names <- lapply(c("LC", "nonLC"), function(i) {
   read_csv(
@@ -999,26 +985,9 @@ vert_sites %>% filter(binomial == "Capricornis milneedwardsii") %>% st_geometry(
 ```
 
 
-
-# Species' Habitat Age Requirements
+# 4. Species' Habitat Age Requirements
 
 ```{r prep-habitat-details}
-habitat_prefs %>% names()
-
-habitat_prefs %>%
-  filter(suitability == "Suitable") %>%
-  select(name, code, IUCNLevel, Coarse_Name) %>% unique() %>% 
-  filter(!is.na(IUCNLevel)) %>% arrange(code) %>% print(n=100)
-
-habitat_prefs %>%
-  filter(suitability == "Suitable") %>%
-  select(name, code, IUCNLevel, Coarse_Name) %>% unique() %>% 
-  filter(!is.na(IUCNLevel)) %>% arrange(code) %>% #print(n=100)
-  select(Coarse_Name) %>% unique
-
-species_list$binomial %>% unique %>% length
-species_ranges$binomial %>% unique %>% length
-habitat_prefs$binomial %>% unique %>% length
 
 # -----------
 # extract a list of all suitable habitats for each species
@@ -1124,49 +1093,12 @@ habitat_age_req <-
          site_presence,
          everything())
 
-habitat_age_req
-names(habitat_age_req)
-
 ```
 
 ```{r separating-habitat-specialties}
-habitat_prefs %>%
-  filter(suitability == "Suitable",
-         majorImportance == "Yes") %>%
-  .$binomial %>% 
-  unique %>%
-  length
 
 # see _util_files.R
 site_habitats %>% print(n = 34)
-
-
-# forests exclusively (and majorImportance)
-
-# grasslands exclusively
-site_habitats$IUCNLevel
-
-# testing
-site_habitats$IUCNLevel %>% str_subset(regex("forest|plantations", ignore_case = TRUE))
-site_habitats$IUCNLevel %>% str_subset(regex("grassland|savanna|shrubland|pasture", ignore_case = TRUE))
-site_habitats$IUCNLevel %>% str_subset(regex("wet", ignore_case = TRUE))
-site_habitats$IUCNLevel %>% str_subset(regex("arable|pasture|garden", ignore_case = TRUE))
-site_habitats$IUCNLevel %>% str_subset(regex("urban", ignore_case = TRUE))
-site_habitats$IUCNLevel %>% str_subset(regex("rocky", ignore_case = TRUE))
-site_habitats$IUCNLevel %>% str_subset(regex("desert", ignore_case = TRUE))
-
-c(
-  site_habitats$IUCNLevel %>% str_subset(regex("forest|plantations", ignore_case = TRUE)), 
-  site_habitats$IUCNLevel %>% str_subset(regex("grassland|savanna|shrubland|pasture", ignore_case = TRUE)),
-  site_habitats$IUCNLevel %>% str_subset(regex("wet", ignore_case = TRUE)),
-  site_habitats$IUCNLevel %>% str_subset(regex("arable|pasture|garden", ignore_case = TRUE)),
-  site_habitats$IUCNLevel %>% str_subset(regex("urban", ignore_case = TRUE)),
-  site_habitats$IUCNLevel %>% str_subset(regex("rocky", ignore_case = TRUE)),
-  site_habitats$IUCNLevel %>% str_subset(regex("desert", ignore_case = TRUE))
-  ) %>% sort()
-
-habitat_age_req
-obj_size(habitat_age_req)
 
 # ------------------------- species habitat specialty --------------------------- # 
 habitat_age_req <- habitat_age_req %>%
@@ -1179,9 +1111,6 @@ habitat_age_req <- habitat_age_req %>%
          rocky_occ =      str_detect(suitable_habitats, regex("rocky", ignore_case = TRUE)),
          desert_occ =     str_detect(suitable_habitats, regex("desert", ignore_case = TRUE)),
          
-         # specialty_full = ifelse(forest_occ, ifelse(grass_occ, "both", "forest"), "grass"),
-         # comp = ifelse(forest_occ & !grass_occ & !wetlands_occ & !urban_occ & !rocky_occ & !desert_occ, "forest", "no"),
-         # sp_sums = rowSums(across(forest_occ:desert_occ)),
          n_spec = rowSums(across(contains("occ"))),
          specialty = case_when(
            n_spec == 1 & forest_occ ~ "forest",
@@ -1194,49 +1123,29 @@ habitat_age_req <- habitat_age_req %>%
            n_spec == 2 & forest_occ & grass_occ ~ "for_grass",
            n_spec >= 5 ~ "generalist",
            TRUE ~ "NA"),
-         # stuff = paste(contains(occ))
          ) #%>%
+# testing
   # select(binomial, forest_occ:n_spec, specialty) %>%
   # filter(n_specialty >= 0) %>%
   # arrange(desc(n_spec)) %>% print(n = 50)
 
 
-str_detect(habitat_age_req$suitable_habitats[1:10], regex("forest", ignore_case = TRUE) | regex("wetlands", ignore_case = TRUE))
-
-
-
-# how many species ONLY use cropland or some sort of farmland?
-habitat_age_req %>% filter(farmland_occ, n_spec == 1) %>% nrow() # 0!
-habitat_age_req %>% filter(farmland_occ, n_spec == 1) %>% nrow() # 0!
-
-habitat_age_req %>% select(-common_names)
-
-names(habitat_age_req)
-
-habitat_age_req %>%
-  filter(#vert_class != "amp",
-         farmland_occ,
-         # n_spec == 1
-         ) %>%
-  select(vert_class:common_names, redlistCategory, n_spec, suitable_codes, contains("occ")) %>%
-  arrange(n_spec, desc(grass_occ), desc(wetlands_occ)) %>%
-  .[1:4, 3] %>% .$common_names %>% .[4]
-#View() 
-  
-  
 ```
 
 
-```{r save-load}
+```{r save-intermediate-versions}
 # -----------
 # write to file
 # -----------
-
+# careful to not overwrite, until ready.
 write_csv(habitat_age_req, file = paste0(p_derived, "iucn_habitat_age_req.csv"))
+```
 
 
+```{r load-intermediate-versions}
 # reload
 habitat_age_req <- read_csv(paste0(p_derived, "iucn_habitat_age_req.csv"))
+
 
 # Alex's coded version
 habitat_age_req_AW <- read_csv(paste0(p_derived, "/habitat_age_req/iucn_habitat_age_req_AW_121421.csv")) %>%
@@ -1315,207 +1224,6 @@ habitat_age_req_2022_12_06 <- read_csv(
     TRUE ~ coder # otherwise, keep it the same. 
     ))
 
-habitat_age_req_2022_12_06 %>% filter(is.na(coder))
-
-habitat_age_req_2022_12_06 %>%  
-  filter(str_detect(mature_forest_obl, "NA") | is.na(mature_forest_obl))
-
-habitat_age_req_2022_12_06 %>%  
-  filter(str_detect(water_obl, "NA") | is.na(water_obl))
-
-```
-
-
-```{r find-missing-species}
-habitat_age_req
-habitat_age_req_AW
-
-old_species_list %>% 
-  select(vert_class, binomial) %>% unique()
-
-old_req_sp <- habitat_age_req_AW %>% 
-  select(vert_class, binomial, site_presence) %>% unique()
-
-
-# new: species that are in the new version that are not in the old version
-species_list %>%
-  filter(!binomial %in% unique(old_species_list$binomial)) %>% 
-  View()
-
-# species in the old version that are no longer in the new version
-old_species_list %>%
-  filter(!binomial %in% unique(species_list$binomial))
-
-
-names(habitat_age_req_AW)
-
-# species screened by Alex
-habitat_age_req_AW %>%
-  filter(!is.na(mature_forest_obl)) %>%
-  .$binomial %>% unique()
-
-habitat_age_req_AW %>% filter(!is.na(mature_forest_obl))
-habitat_age_req_AW %>% filter(!is.na(mature_forest_obl)) %>% .$binomial
-
-habitat_age_req_AW %>% filter(!is.na(water_obl)) 
-
-# species that are not na for water_obl, but not also not na for mature_forest_obl
-habitat_age_req_AW %>% 
-  filter(!is.na(water_obl)) %>%
-  filter(!binomial %in% unique(habitat_age_req_AW %>% filter(!is.na(mature_forest_obl)) %>% .$binomial))
-
-
-# species that are not na for mature_forest_obl, but not also not na for water_obl
-habitat_age_req_AW %>% 
-  filter(!is.na(mature_forest_obl)) %>%
-  filter(!binomial %in% unique(habitat_age_req_AW %>% filter(!is.na(water_obl)) %>% .$binomial))
-
-# ok... that means all of the species that Alex marked have some mark in the mature_forest_obl column
-habitat_age_req_AW$mature_forest_obl %>% unique()
-
-
-# --------------------------------------------------------------------------- #
-# Species that Alex categorized in the old version, which are no longer in the new version of the species_list:
-# just one species: "Sporophila maximiliani", whose range map has been updated so that it no longer overlaps with my sites. 
-
-## total number of species:
-species_list %>% select(vert_class, binomial) %>% unique() # 2187, including birds, mammals, and amphibians
-species_list %>% filter(vert_class != "amp") %>% select(vert_class, binomial) %>% unique() # 2023, just birds and mammals
-
-# new: species that are in the new version that have not received a coding
-species_list %>% filter(vert_class != "amp") %>%
-  filter(!binomial %in% filter(habitat_age_req_AW, !is.na(mature_forest_obl))$binomial) %>%
-  select(vert_class, binomial) %>%
-  unique()
-
-# Species that Alex gave a code but are no longer in the new version:
-filter(habitat_age_req_AW, !is.na(mature_forest_obl))$binomial # species Alex coded:
-
-habitat_age_req_AW %>% 
-  select(vert_class, binomial, common_names, mature_forest_obl, water_obl, site_presence) %>%
-  filter(!is.na(mature_forest_obl), # filter to just species that Alex gave a code
-         !binomial %in% species_list$binomial) # filter to species binomial names that are not in the new list.
-
-species_synonyms_sub %>% filter(binomial == "Sporophila maximiliani")
-species_synonyms_sub %>% filter(synonym == "Sporophila maximiliani")
-
-
-species_list %>% filter(str_detect(binomial, "Sporophila"))
-species_list %>% filter(str_detect(binomial, "maximiliani"))
-species_list %>% 
-  filter(
-    !binomial %in% filter(habitat_age_req_AW, !is.na(mature_forest_obl))$binomial,
-    str_detect(binomial, "maximiliani"))
-
-habitat_age_req_AW %>% 
-  filter(!is.na(mature_forest_obl),
-         str_detect(binomial, "maximiliani")) %>%
-  select(vert_class, binomial, common_names, mature_forest_obl, water_obl, site_presence)
-
-habitat_age_req %>%
-  filter(vert_class != "amp",
-         str_detect(site_presence, "goias"),
-         str_detect(binomial, "maximiliani"))
-
-
-species_list %>% filter(str_detect(category, "Concern"))
-
-species_list$category %>% str_detect(., "Concern")
-species_list$category %>% str_subset(., "Concern")
-    
-old_species_list %>% filter(!binomial %in% unique(species_list$binomial))
-
-# ------------------------------------------------------------- #
-sf_use_s2(FALSE)
-
-load(paste0(p_dat, "bd/IUCN/ranges_2022_01_04/bird_sf_validated_2022_03_23.RData"), verbose = TRUE)
-
-bird_sf_validated %>% st_drop_geometry() %>% as_tibble() %>% 
-  filter(str_detect(binomial, "Sporophila maximiliani"))
-
-species_ranges %>% st_drop_geometry() %>% as_tibble() %>% 
-  filter(str_detect(binomial, "Catharus swainsoni|Catharus ustulatus")) %>%
-  select(site, binomial)
-
-species_ranges %>% 
-  filter(str_detect(binomial, "Catharus ustulatus")) %>%
-  st_geometry() %>% plot()
-
-cs <- species_ranges %>% 
-  filter(str_detect(binomial, "Catharus swainsoni"))# %>%
-  # st_geometry() %>% 
-
-  plot(cs["seasonal"])
-
-load("/Users/christophercrawford/Downloads/bird_sites0.RData", verbose = TRUE)
-
-range_sites %>% filter(str_detect(binomial, "maximiliani"))
-
-spmax <- filter(bird_sf_validated, sci_name == "Sporophila maximiliani")
-
-load("/Users/christophercrawford/Downloads/bird_sf_valid0.RData", verbose = TRUE)
-range_sf %>% st_drop_geometry() %>% as_tibble() %>% filter(str_detect(binomial, "Sporophila maximiliani"))
-spmax0 <- filter(range_sf, str_detect(binomial, "Sporophila maximiliani"))
-rm(range_sf)
-
-plot(spmax["presence"])
-
-plot(spmax$geometry)
-plot(st_geometry(spmax))
-plot(site_sf$geometry, add = TRUE, border = "red")
-# ok, so there isn't any overlap with my sites:
-
-plot(st_geometry(spmax0))
-plot(site_sf$geometry, add = TRUE, border = "red")
-
-bird_sf_validated %>% st_drop_geometry() %>% as_tibble
-
-
-site_sf %>% 
-  filter(site == "wisconsin") %>% st_geometry() %>%
-  plot(., border = "red", add = T)
-
-species_ranges %>% 
-  filter(str_detect(binomial, "Cercomacra ferdinandi")) %>%
-  st_geometry() %>% plot(., add = T)
-
-
-habitat_age_req_partial %>% 
-  filter(str_detect(common_names, "Snipe")) %>%
-  st_geometry() %>% plot()
-
-
-
-species_ranges %>% 
-  filter(str_detect(binomial, "Phoenicurus frontalis"))# %>%
-  # st_geometry() %>% plot(., add = T)
-
-wc <- bird_sf_validated %>% filter(str_detect(sci_name, "Grus americana"))
-rm(bird_sf_validated)
-
-species_ranges %>% 
-  filter(str_detect(binomial, "Grus americana")) %>%
-  st_geometry() %>% plot(., add = F)
-
-
-wc %>% st_geometry() %>% plot(., add = F)
-plot(wc["seasonal"])
-
-species_list %>% filter(binomial == "Picoides tridactylus")
-p_tridactylus <- bird_sf_validated %>% filter(sci_name == "Picoides tridactylus")
-p_tridactylus <- st_simplify(p_tridactylus, dTolerance = 10000, preserveTopology = TRUE)
-
-p_tridactylus %>% st_geometry() %>% plot()
-
-site_sf %>% st_geometry() %>% plot(add = T, border = "red")
-
-species_ranges %>% 
-  filter(str_detect(binomial, "Picoides tridactylus"), site != "belarus") %>%
-  st_geometry() %>% plot(., add = F, border = "green")
-
-p_tridactylus %>% st_geometry() %>% plot(add = T)
-
-
 ```
 
 ```{r save-habitat-reqs-in-progress}
@@ -1535,65 +1243,14 @@ habitat_age_req_partial <-
   arrange(vert_class, coder, mature_forest_obl, binomial) %>%
   select(vert_class:common_names, mature_forest_obl, water_obl, everything())
 
-habitat_age_req_partial %>% filter(binomial %in% filter(habitat_age_req_AW, !is.na(mature_forest_obl))$binomial)
-
-habitat_age_req_partial %>% filter(!is.na(mature_forest_obl)) %>% tail(n=20)
-habitat_age_req_partial
-
-habitat_age_req_partial %>% filter(vert_class == "bird", is.na(mature_forest_obl)) %>% select(binomial) %>% .[100,]
 
 # save
 write_csv(habitat_age_req_partial, file = paste0(p_derived, "habitat_age_req/", "habitat_age_req_partial", format(Sys.time(), "_%Y_%m_%d"), ".csv"))
 
 # ---------------------------------------------------------------------------------------- #
-
-
-
-
-
-
-
-
-# explore the numbers:
-habitat_age_req_partial %>% filter(!is.na(mature_forest_obl))
-
-# numbers of birds in each habitat requirement class:
-species_list %>% 
-  filter(vert_class == "bird") %>%
-  left_join(habitat_age_req_partial %>% 
-              select(binomial, mature_forest_obl), 
-            by = "binomial") %>%
-  group_by(vert_class, # site, 
-           mature_forest_obl) %>% 
-  summarise(n_species = unique(binomial) %>% length()) %>%
-  print(n = 30)
-
-species_list %>% 
-  filter(vert_class != "amp") %>%
-  left_join(habitat_age_req_partial %>% 
-              select(binomial, mature_forest_obl), 
-            by = "binomial") %>%
-  group_by(vert_class, #site, 
-           mature_forest_obl) %>% 
-  summarise(n_species = unique(binomial) %>% length()) %>%
-  print(n = 30)
-
-
-# 676 birds and 528 mammals to classify still
-
-habitat_age_req_AW %>% 
-  group_by(vert_class, mature_forest_obl) %>% 
-  summarise(n_species = n())
-
-habitat_age_req_AW %>% filter(!is.na(mature_forest_obl))
 ```
 
 ```{r add-final-codes-to-habitat-req}
-
-habitat_age_req_2022_04_05_CC$vert_class %>% unique()
-habitat_age_req$vert_class %>% unique()
-habitat_age_req %>% filter(vert_class != "amp")
-habitat_age_req_coded %>% filter(vert_class != "amp")
 
 habitat_age_req_coded <- 
   habitat_age_req %>% 
@@ -1608,22 +1265,6 @@ habitat_age_req_coded <-
   select(vert_class:common_names, mature_forest_obl, water_obl, everything())
 
 
-habitat_age_req_coded %>%
-  mutate(is_coded = !is.na(mature_forest_obl)) %>%
-  group_by(vert_class, is_coded) %>% summarise(n_sp = n())
-
-habitat_age_req_coded %>%
-  mutate(mature_obl = mature_forest_obl > 0.5) %>%
-  group_by(vert_class, mature_obl) %>% summarise(n_sp = n())
-
-habitat_age_req_coded %>%
-  filter(mature_forest_obl > 0.5, coder == "CLC") %>%
-  select(binomial, common_names, mature_forest_obl, site_presence) %>%
-  arrange(binomial) %>%
-  print(n=218)
-
-218 / (218 + 1277)
-
 
 # save the most recent version with mammals classified as mature forest obligates
 habitat_age_req_2022_12_06 %>%
@@ -1635,458 +1276,9 @@ habitat_age_req_2022_12_06 %>%
 
 ```
 
+# 5. Development code
 
-
-```{r sandbox-habitat-age}
-habitat_age_req_partial %>%
-  filter(str_detect(habitat, "mature"),
-         # coder == "CLC"
-         ) %>%
-  select(binomial, mature_forest_obl, habitat, coder) %>% print(n = 90)
-
-habitat_age_req_partial %>%
-  filter(grepl("mature", habitat, ignore.case = T)) %>%
-  select(binomial, mature_forest_obl, habitat, coder) %>% 
-  print(n = 90)
-
-habitat_age_req_partial %>%
-  filter(grepl("mature|primary|old", habitat, ignore.case = T)) %>%
-  select(binomial, mature_forest_obl, habitat, coder) %>% 
-  print(n = 90)
-
-# cavities and holes for nesting
-habitat_age_req_partial %>%
-  filter(grepl("cavit|hole", habitat, ignore.case = T)) %>%
-  select(binomial, mature_forest_obl, habitat, coder) %>% 
-  print(n = 90)
-
-habitat_age_req %>%
-  select(binomial, vert_class, suitable_habitats, hab_clean) %>%
-  filter(grepl("mature|primary|old", hab_clean, ignore.case = T))
-
-
-habitat_age_req_partial %>%
-  filter(str_detect(common_names, "Swain")) %>%
-  select(vert_class:habitat) #%>% print(n = 30)
-
-
-habitat_age_req_partial %>%
-  filter(str_detect(binomial, "Phoenicurus frontalis"))
-
-habitat_age_req_partial %>%
-  filter(!is.na(mature_forest_obl), str_detect(binomial, "^A"))
-
-
-habitat_age_req_partial %>% 
-  filter(!is.na(water_obl),
-         str_detect(common_names, "piper")) %>%
-  arrange()
-
-
-# ------------------------------------------------------------------------- #
-# Mammals:
-habitat_age_req_partial %>%
-  filter(str_detect(habitat, "mature|primary|old|cavit|hole"),
-         vert_class == "mam",
-         # coder == "CLC"
-         ) %>%
-  select(binomial, mature_forest_obl, habitat, coder) #%>% print(n = 90)
-```
-
-
-
-```{r jungs_method_for_specialists}
-# https://gist.github.com/Martin-Jung/ad250b96f07944cf5f0b
-# https://conservationecology.wordpress.com/2015/03/29/assesing-habitat-specialization-using-iucn-data/
-
-# three groups
-# 
-# "Forest-specialist”, if forest habitat is of major importance to a species, 
-# “Forest-associated” if a species is just known to occur in forest or 
-# “Other Habitats” if a species does not occur in forests at all.
-
-
-
-```
-
-
-```{r majorImportance}
-# see prep-habitat-details chunk 
-majorImportance_extract %>%
-  mutate(nchar = nchar(major_codes)) %>%
-  arrange(desc(nchar)) %>% 
-  print(n = 50)
-
-
-
-habitat_prefs %>%
-  filter(suitability == "Suitable",
-         # majorImportance == "Yes"
-         ) %>%
-  .$binomial %>% 
-  unique %>%
-  length
-
-# only 1417 out of 2226 species with suitable habitat 
-species_ranges$binomial %>% unique %>% length
-  
-specialists_test <- habitat_age_req
-
-specialists_test %>%
-  mutate(forest_maj = str_detect(major_habitats, regex("forest", ignore_case = TRUE)),
-         forest_occ = str_detect(suitable_habitats, regex("forest|plantations", ignore_case = TRUE)),
-         
-  ) %>%
-  select(vert_class, binomial, common_names, forest_mi, forest_occ)
-
-
-habitat_age_req %>%
-  mutate(forest_mi =     str_detect(suitable_habitats, regex("forest|plantations", ignore_case = TRUE)),
-         grass_occ =      str_detect(suitable_habitats, regex("grassland|savanna|shrubland|pasture", ignore_case = TRUE)),
-         wetlands_occ =   str_detect(suitable_habitats, regex("wet", ignore_case = TRUE)),
-         farmland_occ =   str_detect(suitable_habitats, regex("arable|pasture|garden", ignore_case = TRUE)),
-         urban_occ =      str_detect(suitable_habitats, regex("urban", ignore_case = TRUE)),
-         rocky_occ =      str_detect(suitable_habitats, regex("rocky", ignore_case = TRUE)),
-         desert_occ =     str_detect(suitable_habitats, regex("desert", ignore_case = TRUE)),
-         
-         # specialty_full = ifelse(forest_occ, ifelse(grass_occ, "both", "forest"), "grass"),
-         # comp = ifelse(forest_occ & !grass_occ & !wetlands_occ & !urban_occ & !rocky_occ & !desert_occ, "forest", "no"),
-         # sp_sums = rowSums(across(forest_occ:desert_occ)),
-         n_spec = rowSums(across(contains("occ"))),
-         specialty = case_when(
-           n_spec == 1 & forest_occ ~ "forest",
-           n_spec == 1 & grass_occ ~ "grass",
-           n_spec == 1 & wetlands_occ ~ "wetlands",
-           n_spec == 1 & farmland_occ ~ "farmland",
-           n_spec == 1 & urban_occ ~ "urban",
-           n_spec == 1 & rocky_occ ~ "rocky",
-           n_spec == 1 & desert_occ ~ "desert",
-           n_spec == 2 & forest_occ & grass_occ ~ "for_grass",
-           n_spec == 7 ~ "generalist",
-           TRUE ~ "NA"),
-         # stuff = paste(contains(occ))
-         )
-
-```
-
-
-
-```{r na}
-habitat_age_req$binomial %>% unique %>% length()
-habitat_age_req %>%
-  filter(!is.na(hab_clean)) %>% unique %>% nrow()
-
-# about 1000 of them have no specific habitat description
-
-habitat_age_req %>% 
-  filter(str_detect(suitable_habitats, "[Tt]emperate")) # can also use: filter(grepl("Acris", binomial))
-
-habitat_age_req %>% 
-  filter(str_detect(suitable_habitats, "[Tt]emperate")) # can also use: filter(grepl("Acris", binomial))
-
-jung_hab_type_area_df %>%
-  select(habitat_type, lc, IUCNLevel, Coarse_Name) %>% unique %>% arrange(habitat_type) %>% print(n = 35)
-
-```
-
-
-
-```{r match-text}
-species_ranges %>%
-  filter(binomial == "Agamia agami") %>%
-  st_geometry() %>%
-  plot()
-
-plot(site_jung_l2$mato_grosso)
-
-plot(lc$mato_grosso$y2017)
-
-habitat_age_req %>%
-  select(binomial, vert_class, suitable_habitats, hab_clean) %>%
-  filter(str_detect(hab_clean, "mature|primary|old")) # can also use: filter(grepl("Acris", binomial))
-
-habitat_age_req %>%
-  select(binomial, vert_class, suitable_habitats, hab_clean) %>%
-  filter(str_detect(suitable_habitats, "forest")) # can also use: filter(grepl("Acris", binomial))
-
-# --------------------------------------- #
-# separate species by habitat type
-habitat_age_req %>%
-  select(binomial, vert_class, suitable_habitats, hab_clean) %>%
-  filter(grepl("forest", suitable_habitats, ignore.case = T))
-
-
-
-# --------------------------------------- #
-# separate species by habitat age preference
-habitat_age_req$binomial %>% unique() %>% length
-
-habitat_age_req %>%
-  select(binomial, vert_class, suitable_habitats, hab_clean) %>%
-  filter(grepl("mature|primary|old", hab_clean, ignore.case = T))
-
-habitat_age_req %>%
-  select(binomial, vert_class, suitable_habitats, hab_clean) %>%
-  filter(grepl("succession", hab_clean, ignore.case = T))
-
-habitat_age_req %>%
-  select(binomial, vert_class, suitable_habitats, hab_clean) %>%
-  filter(grepl("old", hab_clean, ignore.case = T))
-
-
-habitat_age_req %>%
-  select(binomial, vert_class, suitable_habitats, hab_clean) %>%
-  filter(str_detect(hab_clean, "old")) # can also use: filter(grepl("Acris", binomial))
-
-
-habitat_age_req %>%
-  select(binomial, vert_class, hab_clean) %>%
-  mutate(old_sp = ifelse(str_detect(hab_clean, "mature|primary"), 1, 0))
-  
-t1 <- habitat_age_req %>%
-  select(binomial, vert_class, hab_clean) %>%
-  filter(str_detect(hab_clean, "mature")) %>% # can also use: filter(grepl("Acris", binomial))
-  mutate(hab_clean = str_trim(unlist(hab_clean))) %>%
-  head()
-
-t1[2, 3] %>% unlist
-
-t1[2, 3] %>% unlist %>% str_trim()
-t1[2, 3] %>% unlist %>% str_squish()
-# when finding a record to update:
-  
-
-```
-
-
-```{r *update-species-list*}
-
-# remove double record for Swainson's thrush:
-# Catharus swainsoni should stay in
-# Catharus ustulatus should be removed. 
-# Ask David and Alex about this.
-
-species_ranges %>% filter(str_detect(binomial, "Catharus swainsoni|Catharus ustulatus"))
-species_ranges %>% filter(str_detect(binomial, "Catharus swainsoni"), site == "wisconsin") %>% select(seasonal) %>% plot()
-
-species_ranges %>% filter(str_detect(binomial, "Microhierax melanoleucos"))
-species_ranges %>% filter(str_detect(binomial, "Myiomela leucura"))
-
-# "Grus americana" - whooping crane, where abandoned agricultural land is almost certainly not going to add meaningful habitat?
-
-# How about birds which require mature forest for breeding, but not during passage?
-# Examples include smew (Mergellus albellus), common merganser (Mergus merganser), scaly-sided merganser (Mergus squamatus) etc. I have marked these as mature_forest_obl given their need for mature trees for nest cavities.
-# 
-
-# Tree cavities for nesting?
-species_ranges %>% filter(str_detect(binomial, "Otus sunia")) # oriental scops-owl
-species_ranges %>% filter(str_detect(binomial, "Otus semitorques")) # Japanese scops-owl
-
-species_ranges %>% filter(str_detect(binomial, "Melanerpes erythrocephalus")) # # Red-headed woodpecker:
-
-# p
-species_ranges %>% filter(str_detect(binomial, "Fringilla coelebs")) # common chaffinch
-
-species_ranges %>% filter(str_detect(binomial, "Muscicapa striata")) # spotted flycatcher
-
-species_ranges %>% filter(str_detect(binomial, "Pardaliparus venustulus")) # yellow-bellied tit - non-breeding found in any sizeable patch of trees, but description as follows: "Broadleaf subtropical and evergreen forests, including mixed conifer and deciduous forest with bamboo, larches (Larix), willow (Salix) groves and other scattered trees at edges of cultivation; in non-breeding season more widely dispersed and may be found in almost any sizeable patch of trees."
-
-
-species_ranges %>% filter(str_detect(binomial, "Phoenicurus frontalis")) # blur-fronted redstart
-
-species_ranges %>% filter(str_detect(binomial, "Phylloscopus inornatus")) %>% # Phylloscopus warblers, like this one: Yellow-browed warbler (passage)
-  st_geometry() %>% plot()
-
-species_ranges %>% filter(str_detect(binomial, "Phylloscopus nitidus")) # green warbler
-species_ranges %>% filter(str_detect(binomial, "Phylloscopus proregulus")) # Pallas's leaf warbler
-
-species_ranges %>% filter(str_detect(binomial, "Phylloscopus subaffinis"))
-
-species_ranges %>% filter(str_detect(binomial, "Picus viridis")) # 
-
-species_ranges %>% filter(str_detect(binomial, "Pitta nympha")) # fairy pitta.
-# It breeds in subtropical forest, where its localised distribution suggests that it has specialised habitat requirements. Peak breeding season in Taiwan is in May and June. In Japan, it breeds primarily in broadleaved evergreen forest near the coast (mostly below 500 m), although breeding has been recorded from plantations and the species appears to be adaptable to modified forest habitats. In South Korea, it breeds in dense moist forest and broadleaved forest near the coast, up to 1,200 m. The nest is usually built in crevices or foliage 1-5 m above the ground. It forages amongst leaf-litter for invertebrates, also occasionally taking snakes, lizards and small rodents (Wild at Heart Legal Defence Association undated).
-
-
-species_ranges %>% filter(str_detect(binomial, "Pnoepyga pusilla")) # pygmy cupwing
-# "Floor and understorey of broadleaf evergreen forest, densely vegetated forest ravines, mossy boulders, fallen logs, dense fern growth, luxuriant moss. Similar habitat on Flores, described as montane forest, Eupatrium scrub and occasionally roadside regrowth and tall secondary forest; on Timor occurs around large rocky outcrops."
-
-species_ranges %>% filter(str_detect(binomial, "Poecile lugubris")) # Sombre tit - cavity nesting? But largely open forests. 
-
-species_ranges %>% filter(str_detect(binomial, "Poecile palustris")) # marsh tit - primarily mature forest, but occasionally seen in orchards, gardens, etc. 
-species_ranges %>% filter(str_detect(binomial, "Pteruthius aeralatus"))  # white-browed shrike-babbler
-species_ranges %>% filter(str_detect(binomial, "Pucrasia macrolopha")) # koklass pheasant
-
-
-species_ranges %>% filter(str_detect(binomial, "Regulus ignicapilla")) # common firecrest &
-species_ranges %>% filter(str_detect(binomial, "Regulus regulus")) # goldcrest
-
-species_ranges %>% st_drop_geometry() %>% filter(str_detect(binomial, "Setophaga ")) %>% select(site:seasonal)
-
-
-
-species_list %>%
-  left_join(species_ranges %>% st_drop_geometry() %>% select(binomial, vert_class, #presence, origin, 
-                                                             seasonal)) %>%
-  left_join(select(habitat_age_req_AW, vert_class, binomial, mature_forest_obl, water_obl, common_names)) %>%
-  filter(site %in% c("nebraska", "wisconsin"),
-         str_detect(binomial, "Setophaga")) %>%
-  print(n = 50)
-
-warblers <- species_ranges %>%
-  filter(str_detect(binomial, "Setophaga")) %>% 
-  #select("seasonal") %>% plot
-  st_cast() %>%
-  fasterize(.,
-                raster::raster(resolution = terra::res(elevation_map[[11]])*100,
-                               ext = raster::extent(site_sf %>% filter(site %in% c("nebraska", "wisconsin")))),
-            fun = "count"
-                # field = "seasonal" # so that cell values correspond to seasonality code
-      ) %>% 
-      rast()
-plot(warblers)
-# Passage only. 
-# Setophaga caerulescens	Black-throated Blue Warbler
-# Setophaga castanea	Bay-breasted Warbler
-# Setophaga striata	Blackpoll Warbler
-
-
-select(species_ranges, site:seasonal) %>% st_drop_geometry() %>% filter(str_detect(binomial, "Sitta euro"))
-select(species_ranges, site:seasonal) %>% st_drop_geometry() %>% filter(str_detect(binomial, "Surniculus dicruroides")) # Dan, have you ever seen this species in China? It doesn't seem to have any eBird sitings, and all of the information about the bird that I can find refer to South Asia.
-
-
-select(species_ranges, site:seasonal) %>% st_drop_geometry() %>% filter(str_detect(binomial, "Treron sieboldii")) #	White-bellied Green Pigeon; White-bellied Green-Pigeon; White-bellied Green-pigeon
-
-select(species_ranges, site:seasonal) %>% st_drop_geometry() %>% filter(str_detect(binomial, "Tringa ochropus"))
-select(species_ranges, site:seasonal) %>% st_drop_geometry() %>% filter(str_detect(binomial, "Trochalopteron milnei"))
-select(species_ranges, site:seasonal) %>% st_drop_geometry() %>% filter(str_detect(binomial, "Turdus eunomus"))
-
-
-select(species_ranges, site:seasonal) %>% st_drop_geometry() %>% filter(str_detect(binomial, "Turdus feae"))
-select(species_ranges, site:seasonal) %>% st_drop_geometry() %>% filter(str_detect(binomial, "Turdus obscurus"))
-select(species_ranges, site:seasonal) %>% st_drop_geometry() %>% filter(str_detect(binomial, "Turdus viscivorus"))
-select(species_ranges, site:seasonal) %>% st_drop_geometry() %>% filter(str_detect(binomial, "Zoothera aurea"))
-select(species_ranges, site:seasonal) %>% st_drop_geometry() %>% filter(str_detect(binomial, "Zosterops erythropleurus"))
-select(species_ranges, site:seasonal) %>% st_drop_geometry() %>% filter(str_detect(binomial, "Picoides tridactylus"))
-select(species_ranges, site:seasonal) %>% st_drop_geometry() %>% filter(str_detect(binomial, "Picoides tridactylus"))
-select(species_ranges, site:seasonal) %>% st_drop_geometry() %>% filter(str_detect(binomial, "Picoides tridactylus"))
-select(species_ranges, site:seasonal) %>% st_drop_geometry() %>% filter(str_detect(binomial, "Picoides tridactylus"))
-
-
-
-```
-
-
-# Development
-
-## Range map sand box
-```{r sql}
-p_range <- "/Volumes/GoogleDrive/My Drive/data/bd/IUCN/ranges_2022_01_04/"
-
-# load a subset via a SQL query. 
-# Note, however, that this still takes a super long time, so is not practical. 
-bird_sub <- st_read(dsn = paste0(p_range, "BOTW/BOTW.gdb"), layer = "All_Species",
-                    query = 'SELECT * FROM All_Species WHERE OBJECTID = 294')
-
-# still takes a super super long time.
-bird_sub <- st_read(dsn = paste0(p_range, "BOTW/BOTW.gdb"), layer = "All_Species",
-                    query = 'SELECT * FROM All_Species WHERE FID = 1')
-
-# so, I'd be better off simply doing the following on Della
-# 1. Loading the file
-# 2. adding a column for vertices
-# 3. save as an RData file. 
-# 4. sort into groups to be validated, save these smaller chunks
-# 5. run the validation process on these smaller pieces, then combine them again.
-# simplify polygons:
-
-
-# load and save just the attribute table as a .gdb without geometries:
-# following Rob Williams: https://jayrobwilliams.com/posts/2020/09/spatial-sql
-library(gdalUtils)
-
-## convert to nonspatial geometry
-tic()
-ogr2ogr(src_datasource_name = paste0(p_range, "BOTW/BOTW.gdb"), 
-        layer = "All_Species",
-        dst_datasource_name = paste0(p_derived, 'sf/birds_no_geom'),
-        # select = 'GWCODE,GWSYEAR,GWSMONTH,GWSDAY', # defaults to "all"
-        nlt = 'NONE')
-toc()
-
-tic()
-bird_table <- st_read(paste0(p_derived, 'sf/birds_no_geom/All_Species.dbf')) %>%
-  as_tibble()
-toc()
-
-
-# write bird_table to .csv
-write_csv(bird_table, paste0(p_derived, 'sf/birds_no_geom/bird_table.csv'))
-bird_table <- read_csv(paste0(p_derived, 'sf/birds_no_geom/bird_table.csv'))
-
-# write bird_table to parquet
-write_parquet(bird_table, paste0(p_derived, 'sf/birds_no_geom/bird_table.parquet'))
-
-# load in bird table from parquet
-bird_table <- read_parquet(paste0(p_derived, 'sf/birds_no_geom/bird_table.parquet')) %>% as_tibble()
-```
-
-```{r sfarrow}
-# https://arrow.apache.org/docs/r/
-
-# arrow lets users save to the .parquet file format, saving lots of space and time
-write_parquet()
-lc_dt <- read_parquet(paste0(p_dat_derived, "input_data.tables/", site_df$site[9], "_clean.parquet"))
-lc_dt
-obj_size(lc_dt)
-
-# sfarrow package does the same thing for sf objects.
-# I tried this out below, but ran into "capacity" issues, which makes it hard to use how I intended to.
-# https://wcjochem.github.io/sfarrow/index.html
-install.packages("sfarrow")
-library(sfarrow)
-
-# load a big big bird file (old, but "valid")
-
-tic()
-load("/Users/christophercrawford/work/projects/biodiversity_abn/derived/species_ranges0/bird_sf_valid0.RData", verbose = TRUE)
-toc()
-
-
-
-range_sf
-obj_size(range_sf)
-
-
-# try writing to parquet using sfarrow::st_write_parquet()
-tic()
-st_write_parquet(site_sf, dsn = paste0(p_derived, "species_ranges0/site_sf.parquet"))
-toc()
-
-tic()
-st_write_parquet(range_sf, dsn = "/Users/christophercrawford/work/projects/biodiversity_abn/derived/species_ranges0/bird_sf_valid0.parquet")
-toc()
-
-# I get a capacity error, which leads me to believe I can't use this to save super big sf files, which negates the utility of using this package. 
-
-# read back in using sfarrow::st_read_parquet()
-tic()
-parquet_sf <- st_read_parquet(paste0(p_derived, "species_ranges0/site_sf.parquet"))
-toc()
-
-tic()
-parquet_sf <- st_read_parquet(paste0(p_derived, "species_ranges0/bird_sf_valid0.parquet"))
-toc()
-
-rm(range_sf)
-
-identical(parquet_sf, site_sf)
-
-plot(st_geometry(parquet_sf))
-
-```
-
-```{r qgis}
+```{r range-maps-in-qgis}
 # One option, other than validating via sf::st_make_valid(), which takes a long time, is to load into QGIS or ArcMap, and clip directly. QGIS allows for filtering for valid geometries, which can be turned off in settings, so the clip takes place even for invalid geometries (which is what I want).
 # paste0(p_derived, "sf/bird_clip_qgis.shp") # is the final result here
 
@@ -2188,503 +1380,31 @@ bird_sites %>%
   group_by(site) %>%
   select(site, binomial) %>%
   summarise(num_sp = length(unique(binomial)))
-
-
-```
-
-```{r compare-2022-03-ranges-to-old}
-
-load(paste0(p_derived, "species_ranges/", "bird_sites.RData"), verbose = T)
-bird_sites <- bird_sites %>%  # or assign("bird_sites", range_sites)
-  mutate(vert_class = "bird")
-
-bird_sites0
-
-b0 <- read_csv(paste0(p_derived, "species_ranges0/", "bird_sites.csv"))
-b1 <- read_csv(paste0(p_derived, "species_ranges/", "bird_sites.csv")) %>%
-  rename(binomial = sci_name)
-
-b0
-b1
-# filter both:
-nrow(b1)
-b1 <- b1 %>%
-  left_join(iucn_status, by = "binomial") %>%
-  filter(presence == 1,
-         origin %in% c(1, 2), 
-         seasonal %in% c(1, 2, 3), # now including passage areas too
-         !redlistCategory %in% c("EW", "EX"),
-         # marine == "false"
-         )
-
-b0 <- b0 %>%
-  filter(presence == 1,
-         origin %in% c(1, 2), 
-         seasonal %in% c(1, 2, 3), # now including passage areas too
-         !category %in% c("EW", "EX"),
-         # marine == "false"
-         )
-
-new_list <- b1 %>% select(binomial) %>% unique() %>% arrange(binomial) %>%
-  mutate(new = "yes")
-old_list <- b0 %>% select(binomial) %>% unique() %>% arrange(binomial) %>%
-  mutate(old = "yes")
-
-new_list
-old_list
-full_join(new_list, old_list, by = "binomial") %>%
-  filter(is.na(new))
-
-mismatches <- 
-  bind_rows(
-    full_join(new_list, old_list, by = "binomial") %>%
-      filter(is.na(new)),
-    full_join(new_list, old_list, by = "binomial") %>%
-      filter(is.na(old))
-  )
-  
-
-
-b1
-b0$binomial %>% unique() %>% length()
-b1$binomial %>% unique() %>% length()
 ```
 
 
-```{r load-raw-species-data}
-# location of prepped range map data (from Zambia project)
-p_range <- "/Volumes/GoogleDrive/My Drive/Zambia/agroEcoTradeoff/external/data_new/1_IUCN_dev/"
-list.files(p_range) %>% grep("prep", .,  value = TRUE)
+```{r plot-warblers}
+warblers <- species_ranges %>%
+  filter(str_detect(binomial, "Setophaga")) %>% 
+  #select("seasonal") %>% plot
+  st_cast() %>%
+  fasterize(.,
+                raster::raster(resolution = terra::res(elevation_map[[11]])*100,
+                               ext = raster::extent(site_sf %>% filter(site %in% c("nebraska", "wisconsin")))),
+            fun = "count"
+                # field = "seasonal" # so that cell values correspond to seasonality code
+      ) %>% 
+      rast()
 
-
-
-# Amphibians
-load(paste0(p_range, "amp_valid_prepped.RData"), verbose = TRUE)
-assign("amp_sf", amp_valid)
-rm(amp_valid)
-st_crs(amp_sf) <- st_crs(amp_sf)
-
-
-# Birds
-load(paste0(p_range, "bird_valid_prepped.RData"), verbose = TRUE)
-assign("bird_sf", bird_valid)
-rm(bird_valid)
-st_crs(bird_sf) <- st_crs(bird_sf)
-
-
-# Mammals
-load(paste0(p_range, "mam_valid_prepped.RData"), verbose = TRUE)
-assign("mam_sf", mam_valid)
-rm(mam_valid)
-st_crs(mam_sf) <- st_crs(mam_sf)
-
-
-# Reptiles (GARD)
-load(paste0(p_range, "gard_prep.RData"), verbose = TRUE)
-gard_prep
-assign("rep_sf", gard_prep)
-rm(gard_prep)
-st_crs(rep_sf) <- st_crs(rep_sf)
-
+plot(warblers)
+# Passage only. 
+# Setophaga caerulescens	Black-throated Blue Warbler
+# Setophaga castanea	Bay-breasted Warbler
+# Setophaga striata	Blackpoll Warbler
 
 ```
 
-```{r validate}
-# Amphibians
-
-amp_sf <- amp_sf %>% sf::st_make_valid()
-
-amp_valid_reasons <- st_is_valid(amp_sf, reason = TRUE)
-length(amp_valid_reasons)
-unique(amp_valid_reasons)
-grep("Loop 0: Edge 9032 crosses edge 9034", amp_valid_reasons) 
-# 7147:
-# Vaillant's Frog
-# Lithobates vaillanti
-
-amp_sf[7147, ]
-
-
-# Birds
-bird_sf <- bird_sf %>% sf::st_make_valid()
-
-bird_sf_valid_reasons <- st_is_valid(bird_sf, reason = TRUE)
-
-length(amp_valid_reasons)
-unique(amp_valid_reasons)
-grep("Valid Geometry", bird_sf_valid_reasons, invert = TRUE) 
-
-
-
-amp_sf[7147, ]
-
-# Mammals
-
-
-# Reptiles (GARD)
-
-```
-
-```{r crop-ranges-to-sites}
-# Amphibians
-
-names(amp_sf)
-amp_s <- amp_sf[-7147, ] %>%
-    st_intersection(., site_sf %>% filter(site == "shaanxi"))
-
-amp_sc <- amp_sf[-7147, ] %>%
-    st_intersection(., site_sf %>% 
-                      filter(site %in% site_df$site[c(3,9)])
-                    )
-
-tic()
-amp_sites <- amp_sf[-7147, ] %>% st_intersection(., site_sf)
-toc() # 1402 sec
-
-names(amp_sites)
-amp_sites %>% st_drop_geometry() %>% select(binomial, category, site)
-
-write_csv(amp_sites %>% st_drop_geometry(), 
-          file = paste0(p_derived, "amp_sites.csv"))
-st_write(amp_sites, paste0(p_derived, "amp_sites.shp")) # 
-save(amp_sites, file = paste0(p_derived, "amp_sites.RData"))
-# load(file = paste0(p_derived, "amp_sites.RData"), verbose = TRUE)
-
-
-
-# Birds
-bird_s <- bird_sf %>%
-    st_intersection(., site_sf %>% filter(site == "shaanxi"))
-
-```
-
-```{r mam-sites}
-mam_sites %>%
-  filter(site == "shaanxi") %>%
-  st_geometry() %>% plot()
-
-# how many species occur at each site?
-
-mam_sites %>%
-  st_drop_geometry() %>%
-  group_by(site) %>%
-  select(site, binomial) %>%
-  summarise(num_sp = length(unique(binomial)))
-
-filter(mam_sites, site == "shaanxi")
-
-mam_rich <- lapply(site_df$site,
-                   function(i) {
-                     
-                     template <- raster()
-                     extent(template) <- extent(raster(lc[[i]]))
-                     res(template) <- res(lc[[i]])
-                     
-                     rast(
-                       fasterize(sf = mam_sites %>%
-                                   filter(site == i) %>% 
-                                   st_cast("MULTIPOLYGON"), 
-                                 raster = template, 
-                                 fun = "sum"))})
-
-
-rm(mam_rich)
-plot(mam_rich[[1]])
-plot(mam_rich[[1]]$sha_1)
-dev.off()
-```
-
-
-
-
-```{r merge-polygons}
-
-vert_sites %>% st_drop_geometry() %>%
-  filter(vert_class != "gard") %>% # I can't use reptile species because they do not all have habitat assessments from IUCN
-  select(binomial, vert_class, #site
-         ) %>%
-  unique() %>%
-  nrow() 
-# 4253 features (4856 with reptiles)
-# 2230 species total occur at one or more of my sites (2656 if including reptiles)
-# 4038 unique site, species pairs exist - this is the number of runs I'll have to do. (4641 if including reptiles)
-
-vert_sites %>% nrow()
-vert_sites_merged %>% nrow()
-vert_sites_merged %>% st_drop_geometry() %>%
-  filter(vert_class != "gard") %>% # I can't use reptile species because they do not all have habitat assessments from IUCN
-  select(site, binomial, vert_class, #site
-         ) %>%
-  unique() %>%
-  nrow() 
-
-
-
-# how many sites have multiple polygons per species?
-vert_sites %>% 
-  filter(vert_class != "gard") %>% # I can't use reptile species because they do not all have habitat assessments from IUCN
-  # 4253 features
-  st_drop_geometry() %>%
-  group_by(site, vert_class) %>% 
-  summarise(num_rows = binomial %>% length(),
-            num_sp = binomial %>% unique() %>% length()) %>% 
-  filter(site == "wisconsin")
-
-sf_use_s2()
-sf_use_s2(FALSE)
-
-tic()
-vert_sites_merged <- vert_sites %>% 
-  group_by(site, vert_class, binomial, category, id_no, #presence, origin, seasonal
-           ) %>% 
-  summarise() %>% ungroup()
-toc()
-
-tcom1 <- vert_sites %>% filter(binomial == "Lithobates palustris")
-
-tcom1 %>%
-  st_geometry() %>%
-  plot()
-
-tcom1
-tcom1 %>% st_combine()
-
-names(tcom1)
-tcom2 <- tcom1 %>% 
-  group_by(site, vert_class, binomial, category, id_no, presence, origin, seasonal) %>% 
-  summarise() %>% ungroup()
-
-tcom3 <- tcom1 %>%
-  group_by(site) %>% summarise()
-
-plot(tcom2)
-plot(tcom1[1,])
-tcom1 %>% group_by(c("site", "vert_class")) %>% summarise()
-
-
-```
-
-
-
-
-```{r fasterize-site_ranges}
-# fasterize
-amp_sc_r <- amp_sc %>%
-  st_collection_extract(., "POLYGON") %>% # extract only polygons
-  fasterize(sf = ., raster = template_raster, 
-            field = NULL, fun = "sum")
-
-plot(amp_sc_r)
-plot(amp_sc_r, ext = my_ext)
-
-plot(amp_sc)
-
-
-amp_china <- amp_sf[-7147, ] %>%
-    st_intersection(., st_geometry(china))
-
-
-plot(st_geometry(china))
-amp_china
-
-st_bbox(china)
-
-extent(filter(site_sf, site == "shaanxi"))
-
-template_raster <- raster::raster(ncols = 100, nrows = 100,
-                    xmn = -84, xmx = -83, 
-                    ymn = 42, ymx = 43)
-
-template_raster <- raster::raster(ncols = 100, nrows = 100,
-                    extent(china))
-
-extent(filter(site_sf, site == "shaanxi"))
-
-
-values(template_raster) <- 1:ncell(template_raster)
-plot(template_raster)
-plot(china$geometry, add = T)
-#extend(mask_filled, template_raster_extent, value = 0)
-
-amp_china_poly <- amp_china %>% st_collection_extract(., "POLYGON") # extract only polygons
-
-
-amp_china_r <- 
-  fasterize(sf = amp_china_poly, raster = template_raster, 
-            field = NULL, fun = "sum")
-
-plot(amp_china_r)
-my_ext <- drawExtent()
-
-plot(amp_china_r, ext = my_ext)
-plot(site_sf %>% 
-       filter(site == "shaanxi") %>%
-       st_geometry(), 
-     add = T)
-
-act <- rast(amp_china_r)
-plot(act)
-plot(act, extent = my_ext)
-
-act_crop <- crop(act, terra::ext(my_ext))
-amp_s
-plot(act_crop, type = "classes")
-plot(amp_s$geometry)
-
-
-plot(amp_s$geometry)
-
-plot(amp_sf[1, ]$geometry)
-
-plot(site_sf %>% filter(site == "shaanxi") %>% st_geometry())
-plot(amp_sf$geometry, add = TRUE)
-
-```
-
-
-
-```{r filter-ranges}
-names(amp_sf)
-
-amp_sf %>% select(binomial, category)
-
-amp_sf %>%
-  filter(presence == 1) %>%   # only records with Code 1 (Extant)
-  filter(origin %in% c(1, 2)) %>%     # only native species (Code 1) and reintroduced (Code 2)
-  filter(seasonal %in% c(1, 2, 3)) %>%   # selecting "Resident" (1), "Breeding" (2), and "Non-breeding Season" (3) ranges. Other categories include: Non-breeding Season (3), Passage (4), and Seasonal Occurrence Uncertain (5).
-  filter(marine == "False") %>%   # removing all marine species
-  filter(!category %in% c("EW", "EX")) %>% # remove Extinct or Extinct in the Wild species ("EW", "EX")
-  
-  print(n = 40)
-
-```
-
-
-
-```{r RS-AOH-tester}
-library(sf)
-AOH <- st_read(paste0(p_dat, "bd/AOH/reptilia_AOH/reptilia.shp"))
-
-AOH %>% st_drop_geometry() %>% as_tibble()
-object_size(AOH)
-names(AOH)
-head(AOH)
-st_crs(AOH)
-
-
-
-# plot
-AOH %>% 
-  filter(binom == "Archaius_tigris") %>% 
-  st_geometry() %>% 
-  plot()
-
-AOH %>% 
-  st_geometry() %>% 
-  plot(add = TRUE)
-
-plot(ne_countries()) # or all sub national level bodies plot(ne_states())
-
-crs(ne_countries())
-
-# Create template raster by extending the input raster (mask) to the extent of the input polygons.
-mask_filled <- mask
-mask_filled[is.na(mask_filled)] <- 0 # replace NAs with 0s
-
-projection <- crs(AOH) # note, seems to work better than st_crs().
-
-# make a template raster
-mask <- raster()
-res(mask) <- 0.01
-
-
-# values(mask) <- 0 # If you want, you can add values to the raster. You don't have to though, and it just makes the raster HUGE at this resolution (4.8 GB)
-# writeRaster(mask, "mask.tif") # if you add values, you'll need to just write it to your machine, otherwise you'll quickly run out of memory, as the fasterize layer will be the same size.  
-
-
-AOH_r <- fasterize(AOH, mask, fun = "sum") # field = NULL by default, which gives every polygon a value of 1
-
-# in the event that you want to build a raster based on 
-template_raster <- extend(small_mask, extent(as.Spatial(sf_file)), value = 0)
-
-
-
-
-# fasterize
-
-
-  
-```
-
-```{r sparse}
-library(sf)
-library(raster)
-
-AOH <- st_read(paste0(p_dat, "bd/AOH/reptilia_AOH/reptilia.shp"))
-
-# check it out
-AOH %>% 
-  filter(binom == "Archaius_tigris") %>% 
-  st_geometry() %>% 
-  plot()
-
-AOH %>% 
-  st_geometry() %>% 
-  plot(add = TRUE)
-# tiny lil guys, eh?
-
-
-
-# -------------------
-# First, make a template raster
-
-mask <- raster()
-res(mask) <- 0.01
-
-
-# values(mask) <- 0 # If you want, you can add values to the raster. You don't have to though, and it just makes the raster HUGE at this resolution (4.8 GB)
-# writeRaster(mask, "mask.tif") # if you add values, you'll need to just write it to your machine, otherwise you'll quickly run out of memory, as the fasterize layer will be the same size.  
-
-
-# -------------------
-#  Fasterize: 
-
-AOH_r <- fasterize(AOH, mask, fun = "sum") # field = NULL by default, which gives every polygon a value of 1
-
-plot(AOH_r) # again.... tiny lil guys!
-
-
-
-
-# -------------------
-# Notes:
-
-# If you aren't already familiar, these are great packages for basemaps:
-install.packages("rnaturalearth")
-devtools::install_github("ropensci/rnaturalearthdata")
-devtools::install_github("ropensci/rnaturalearthhires")
-library(rnaturalearth)
-library(rnaturalearthdata)
-library(rnaturalearthhires)
-
-plot(ne_countries())  # nice!
-# plot(ne_states()) # or all sub national level bodies with this one 
-
-
-
-# if you need to reproject the mask before you fasterize, I think raster works best with: 
-crs(AOH) # note, seems to work better than st_crs().
-
-# in the event that you want to build a raster based on a smaller existing one
-template_raster <- extend(small_mask, extent(as.Spatial(sf_file)), value = 0)
-
-
-
-```
-
-## Seasonality of ranges
-
-```{r seasonality}
+```{r seasonality-of-ranges}
 # 1a. filter to presence, defaults to code 1 (extant species only). Other unused codes are:
 # ------ 2. Probably Extant (discontinued, ambiguous), 3. Possibly Extant,
 # ------ 4. Possibly Extinct, 5. Extinct, 6. Presence Uncertain.
@@ -2774,39 +1494,68 @@ range_t <-
 plot(range_t)
 ```
 
+```{r species-specific-explorations}
+# remove double record for Swainson's thrush:
+# Catharus swainsoni should stay in
+# Catharus ustulatus should be removed. 
 
-## Misc
+species_ranges %>% filter(str_detect(binomial, "Catharus swainsoni|Catharus ustulatus"))
+species_ranges %>% filter(str_detect(binomial, "Catharus swainsoni"), site == "wisconsin") %>% select(seasonal) %>% plot()
 
-```{r create-blank-template-rasters}
-site_index
+species_ranges %>% filter(str_detect(binomial, "Microhierax melanoleucos"))
+species_ranges %>% filter(str_detect(binomial, "Myiomela leucura"))
 
-
-lapply(1:11, function(i) {
-  template_r <- terra::rast(
-    resolution = res(lc[[i]]),
-    extent = ext(lc[[i]])
-  )
-  
-  
-
-  terra::writeRaster(template_r, 
-                     filename = paste0(p_derived, "templates/", site_df$site[i], "_template.tif"),
-                     overwrite = TRUE,
-                     names = paste0(site_df$site[i], "_template"))
-  })
+# "Grus americana" - whooping crane, where abandoned agricultural land is almost certainly not going to add meaningful habitat? Passage areas are not included in final analysis.
+habitat_age_req_coded %>% filter(binomial == "Grus americana") #%>% select(Chris_notes)
 
 
-rasterOptions()
-rasterOptions(tmpdir = "/scratch/gpfs/clc6/biodiversity_abn/derived/tmp/")
-tmp_r <- raster(ncols = 10, 
-                nrows = 10, 
-                resolution = 50)
+# How about birds which require mature forest for breeding, but not during passage?
+# Examples include smew (Mergellus albellus), common merganser (Mergus merganser), scaly-sided merganser (Mergus squamatus) etc. I have marked these as mature_forest_obl given their need for mature trees for nest cavities.
+# 
 
-values(tmp_r) <- 1:ncell(tmp_r)
+# Tree cavities for nesting?
+species_ranges %>% filter(str_detect(binomial, "Otus sunia")) # oriental scops-owl
+species_ranges %>% filter(str_detect(binomial, "Otus semitorques")) # Japanese scops-owl
+species_ranges %>% filter(str_detect(binomial, "Melanerpes erythrocephalus")) # # Red-headed woodpecker:
 
-plot(tmp_r)
-plot(template_r)
+# p
+species_ranges %>% filter(str_detect(binomial, "Fringilla coelebs")) # common chaffinch
 
+species_ranges %>% filter(str_detect(binomial, "Muscicapa striata")) # spotted flycatcher
+
+species_ranges %>% filter(str_detect(binomial, "Pardaliparus venustulus")) # yellow-bellied tit - non-breeding found in any sizeable patch of trees, but description as follows: "Broadleaf subtropical and evergreen forests, including mixed conifer and deciduous forest with bamboo, larches (Larix), willow (Salix) groves and other scattered trees at edges of cultivation; in non-breeding season more widely dispersed and may be found in almost any sizeable patch of trees."
+
+
+species_ranges %>% filter(str_detect(binomial, "Phoenicurus frontalis")) # blur-fronted redstart
+
+species_ranges %>% filter(str_detect(binomial, "Phylloscopus inornatus")) %>% # Phylloscopus warblers, like this one: Yellow-browed warbler (passage)
+  st_geometry() %>% plot()
+
+species_ranges %>% filter(str_detect(binomial, "Phylloscopus nitidus")) # green warbler
+species_ranges %>% filter(str_detect(binomial, "Phylloscopus proregulus")) # Pallas's leaf warbler
+
+species_ranges %>% filter(str_detect(binomial, "Phylloscopus subaffinis"))
+
+species_ranges %>% filter(str_detect(binomial, "Picus viridis")) # 
+
+species_ranges %>% filter(str_detect(binomial, "Pitta nympha")) # fairy pitta.
+# It breeds in subtropical forest, where its localised distribution suggests that it has specialised habitat requirements. Peak breeding season in Taiwan is in May and June. In Japan, it breeds primarily in broadleaved evergreen forest near the coast (mostly below 500 m), although breeding has been recorded from plantations and the species appears to be adaptable to modified forest habitats. In South Korea, it breeds in dense moist forest and broadleaved forest near the coast, up to 1,200 m. The nest is usually built in crevices or foliage 1-5 m above the ground. It forages amongst leaf-litter for invertebrates, also occasionally taking snakes, lizards and small rodents (Wild at Heart Legal Defence Association undated).
+
+
+species_ranges %>% filter(str_detect(binomial, "Pnoepyga pusilla")) # pygmy cupwing
+# "Floor and understorey of broadleaf evergreen forest, densely vegetated forest ravines, mossy boulders, fallen logs, dense fern growth, luxuriant moss. Similar habitat on Flores, described as montane forest, Eupatrium scrub and occasionally roadside regrowth and tall secondary forest; on Timor occurs around large rocky outcrops."
+
+species_ranges %>% filter(str_detect(binomial, "Poecile lugubris")) # Sombre tit - cavity nesting? But largely open forests. 
+
+species_ranges %>% filter(str_detect(binomial, "Poecile palustris")) # marsh tit - primarily mature forest, but occasionally seen in orchards, gardens, etc. 
+species_ranges %>% filter(str_detect(binomial, "Pteruthius aeralatus"))  # white-browed shrike-babbler
+species_ranges %>% filter(str_detect(binomial, "Pucrasia macrolopha")) # koklass pheasant
+
+
+species_ranges %>% filter(str_detect(binomial, "Regulus ignicapilla")) # common firecrest &
+species_ranges %>% filter(str_detect(binomial, "Regulus regulus")) # goldcrest
+
+species_ranges %>% st_drop_geometry() %>% filter(str_detect(binomial, "Setophaga ")) %>% select(site:seasonal)
 ```
 
 
