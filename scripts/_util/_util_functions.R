@@ -4,6 +4,33 @@
 # 
 # --------------------------------------------------------------- #
 
+# Input data preparation ----
+
+
+# -------------------------------------------------------------------------- #
+# Modified version of cc_erase_non_abn_periods() (see https://github.com/chriscra/abandonment_trajectories/blob/master/scripts/_util/_util_functions.R),
+# for producing a mask of noncrop periods that start the time series, before cultivation.
+# -------------------------------------------------------------------------- #
+cc_extract_noncrop_precrop <- function(dt) {
+  
+  if (length(grep("[xy]$", names(dt))) > 0) {
+    if (!identical(names(dt)[1:2], c("x", "y"))) {
+      stop("x and y must be the first two columns in the data.table")
+    }
+    adjustment <- 2
+  } else {
+    adjustment <- 0
+  }
+  
+  # iterate across columns
+  for (i in seq_len(length(dt) - adjustment)) {
+    dt[get(names(dt)[i + adjustment]) != i,  # filter rows with values NOT equal to column number
+       names(dt)[i + adjustment] := NA] # set value to NA
+  }
+}
+
+
+
 # AOH ----
 
 # ------------------------------------------------------------------------- #
