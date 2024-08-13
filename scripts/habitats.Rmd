@@ -11,6 +11,7 @@ This script is part of the **Effects of cropland abandonment on biodiversity** p
 See https://github.com/chriscra/biodiversity_abandonment.
 
 
+
 ```{r initialize}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
 ```
@@ -43,9 +44,18 @@ raster::removeTmpFiles()
 warnings()
 ```
 
-Note: early in the project, I explored using Hengl et al. 2019's map of Potential Natural Vegetation (https://peerj.com/articles/5457/), but decided against it. 
+5 primary sections:
+
+1. Prepping the Jung et al. 2020 map of IUCN Level 2 Habitats (for the year 2015)
+2. Interpolating Yin et al. 2020 Land Covers to IUCN Level 2 Habitat Types (Jung et al. 2020)
+3. Analyzing Landscape Configuration and Fragmentation via {landscapemetrics} (see "cluster/lsm_2024.R" and "cluster/lsm_two_2024.R")
+4. Plotting Ecoregions & Biomes for each site. 
 
 # IUCN Habitat types
+
+Interpolate our annual land cover time series from Yin et al. 2020 (which just has four land cover types) into IUCN Level 2 Habitat Types based on the 2015 IUCN Level 2 Habitat Types map from Jung et al. 2020.
+
+## Load, crop, and prep Jung et al. 2020
 
 ```{r load-jung-habitat-types}
 # level 1
@@ -59,17 +69,18 @@ jung_l2 <- rast(paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/iucn_habitatclas
 
 plot(jung_l2, type = "classes")
 
-# freq(jung_l2)
+
+# produce global class frequencies:
+# freq(jung_l2) %>% write_csv(paste0(p_proj, "resources/jung_freq_table.csv")) # careful, this takes a while
 jung_freq <- read_csv(paste0(p_proj, "resources/jung_freq_table.csv"))
 ```
 
-
-```{r jung-crop-resample}
+```{r crop-jung}
 # ---------------------------------------------- #
 # crop with a buffer, to deal with NA issues: use this going forward
 # ---------------------------------------------- #
 
-# --------- no buff: --------- #
+# --------- no buffer --------- #
 site_jung_l1_no_buff <- lapply(1:11, function(i) {
   terra::crop(jung_l1, ext(lcc[[i]]),
               filename = paste0(p_derived, "site_jung/", 
@@ -86,7 +97,7 @@ site_jung_l2_no_buff <- lapply(1:11, function(i) {
 
 
 
-# now, with a buffer, for resampling
+# now, with a buffer, to facilitate resampling
 site_jung_l1 <- lapply(1:11, function(i) {
   terra::crop(jung_l1, ext(lc[[i]]) + rep(0.1, 4), # with a bit of buffer
               filename = paste0(p_derived, "site_jung/", 
@@ -125,10 +136,12 @@ site_jung_l2 <- lapply(
 names(site_jung_l2) <- site_df$site
 
 plot(site_jung_l2$shaanxi, type = "classes")
+```
 
 
+```{r resample-jung}
 # ------------------------------------------------------ #
-# resample
+# resample from ~ 100m resolution to 30m resolution to match Yin et al. 2020 maps
 # ------------------------------------------------------ #
 # level 1
 site_jung_l1_30 <- lapply(1:11, function(i) {
@@ -165,6 +178,266 @@ site_jung_l2_30 <- lapply(
 names(site_jung_l2_30) <- site_df$site
 ```
 
+## Crosswalking IUCN Level 2 Habitats (Jung et al. 2020) to Yin et al. 2020 Land Covers
+
+```{r jung-table}
+# ---------------------------------------------- #
+# Jung table with classes
+# ---------------------------------------------- #
+jung_l1_table_clr <- read_delim(
+  file = paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/Habitatmapping-004/styles/level1.clr"), 
+  delim = " ", 
+  col_names = c("map_code", "R", "G", "B", "Opacity", "Name")) %>%
+  mutate(cols = rgb(R, G, B, maxColorValue = 255),
+         label = paste0(map_code, ": ", Name)
+  )
+
+
+jung_l2_table_clr <- read_delim(
+  file = paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/Habitatmapping-004/styles/level2.clr"), 
+  delim = " ", 
+  col_names = c("map_code", "R", "G", "B", "Opacity", "Name")) %>%
+  mutate(cols = rgb(R, G, B, maxColorValue = 255))
+
+jung_table <- read_csv(paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/Habitatmapping-004/IUCN_mapping_legend.csv")) %>%
+  rename("map_code" = "NewCode") %>%
+  mutate(IUCNLevel = gsub(" – | –", " - ", IUCNLevel)) %>%
+  left_join(select(jung_l2_table_clr, map_code, cols, Coarse_Name = Name), by = "map_code") %>%
+  mutate(label = paste0(map_code, ": ", IUCNLevel))
+
+jung_table %>% select(map_code, IUCNLevel) %>% print(n = 126)
+
+jung_table %>% 
+  filter(map_code == 1404) %>%
+  .$IUCNDefintion
+  # .$Notes
+
+# level 1
+jung_table %>%
+  filter((map_code %% 100) == 0) %>%
+  select(map_code, Coarse_Name, IUCNLevel)
+```
+
+
+```{r iucn-crosswalk}
+# ---------------------------------------------- #
+# IUCN crosswalk, produced manually in Excel
+# ---------------------------------------------- #
+iucn_crosswalk # see _util_files.R
+
+iucn_crosswalk %>% arrange(lc, map_code) %>% print(n = 45)
+iucn_crosswalk %>% arrange(map_code) %>% print(n = 45)
+
+```
+
+```{r calculate-overlap-Jung-to-Yin}
+# Comparing different approaches to crosswalking the IUCN Level 2 habitat types to the broader Yin land covers 
+
+i <- 3
+lc[[i]]$y2015
+
+site_jung_l1_30[[i]]
+site_jung_l1_30_freq$map_code %>% sort %>% unique()
+jung_l1_table_clr
+jung_l2_table_clr
+
+jung_table %>% 
+  select(map_code, Coarse_Name) 
+
+select(iucn_crosswalk, "is" = map_code, "becomes" = lc)
+
+lc_plot_cols$name
+
+# reclassify level 2 habitat types
+
+iucn_crosswalk <- iucn_crosswalk %>% 
+  mutate(
+    #lc is where savanna is grassland (4) and shrubland is forest (2)
+    
+    # recode shrubland (IUCN) to 4, grassland (lc). 
+    # This version has both savanna and shrubland as grassland (2)
+    lc2 = ifelse(map_code >= 300 & map_code < 400, 4, lc), 
+    
+    # recode savanna (IUCN) to forest (lc). 
+    # This version has both savanna and shrubland as forest (3)
+    lc3 = ifelse(map_code >= 200 & map_code < 300, 2, lc), 
+    
+    # swap both: This version has savanna as forest (2), and shrubland as grassland (4)
+    lc4 = ifelse(map_code >= 200 & map_code < 300, 2, lc2) 
+  )
+
+iucn_crosswalk %>% select(map_code:lc, lc2:lc4, IUCNLevel) %>% print(n = 50)
+
+
+tic()
+site_jung_l2_30_rcl <- 
+  lapply(1:11, function(site) {
+    rast(lapply(c("lc", "lc2", "lc3", "lc4"), function(lc_type) {
+      classify(
+        site_jung_l2_30[[site]],
+        
+        # cycles through lc, lc2, lc3, and lc4 as the "lc_type", to convert the map_code to.
+        rcl = iucn_crosswalk %>% select("is" = map_code, "becomes" = lc_type),
+        filename = paste0(p_derived, "site_jung/", site_df$site[site], "_jung_l2_rcl_", lc_type,".tif"),
+        overwrite=TRUE)
+      }
+      )
+    )
+    }
+    )
+toc()
+
+
+# load back in site_jung_l2_30_rcl
+for (lc_type in c("lc", "lc2", "lc3", "lc4")) {}
+tt <- rast(paste0(p_derived, "site_jung/", site_df$site[9], "_jung_l2_rcl_", 
+                  c("lc", "lc2", "lc3", "lc4"), ".tif"))
+
+
+site_jung_l2_30_rcl <- 
+  lapply(1:11, function(i) {
+    rast(paste0(p_derived, "site_jung/", site_df$site[i], "_jung_l2_rcl_", 
+                  c("lc", "lc2", "lc3", "lc4"), ".tif"))
+    }
+    )
+
+names(site_jung_l2_30_rcl) <- site_df$site
+for(i in 1:11) {names(site_jung_l2_30_rcl[[i]]) <- c("lc", "lc2", "lc3", "lc4")}
+
+
+plot(site_jung_l2_30_rcl[[3]]$lc, col = lc_plot_cols$color)
+plot(lcc[[3]]$y2015, col = lc_plot_cols$color)
+
+# Comparing how well the crosswalks match:
+# Confusion Matrix
+conf <- tmp_dt[, 1:2][, .N, by = c("y2015", "lc")][order(y2015, lc)]
+conf %>% pivot_wider(names_from = lc, values_from = N)
+                       
+
+# --------------------------------------------------------------------- #
+# calculate the jaccard similarities between Yin's land cover maps (2015) and the IUCN habitat map (Jung 2020), following four different recoding schemes.
+# --------------------------------------------------------------------- #
+
+site <- 3
+crosswalk_jac0
+
+identical(crosswalk_jac, crosswalk_jac0)
+
+crosswalk_jac <- lapply(1:11, 
+                        function(site) {
+  tmp_t <- terra::rast(
+    list(
+      lcc[[site]]$y2015, # land cover in 2015
+      site_jung_l2_30_rcl[[site]] # IUCN habitat types, reclassified
+    )
+    )
+
+  # convert to data.table
+  tmp_dt <- spatraster_to_dt(tmp_t, xy_switch = FALSE)
+  
+  # calculate Jaccard similarity
+  jac_df <- lapply(c("lc", "lc2", "lc3", "lc4"), function(rcl_version){
+    tibble(site = site_df$site[site],
+           lc = 1:4,
+           ver = rcl_version) %>%
+      mutate(jaccard = sapply(lc, #1:4, 
+                              function(lc_code) {
+        int <- tmp_dt[y2015 == lc_code & get(rcl_version) == lc_code, .N] # intersection
+        a <- tmp_dt[y2015 == lc_code, .N] 
+        b <- tmp_dt[get(rcl_version) == lc_code, .N]
+        int / (a + b - int) # int / union
+        }))
+    
+    }
+    ) %>% bind_rows()
+
+  jac_df
+  }) %>% 
+  bind_rows()
+
+write_csv(crosswalk_jac, paste0(p_derived, "jung_crosswalk_jaccard.csv"))
+
+names(site_jung_l2_30_rcl) <- c("shrubs to forest, savanna to grass", 
+                                "shrubs to grass, savanna to grass",
+                                "shrubs to forest, savanna to forest", 
+                                "shrubs to grass, savanna to forest")
+
+# for (i in 1:24) {
+gg_crosswalk_jac <-
+  crosswalk_jac %>%
+  filter(lc %in% c(2, 4)) %>%
+  ggplot(mapping = aes(x = as_factor(lc), y = jaccard, fill = as_factor(ver))) +
+    geom_col(size = 1, position = position_dodge2()) + 
+    theme_classic() +
+  labs(fill = "Crosswalk", x = "Land Cover Class", y = "Jaccard Similarity") +
+  scale_x_discrete(labels = c("1" = "Non-veg",
+                              "2" = "Forest",
+                              "3" = "Cropland",
+                              "4" = "Grassland")) +
+  scale_fill_manual(values = met.brewer("Kandinsky", n = 4), #brewer.pal(n = 4, name = "Set1"), # gg_color_hue(4), #viridis(n = 4),
+                    labels = c("lc" = "Shrubs <-> forest,\n savanna <-> grass", 
+                                "lc2" = "Shrubs <-> grass,\n savanna <-> grass",
+                                "lc3" = "Shrubs <-> forest,\n savanna <-> forest", 
+                                "lc4" = "Shrubs <-> grass,\n savanna <-> forest")) +
+  facet_wrap(vars(site), #scales = "free", 
+             labeller = as_labeller(fancy_labels)) + 
+  theme(
+    # axis.text.x = element_text(angle = 30, vjust = 1, hjust = 1),
+    legend.background = element_blank(),
+    legend.position = c(0.875, 0.13))
+
+
+ggsave(plot = gg_crosswalk_jac,
+       filename = paste0(p_plots, "crosswalk_jaccard.pdf"),
+       width = 6.25, height = 5, units = "in")
+# }
+
+i <- 1 # belarus
+i <- 2 # bh
+i <- 11 # wisc
+
+
+plot(site_jung_l1_30[[i]])
+plot(site_jung_l1_30[[i]],
+     breaks = c(299, 301),
+     main = paste0(names(site_jung_l1_30[[i]]), ": shrubland"))
+
+plot(site_jung_l2_30[[i]],
+     breaks = c(299, 399),
+     main = paste0(names(site_jung_l2_30[[i]]), ": shrubland"),
+     col = "red", add = T)
+
+plot(lc[[i]]$y2015,
+     col = lc_plot_cols$color)
+
+# comparing grassland and shrubland, jung first
+plot(site_jung_l2_30[[i]],
+     breaks = c(299, 399),
+     main = paste0(names(site_jung_l2_30[[i]]), ": shrubland"),
+     col = "red")
+
+plot(lc[[i]]$y2015,
+     col = lc_plot_cols$color,
+     breaks = c(3.9, 4.1),
+     add = T)
+
+# lc first
+plot(lc[[i]]$y2015,
+     col = lc_plot_cols$color,
+     breaks = c(3.9, 4.1))
+
+plot(site_jung_l2_30[[i]],
+     breaks = c(299, 399),
+     main = paste0(names(site_jung_l2_30[[i]]), ": shrubland"),
+     col = "red", add = T)
+
+jung_l2_table_clr %>% print(n = 82)
+
+```
+
+
+
+## Exploratory data analysis and visualization
 
 ```{r jung-freq}
 # ----------------------------- #
@@ -634,548 +907,22 @@ dev.off()
 plot(site_jung_l2_30[[i]], type = "classes")
 ```
 
-```{r plot-max-abn-lcc-iucn}
-site_index <- 3
-
-tmp_classes <- max_abn_lcc_iucn_habitat[[site_index]][[31]] %>% 
-  values() %>% unique() %>% na.omit() %>% 
-  sort() %>% as.vector()
-
-tmp_attributes <- 
-  jung_table %>%
-  arrange(map_code) %>%
-  filter(map_code %in% tmp_classes)
-
-site_jung_l2_freq %>% 
-  filter(site == site_df$site[site_index])
 
 
-plot(max_abn_lcc_iucn_habitat[[site_index]][[31]],
-     maxcell = 5000000,
-     # main = paste0("IUCN Habitat Types, Level 2: ", names(max_abn_lcc_iucn_habitat[2])),
-     # mar = c(mval+0.5, mval, mval + 1.2, mval + 2), # bltr
-     type = "classes", #legend = FALSE,
-     col = tmp_attributes$cols,
-     levels = tmp_attributes$label
-)
-
-freq(max_abn_lcc_iucn_habitat[[2]][[31]])
-
-tmp_attributes %>% left_join(freq(max_abn_lcc_iucn_habitat[[2]][[31]]), by = c("map_code" = "value"))
-
-plot(site_sf[site_index, ]$geometry, add = TRUE, border = "red")
-plot(vert_sites %>% filter(binomial == "Trachypithecus francoisi") %>% st_geometry(), add = TRUE, border = "red")
-
-site_sf[3, ]
-```
-
-
-```{r misc}
+```{r plot-elevation}
 pdf(file = paste0(p_output, "plots/shaanxi_elevation.pdf"), width = 5, height = 4)
 plot(elevation_map[[i]], main = "Elevation (m)")
 dev.off()
-
 ```
 
 
-```{r habitat-old}
-# color palette information #
-# level 1
-habitat_table <- read_delim(
-  file = paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_code_ver003/styles/level1.clr"), delim = " ", col_names = c("Number", "R", "G", "B", "Opacity", "Name"))
-
-# level 2
-habitat_table <- read_delim(
-  file = paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/iucn_habitatclassification_code_ver003/styles/level2.clr"), delim = " ", col_names = c("Number", "R", "G", "B", "Opacity", "Name"))
-habitat_table <- habitat_table %>%
-  mutate(Color = rgb(R, G, B, maxColorValue = 255))
-
-habitat_table[habitat_table$Name == "Forest", "Color"] <- terrain.colors(15)[1]
-habitat_table[habitat_table$Name == "Shrubland", "Color"] <- terrain.colors(15)[2]
-habitat_table[habitat_table$Name == "Savanna", "Color"] <- terrain.colors(15)[3]
-habitat_table[habitat_table$Name == "Grassland", "Color"] <- filter(plot_cols, name == "4. Grassland")$color
-habitat_table[habitat_table$Name == "Artificial", "Color"] <- filter(plot_cols, name == "3. Crop")$color
-
-plot_cols
-show_col(plot_cols$color)
-show_col(habitat_table$Color)
-show_col(terrain.colors(15))
-terrain.colors(9)
-show_col("006633")
-show_col("brown")
-
-
-habitat
-res(habitat) * 110 # = 0.0988 km grid (~ 0.10 km, ~ 100 m)
-
-# crop:
-s_habitat <- crop(habitat, extent(s$y2017))
-b_habitat <- crop(habitat, extent(b$y2017))
-
-sort(unique(values(s_habitat)))
-sort(unique(values(b_habitat)))
-filter(habitat_table, Number %in% unique(values(s_habitat)))
-filter(habitat_table, Number %in% unique(values(b_habitat)))
-
-
-# fancy plots
-par(mfrow = c(2,2))
-plot(s_habitat, main = "Shaanxi, Habitat Types",
-     breaks = c(-1, 
-                filter(habitat_table, Number %in% unique(values(s_habitat)))$Number),
-     col = filter(habitat_table, Number %in% unique(values(s_habitat)))$Color)
-
-legend("topleft", 
-       legend = filter(habitat_table, Number %in% unique(values(s_habitat)))$Name, 
-       fill = filter(habitat_table, Number %in% unique(values(s_habitat)))$Color,
-       cex = 0.6, inset = 0)
-
-# compare to raw land use data
-plot(s$y2015, main = "Shaanxi 2015", 
-     breaks = c(0, plot_cols$breaks), 
-     col = plot_cols$color)
-legend("bottomleft", cex = 0.6, inset = 0,
-       legend = plot_cols$name, 
-       fill = plot_cols$color)
-
-# belarus
-plot(b_habitat, main = "Belarus, Habitat Types",
-     breaks = c(-1, 
-                filter(habitat_table, Number %in% unique(values(b_habitat)))$Number),
-     col = filter(habitat_table, Number %in% unique(values(b_habitat)))$Color)
-
-legend("bottomleft", 
-       legend = filter(habitat_table, Number %in% unique(values(b_habitat)))$Name, 
-       fill = filter(habitat_table, Number %in% unique(values(b_habitat)))$Color,
-       cex = 0.6, inset = 0)
-
-
-# compare to raw land use data
-plot(b$y2015, main = "Belarus 2015", breaks = c(0, plot_cols$breaks), col = plot_cols$color)
-legend("bottomleft", cex = 0.6, inset = 0,
-       legend = plot_cols$name, 
-       fill = plot_cols$color)
-
-
-
-habitat_table 
-# 0   Water                     
-# 100 Forest                   
-# 200 Savanna                 
-# 300 Shrubland               
-# 400 Grassland              
-# 500 Wetlands (inland)       
-# 600 Rocky Areas            
-# 800 Desert                 
-# 1400 Artificial - Terrestrial
-# 1700 Unknown
-unique(values(b_habitat))
-table(getValues(b_habitat))/ncell(b_habitat)
-plot(b_habitat, main = "Belarus Habitat classes", breaks = c(0, 100, 300, 500, 1400), col = plot_cols$color[c(2, 4, 4, 3)])
-
-
-# summary stats
-b_habitat_area <- habitat_table %>%
-  filter(Number %in% unique(values(b_habitat))) %>%
-  select(Number, 
-         Name = New.global.consolidated.biome.scheme) %>%
-  mutate(
-    area_percent = (table(getValues(b_pnv))/ncell(b_pnv))*100, # percentage in each
-    area_km2 = 
-      length(raster::area(b_pnv)) * 
-      median(raster::area(b_pnv), na.rm = TRUE) * 
-      area_percent/100
-  )
-
-```
-
-## Crosswalks
-
-
-```{r jung-table-crosswalk}
-# ---------------------------------------------- #
-# Jung table with classes
-# ---------------------------------------------- #
-jung_l1_table_clr <- read_delim(
-  file = paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/Habitatmapping-004/styles/level1.clr"), 
-  delim = " ", 
-  col_names = c("map_code", "R", "G", "B", "Opacity", "Name")) %>%
-  mutate(cols = rgb(R, G, B, maxColorValue = 255),
-         label = paste0(map_code, ": ", Name)
-  )
-
-
-jung_l2_table_clr <- read_delim(
-  file = paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/Habitatmapping-004/styles/level2.clr"), 
-  delim = " ", 
-  col_names = c("map_code", "R", "G", "B", "Opacity", "Name")) %>%
-  mutate(cols = rgb(R, G, B, maxColorValue = 255))
-
-jung_table <- read_csv(paste0(p_dat, "Habitats/Jung_GlobalHabitatTypes/Habitatmapping-004/IUCN_mapping_legend.csv")) %>%
-  rename("map_code" = "NewCode") %>%
-  mutate(IUCNLevel = gsub(" – | –", " - ", IUCNLevel)) %>%
-  left_join(select(jung_l2_table_clr, map_code, cols, Coarse_Name = Name), by = "map_code") %>%
-  mutate(label = paste0(map_code, ": ", IUCNLevel))
-
-jung_table %>% select(map_code, IUCNLevel) %>% print(n = 126)
-
-jung_table %>% 
-  filter(map_code == 1404) %>%
-  .$IUCNDefintion
-  # .$Notes
-
-# level 1
-jung_table %>%
-  filter((map_code %% 100) == 0) %>%
-  select(map_code, Coarse_Name, IUCNLevel)
-
-
-
-# ---------------------------------------------- #
-# Jung table crosswalk
-# ---------------------------------------------- #
-iucn_crosswalk # see _util_files.R
-
-iucn_crosswalk %>% arrange(lc, map_code) %>% print(n = 45)
-iucn_crosswalk %>% arrange(map_code) %>% print(n = 45)
-
-```
-
-```{r pnv-to-IUCN-crosswalk}
-# 20 shrubs, 30 herbaceous vegetation, 60 bare/sparse vegetation, 90 herbaceous wetland, 111 closed forest, evergreen needleleaf, 112 closed forest, evergreen broadleaf, 114 closed forest, deciduous broadleaf, 115 closed forest, mixed, 121 open forest, evergreen needleleaf, and 122 open forest, evergreen broadleaf
-site_pnv_lc_30_freq %>% 
-  select(map_code, Name, land_cover_class_agg) %>% 
-  arrange(map_code) %>% 
-  unique()
-
-site_jung_l2_30_freq %>% 
-  # filter(hab_percent > 1) %>%
-  select(map_code, Coarse_Name, IUCNLevel) %>% 
-  unique() %>% 
-  arrange(map_code) %>% 
-  print(n = 35)
-
-
-
-IUCN_pnv_crosswalk
-
-test <- site_jung_l2_30_freq %>% 
-  arrange(map_code) %>% 
-  select(map_code, Coarse_Name, IUCNLevel) %>% 
-  unique() %>% 
-  mutate(pnv_code = NA)
-
-# test %>% mutate(pnv_code = if(grepl("1.4", test$IUCNLevel), "")))
-
-site_jung_l2_30_freq %>% 
-  filter(Coarse_Name == unique(site_jung_l2_30_freq$Coarse_Name)[1]) %>%
-  arrange(map_code, desc(hab_percent))
-
-site_jung_l2_30_freq %>% filter(site == site_df$site[i])
-site_pnv_lc_30_freq %>% filter(site == site_df$site[i])
-
-
-# ecoregions_simple %>% select(ECO_NAME) %>% 
-  grep("Amaz", ecoregions_simple$ECO_NAME, value = TRUE)
-
-ecoregions_simple %>%
-  filter(ECO_NAME %in% grep("Amaz", ecoregions_simple$ECO_NAME, value = TRUE)) %>%
-  st_geometry() %>% plot()
-
-plot(jung_l2, add = T)
-
-
-site_pnv_lc_freq %>% 
-  select(land_cover_class, land_cover_class_agg) %>% 
-  unique() %>%
-  arrange(land_cover_class)
-
-
-site_jung_l2_freq %>% 
-  select(IUCNLevel, Coarse_Name) %>% 
-  unique() %>%
-  arrange(IUCNLevel)
-
-# aggregated
-site_pnv_lc_freq %>% 
-  select(land_cover_class_agg) %>% 
-  unique() %>%
-  arrange(land_cover_class_agg)
-
-
-site_jung_l2_freq %>% 
-  select(Coarse_Name) %>% 
-  unique() %>% .$Coarse_Name %>% cat()
-
-
-site_jung_l2_freq$IUCNLevel %>% unique() %>% sort()
-
-```
-
-
-```{r calculate-overlap-IUCN-to-Yin}
-
-i <- 3
-lc[[i]]$y2015
-
-site_jung_l1_30[[i]]
-site_jung_l1_30_freq$map_code %>% sort %>% unique()
-jung_l1_table_clr
-jung_l2_table_clr
-
-jung_table %>% 
-  select(map_code, Coarse_Name) 
-
-select(iucn_crosswalk, "is" = map_code, "becomes" = lc)
-
-lc_plot_cols$name
-
-# reclassify level 2 habitat types
-
-iucn_crosswalk <- iucn_crosswalk %>% 
-  mutate(
-    #lc is where savanna is grassland (4) and shrubland is forest (2)
-    
-    # recode shrubland (IUCN) to 4, grassland (lc). 
-    # This version has both savanna and shrubland as grassland (2)
-    lc2 = ifelse(map_code >= 300 & map_code < 400, 4, lc), 
-    
-    # recode savanna (IUCN) to forest (lc). 
-    # This version has both savanna and shrubland as forest (3)
-    lc3 = ifelse(map_code >= 200 & map_code < 300, 2, lc), 
-    
-    # swap both: This version has savanna as forest (2), and shrubland as grassland (4)
-    lc4 = ifelse(map_code >= 200 & map_code < 300, 2, lc2) 
-  )
-
-iucn_crosswalk %>% select(map_code:lc, lc2:lc4, IUCNLevel) %>% print(n = 50)
-
-
-tic()
-site_jung_l2_30_rcl <- 
-  lapply(1:11, function(site) {
-    rast(lapply(c("lc", "lc2", "lc3", "lc4"), function(lc_type) {
-      classify(
-        site_jung_l2_30[[site]],
-        
-        # cycles through lc, lc2, lc3, and lc4 as the "lc_type", to convert the map_code to.
-        rcl = iucn_crosswalk %>% select("is" = map_code, "becomes" = lc_type),
-        filename = paste0(p_derived, "site_jung/", site_df$site[site], "_jung_l2_rcl_", lc_type,".tif"),
-        overwrite=TRUE)
-      }
-      )
-    )
-    }
-    )
-toc()
-
-
-# load back in site_jung_l2_30_rcl
-for (lc_type in c("lc", "lc2", "lc3", "lc4")) {}
-tt <- rast(paste0(p_derived, "site_jung/", site_df$site[9], "_jung_l2_rcl_", 
-                  c("lc", "lc2", "lc3", "lc4"), ".tif"))
-
-
-site_jung_l2_30_rcl <- 
-  lapply(1:11, function(i) {
-    rast(paste0(p_derived, "site_jung/", site_df$site[i], "_jung_l2_rcl_", 
-                  c("lc", "lc2", "lc3", "lc4"), ".tif"))
-    }
-    )
-
-names(site_jung_l2_30_rcl) <- site_df$site
-for(i in 1:11) {names(site_jung_l2_30_rcl[[i]]) <- c("lc", "lc2", "lc3", "lc4")}
-
-
-plot(site_jung_l2_30_rcl[[3]]$lc, col = lc_plot_cols$color)
-plot(lcc[[3]]$y2015, col = lc_plot_cols$color)
-
-# Comparing how well the crosswalks match:
-# Confusion Matrix
-conf <- tmp_dt[, 1:2][, .N, by = c("y2015", "lc")][order(y2015, lc)]
-conf %>% pivot_wider(names_from = lc, values_from = N)
-                       
-
-# --------------------------------------------------------------------- #
-# calculate the jaccard similarities between Yin's land cover maps (2015) and the IUCN habitat map (Jung 2020), following four different recoding schemes.
-# --------------------------------------------------------------------- #
-
-site <- 3
-crosswalk_jac0
-
-identical(crosswalk_jac, crosswalk_jac0)
-
-crosswalk_jac <- lapply(1:11, 
-                        function(site) {
-  tmp_t <- terra::rast(
-    list(
-      lcc[[site]]$y2015, # land cover in 2015
-      site_jung_l2_30_rcl[[site]] # IUCN habitat types, reclassified
-    )
-    )
-
-  # convert to data.table
-  tmp_dt <- spatraster_to_dt(tmp_t, xy_switch = FALSE)
-  
-  # calculate Jaccard similarity
-  jac_df <- lapply(c("lc", "lc2", "lc3", "lc4"), function(rcl_version){
-    tibble(site = site_df$site[site],
-           lc = 1:4,
-           ver = rcl_version) %>%
-      mutate(jaccard = sapply(lc, #1:4, 
-                              function(lc_code) {
-        int <- tmp_dt[y2015 == lc_code & get(rcl_version) == lc_code, .N] # intersection
-        a <- tmp_dt[y2015 == lc_code, .N] 
-        b <- tmp_dt[get(rcl_version) == lc_code, .N]
-        int / (a + b - int) # int / union
-        }))
-    
-    }
-    ) %>% bind_rows()
-
-  jac_df
-  }) %>% 
-  bind_rows()
-
-write_csv(crosswalk_jac, paste0(p_derived, "jung_crosswalk_jaccard.csv"))
-
-names(site_jung_l2_30_rcl) <- c("shrubs to forest, savanna to grass", 
-                                "shrubs to grass, savanna to grass",
-                                "shrubs to forest, savanna to forest", 
-                                "shrubs to grass, savanna to forest")
-
-# for (i in 1:24) {
-gg_crosswalk_jac <-
-  crosswalk_jac %>%
-  filter(lc %in% c(2, 4)) %>%
-  ggplot(mapping = aes(x = as_factor(lc), y = jaccard, fill = as_factor(ver))) +
-    geom_col(size = 1, position = position_dodge2()) + 
-    theme_classic() +
-  labs(fill = "Crosswalk", x = "Land Cover Class", y = "Jaccard Similarity") +
-  scale_x_discrete(labels = c("1" = "Non-veg",
-                              "2" = "Forest",
-                              "3" = "Cropland",
-                              "4" = "Grassland")) +
-  scale_fill_manual(values = met.brewer("Kandinsky", n = 4), #brewer.pal(n = 4, name = "Set1"), # gg_color_hue(4), #viridis(n = 4),
-                    labels = c("lc" = "Shrubs <-> forest,\n savanna <-> grass", 
-                                "lc2" = "Shrubs <-> grass,\n savanna <-> grass",
-                                "lc3" = "Shrubs <-> forest,\n savanna <-> forest", 
-                                "lc4" = "Shrubs <-> grass,\n savanna <-> forest")) +
-  facet_wrap(vars(site), #scales = "free", 
-             labeller = as_labeller(fancy_labels)) + 
-  theme(
-    # axis.text.x = element_text(angle = 30, vjust = 1, hjust = 1),
-    legend.background = element_blank(),
-    legend.position = c(0.875, 0.13))
-
-
-ggsave(plot = gg_crosswalk_jac,
-       filename = paste0(p_plots, "crosswalk_jaccard.pdf"),
-       width = 6.25, height = 5, units = "in")
-# }
-
-i <- 1 # belarus
-i <- 2 # bh
-i <- 11 # wisc
-
-
-plot(site_jung_l1_30[[i]])
-plot(site_jung_l1_30[[i]],
-     breaks = c(299, 301),
-     main = paste0(names(site_jung_l1_30[[i]]), ": shrubland"))
-
-plot(site_jung_l2_30[[i]],
-     breaks = c(299, 399),
-     main = paste0(names(site_jung_l2_30[[i]]), ": shrubland"),
-     col = "red", add = T)
-
-plot(lc[[i]]$y2015,
-     col = lc_plot_cols$color)
-
-# comparing grassland and shrubland, jung first
-plot(site_jung_l2_30[[i]],
-     breaks = c(299, 399),
-     main = paste0(names(site_jung_l2_30[[i]]), ": shrubland"),
-     col = "red")
-
-plot(lc[[i]]$y2015,
-     col = lc_plot_cols$color,
-     breaks = c(3.9, 4.1),
-     add = T)
-
-# lc first
-plot(lc[[i]]$y2015,
-     col = lc_plot_cols$color,
-     breaks = c(3.9, 4.1))
-
-plot(site_jung_l2_30[[i]],
-     breaks = c(299, 399),
-     main = paste0(names(site_jung_l2_30[[i]]), ": shrubland"),
-     col = "red", add = T)
-
-jung_l2_table_clr %>% print(n = 82)
-
-```
-
-```{r comparing-PNV-and-ecoregions}
-
-# plot PNV and ecoregions side by side:
-
-site_pnv_lc_30$belarus
-
-cat(paste0(site_df$site, " (", 1:11, ")\n"))
-
-# ---------- forest biomes: ---------- #
-# belarus (1)
-# bosnia_herzegovina (2)
-# wisconsin (11)
-# chongqing (3) - tropical
-
-
-site_ecoregions2017 %>% st_drop_geometry() %>% select(site, BIOME_NAME) %>% unique()
-
-# ---------- Savanna biomes: ---------- #
-# goias (4)
-# mato_grosso (6)
-
-# ---------- shrublands / desert biomes: ---------- #
-# iraq (5)
-
-# ---------- grasssland biomes: ---------- #
-# nebraska (7)
-# orenburg (8)
-# shaanxi (9)
-# volgograd (10)
-
-
-plot(site_forest_c_30$chongqing, main = "Resampled to ~30 m")
-
-for(i in 1:2) {
-  plot(site_forest_c_30[[i]], main = site_df$site[i])
-  site_ecoregions2017 %>% 
-  filter(site == site_df$site[i],
-         BIOME_NAME %in% grep("Savanna",
-                         site_ecoregions2017$BIOME_NAME,
-                         value = TRUE)) %>%
-  st_geometry() %>% plot(col = "red", add = TRUE)
-  
-  Sys.sleep(4)
-  
-}
-
-plot(pnv_lc)
-
-plot(pnv_lc, ext = ext(lc[[i]]$y2017 + 1), maxcell = 1e8)
-
-```
-
-
-## Directly assign land cover to IUCN habitat types
+# Assign Yin et al. 2020 Land Covers to IUCN Level 2 Habitat Types
 
 In a previous version of the AOH function, we calculated the area in each land cover class (i.e., of the four land cover classes in the original Yin et al. 2020 land cover maps).
-We created a crosswalk to translate our coarse land cover classes into the finer habitat types used by the IUCN, and mapped by Jung et al. 2020 for the year 2015. 
-This crosswalk is captured in `r iucn_crosswalk`.
-Because this crosswalk involves "one to many" relationships (i.e., one land cover class, such as 2 [woody vegetation], could be multiple IUCN habitat types).
+We created a crosswalk to translate our coarse land cover classes into the finer habitat types used by the IUCN and mapped by Jung et al. 2020 for the year 2015  
+This crosswalk is captured in chunk `r iucn_crosswalk` in section above titled "Crosswalking..."
+
+One complication is that this crosswalk involves "one to many" relationships (i.e., one land cover class, such as 2 [woody vegetation], could be multiple IUCN habitat types).
 For example, `r iucn_crosswalk %>% filter(lc == 2)`.
 But, we don't know what any given pixel in lc class 2 (woody vegetation) is, of the various IUCN habitat types.
 
@@ -1185,10 +932,10 @@ So, if a site has 20% temperate forest and 10% subtropical/tropical moist montan
 This was conducted for each year individually - so the area of each land cover class was calculated for each year, and these were then adjusted by the proportion of that land cover class occupied by each IUCN habitat type ("map_code") at each site.
 This proportion was calculated for each species iteratively, because the number of habitat types that were suitable for a given species changed over time.
 
-Our new method is designed to directly assign habitat types to each pixel based on the land cover type.
+Ultimately, however, we used a different approach designed to directly assign habitat types to each pixel based on the land cover type.
 Essentially, we assign each pixel in a land cover (e.g., "woody vegetation [2]") to the nearest analogous habitat type in the 2015 @Jung2020a habitat map.
 
-We essentially follow seven steps:  
+This process follows seven steps:  
 
 1. Reclassify the habitat map to extract only those habitat types that fall within the above land cover class (e.g., 2, woody vegetation).
 
@@ -1207,6 +954,8 @@ We essentially follow seven steps:
 **NOTE**: the final input maps for Calculations 1a and 1b ("crop_abn_iucn" observed and potential) are created in the script "cluster/noncrop_precrop_mask.R".
 
 ```{r lcc-iucn-habitat-composite}
+# this chunk produces the full site maps of iucn level 2 habitat types, for "Calculation 3" in final manuscript (aka "full_iucn", files ending in "_lcc_iucn_habitat.tif")
+
 site_index <- 3
 lc_class <- 2
 
@@ -1226,7 +975,7 @@ cat(fill = TRUE,
     site_df$site[site_index])
 
 # -------------------------------------------- # 
-# 1. Reclassify the habitat map to extract only those habitat types that fall within the above land cover class (e.g., 2, woody vegetation).
+# 1. Reclassify the habitat map to extract only those habitat types that fall within the above land cover class (e.g., 2: woody vegetation).
 
 # for multiple land cover classes at once:
 cat(fill = TRUE, "Subset the Jung habitat map into maps corresponding to four land cover classes.")
@@ -1300,7 +1049,7 @@ iucn_focal_resampled <-
 
 # -------------------------------------------- # 
 # 4. Mask directly, based on cell values, rather than with a intermediate step mask.
-# this results in a list with a 31-layer spatraster for each land cover class, showing just the habitat map codes for the pixels in that land cover in that year:
+# This results in a list with a 31-layer spatraster for each land cover class, showing just the habitat map codes for the pixels in that land cover in that year:
 cat(fill = TRUE, "Mask and save iucn_focal_msk.")
 
 tic()
@@ -1361,9 +1110,15 @@ terra::tmpFiles(current=TRUE, orphan=TRUE, old=TRUE, remove=TRUE)
 # -------------------------------------------- # 
 # 7. Mask this composite to the area abandoned in each year, for each site.
 
-# Note: the pixels in "abn_lcc_iucn_habitat" are NA until they are abandoned... therefore, they exclusively have non-cropland habitat.
-# The "max_abn_lcc_iucn_habitat" includes values for all pixels that are abandoned at any point during the time series, and includes a habitat type for each year of the time series. So, it includes the habitat before and after abandonment. 
-# This is the final layer that should be used to create results. 
+# this chunk produces files ending in "_abn_lcc_iucn_habitat.tif" (aka "abn_iucn")
+
+# Note: the pixels in "abn_lcc_iucn_habitat" are NA until they are abandoned... therefore, exclusively consist of non-cropland habitat.
+
+# The "max_abn_lcc_iucn_habitat" includes values for all pixels that are abandoned at any point during the time series, and includes a habitat type for each year of the time series. So, it includes the habitat before and after abandonment. This is produced in the next chunk
+
+# A third layer, "crop_to_abn_iucn_observed" (aka "crop_abn_iucn") contains IUCN habitats for the abandonment period as well as the immediately preceding period of cultivation (to allow for a proper before and after comparison). These are the final input maps for Calculations 1a and 1b ("crop_to_abn_iucn_observed" and "crop_to_abn_iucn_potential"). These maps are created in the script "cluster/noncrop_precrop_mask.R".
+
+# The three calculations producing final results in the manuscript rely on 1) crop_abn_iucn ("_crop_to_abn_iucn_observed."), 2) max_abn_iucn ("_max_abn_lcc_iucn_habitat."), and 3) full_iucn ("_lcc_iucn_habitat.").
 
 # reload
 lcc_iucn_habitat <- lapply(1:11, function(i) {
@@ -1409,13 +1164,14 @@ abn_lcc_iucn_habitat <- lapply(1:11, function(i) {
               site_df$site[i], "_abn_lcc_iucn_habitat", run_label, ".tif"))
   })
 names(abn_lcc_iucn_habitat) <- site_df$site
+```
 
 
-
+```{r max-extent-of-abn-iucn-habitat}
 # ---------------------------------------------------------------- #
 # ***** Calculate iucn habitats for all pixels that were ever abandoned
 # including habitats before *and* after abandonment, to show the net change
-# as a result of abandonment.
+# as a result of abandonment. (Calculation 2 in final manuscript)
 # ---------------------------------------------------------------- #
 
 # compare to 
@@ -1453,128 +1209,17 @@ names(max_abn_lcc_iucn_habitat) <- site_df$site
 
 plot(max_abn_lcc_iucn_habitat$shaanxi[[28:31]])
 
-# -------------------------------------------- # 
-# 8. Save - Use this as the final habitat map for calculating area of habitat.
-max_abn_lcc_iucn_habitat
-
-
 ```
 
 
-### IUCN habitats in potential abandonment without recultivation
-
-Calculating the area of habitat if no recultivation took place.
-How do I go about determining the land cover (and subsequently, the IUCN habitat types) for the potential abandonment layer?
-The issue is that this layer does not have land cover classes associated with it. 
-
-Perhaps I could use the cover() function to add the land cover classes from the abandonment mask to each other, iteratively, to get the latest land cover type before the abandoned cropland was recultivated. I could then use this to determine the habitat type, frozen (if you will) at the point right before it was recultivated, but allowed to continue on. 
-I guess I could also do this with the `lcc_iucn_habitat` rasters, since this has already been constrained to just the lc codes of abandoned pixels.
-
-The max_age raster has the exact same extent as the potential abandonment in the final year of the time series.
-
-```{r test-cover-abn-lcc}
-abn_mask
-
-site_index <- 9
-
-potential_age_t[[site_index]]$y2017 %>% plot()
-age_t[[site_index]]$y2017 %>% plot()
-
-small_ext <- draw()
-
-age_t[[site_index]]$y2017 %>% plot(ext = small_ext)
-potential_age_t[[site_index]]$y2017 %>% plot(ext = small_ext)
-
-at <- crop(abn_lcc[[site_index]], small_ext)
-lt <- crop(lcc[[site_index]], small_ext)
-lit <- crop(lcc_iucn_habitat[[site_index]], small_ext)
-ait <- crop(abn_lcc_iucn_habitat[[site_index]], small_ext)
-
-magt <- crop(max_age_t[[site_index]], small_ext)
-mt <- crop(max_age_mask[[site_index]], small_ext)
-
-plot(at)
-plot(lt)
-plot(ait[[31]])
-freq(abn_lcc_iucn_habitat[[site_index]][[28:31]])
-iucn_crosswalk %>% print(n= 50)
-plot(mt2)
-plot(mtt>4)
-
-mtt <- classify(
-      mtt,
-      rcl = tibble(from = 0,
-                   to = 4,
-                   becomes = NA_real_),
-      othersNA = FALSE,
-      include.lowest = TRUE, right = TRUE)
-plot(mtt)
-plot(is.na(mtt))
-plot(is.na(mt2))
-plot(ptt[[31]]>4)
-plot(is.na(ptt[[31]]>4))
-
-cit <- cover(ait[[31]], ait[[30]])
-for (i in (nlyr(ait)-2):6) {
-  cit <- cover(cit, ait[[i]])
-}
-
-plot(cit)
-plot(ct)
-plot(is.na(cit))
-plot(is.na(ct))
-
-plot(tt[[31]])
-plot(tt[[30]])
-plot(ct)
-
-ct <- cover(tt[[31]], tt[[30]], values = NA)
-for (i in (nlyr(tt)-2):6) {
-  ct <- cover(ct, tt[[i]])
-}
-plot(ct)
 
 
-plot(ct - tt[[31]])
-plot(is.na(ct))
-plot(is.na(tt[[31]]))
-plot(is.na(ptt[[31]]))
-plot(is.na(mtt))
-plot(is.na(ct) - is.na(tt[[31]]))
+### Potential abandonment: developing IUCN habitat maps for scenarios without recultivation
 
+This follows from the scenario in which no recultivation occurred, developed for Crawford et al. 2022. 
+The challenge involved determining the land cover (and subsequently, the IUCN habitat types) for the potential abandonment layer (which did not initially have land cover classes associated with it).
 
-plot(tt[[31]])
-plot(ptt[[31]])
-plot(mtt)
-
-plot(is.na(ptt[[31]]))
-plot(is.na(mtt))
-
-
-plot(is.na(ptt[[31]]) - is.na(mtt))
-
-#
-tt
-plot(tt[[22:31]])
-
-
-# -------------------------------------------------- #
-# full test, with chongqing
-
-tic()
-full_test <- cover(abn_lcc_iucn_habitat[[site_index]][[31]], abn_lcc_iucn_habitat[[site_index]][[30]])
-for (i in (nlyr(abn_lcc_iucn_habitat[[site_index]])-2):6) {
-  full_test <- cover(full_test, abn_lcc_iucn_habitat[[site_index]][[i]])
-}
-toc()
-
-
-max_abn_lcc_iucn_habitat
-```
-
-*** The need for a new potential abn map:
-
-I produced the first version of "potential_abn_lcc_iucn_habitat" was created by using cover(), which sequentially layered years on top of each other, looking for NA pixels in each year, and updating those with corresponding values from the previous year. 
+I produced a draft version of "potential_abn_lcc_iucn_habitat" by using terra::cover(), which sequentially layered years on top of each other, looking for NA pixels in each year, and updating those with corresponding values from the previous year. 
 Therefore, anything that was recultivated (i.e., NA in that year) was filled with the value from the year before.
 This means that recultivation is filled in with the land use from the previous year.
 Unfortunately though, if a pixel is abandoned, recultivated (NA), then abandoned again (non-NA), this second wave of abandonment won't be replaced with the first abandonment, because the pixel isn't NA. 
@@ -1583,112 +1228,7 @@ So, the land cover might revert from forest back to grassland, a younger stage o
 The second issue is that, regardless, I need to produce a version of the potential_abn_lcc_iucn layer that includes the habitat before and after, to match the max_abn_lcc_iucn layer.
 
 There are a few different approaches I could take:
-1. Use cover() to fill NA pixels in potential_abn_lcc_iucn with corresponding values from lcc_iucn (the full landscape), for each year:
-So, cover(x = potential\$y1995, y = max_abn_lcc\$y1995) would take the layer potential in year 1995 and update all NA values (i.e., pixels that haven't yet been abandoned) and replace them with the corresponding land cover (should be just agriculture).
 
-2. Perhaps I could update all grassland codes in one year with the values from the previous year. 
-This means that any pixel that went from forest to grassland would be replaced with the forest from the previous year. If it stayed as grassland, it would be replaced with grassland. 
-I'd need to do this with just the abandonment, so that it doesn't get replaced with cropland.
-
-3. Alt
-Hmm. How can I implement this with the new, max_abn_lcc_iucn_habitat raster?
-These are the habitats in each pixel that was abandoned at some point during the time series.
-So, I want to keep the cropland that occurred before abandonment, but not allow any recultivation.
-
-4. Alternatively, I could directly do this with the abandonment lc data.table. 
-
-```{r dev-potential-dt}
-site_index <- 9
-
-small_ext <- draw()
-small_ext
-
-age_t[[site_index]]$y2017 %>% plot(ext = small_ext)
-potential_age_t[[site_index]]$y2017 %>% plot(ext = small_ext)
-
-at <- crop(abn_lcc[[site_index]], small_ext)
-lt <- crop(lcc[[site_index]], small_ext)
-agt <- crop(age_t[[site_index]], small_ext)
-pgt <- crop(potential_age_t[[site_index]], small_ext)
-
-plot(at[[31]])
-plot(lt[[31]])
-plot(agt[[31]])
-plot(pgt[[31]])
-
-adt <- spatraster_to_dt(at)
-ldt <- spatraster_to_dt(lt)
-agdt <- spatraster_to_dt(agt)
-pgdt <- spatraster_to_dt(pgt)
-
-agdt
-
-dt2 <- agdt[c(15:19, 28:40), -c("x", "y", paste0("y", 1987:1995))]
-
-dt1 <- adt[c(15:19, 28:40), -c("x", "y", paste0("y", 1987:1995))]
-at
-att <- subst(at, from = 4, to = 2)
-dt <- spatraster_to_dt(att)[c(15:19, 28:40), -c("x", "y", paste0("y", 1987:1995))]
-dt
-
-xy <-  spatraster_to_dt(att)[c(15:19, 28:40), .(x,y)]
-xy
-xy$x %>% paste0(.,collapse = ", ")
-xy$y %>% paste0(.,collapse = ", ")
-
-dt[14, 12:13] <- NA
-dt[14, 14:15] <- 4
-dt$x
-
-minmax(att)
-dt
-# Approach: subset to NA cells, and set them equal to the value from the year before.
-# 1. If the pixel represents the recultivation of abandonment, then it will set it equal to the land cover from the year right before recultivation.
-# 2. If it's not recultivation, it won't have a value in the prior year, and so will remain NA.
-dt[is.na(y2008), y2008:= y2007 + 100]
-dt
-dt[
-  # find all values that are NA in a given year, and...
-  is.na(y2010),
-  
-  # set them equal to the value from the previous year.
-  y2010 := y2009 + 100
-   ]
-
-dt[is.na(y2010),] # find all values that are NA in a given year, and...
-dt
-dt[14, 12:13] <- 2
-
-
-dt# for each column, subset to those pixels that are 0
- # ----- 3. Pass the recultivation calculation function. ----- #
-  for (i in start:ncol(dt)) {
-    
-    # subset rows that are equal to 0 (for crop), and
-    dt[get(names(dt)[i]) == 0, 
-       
-       # set them equal to the previous column's value in that row, minus 1.
-       names(dt)[i] := get(names(dt)[i-1]) - 1] 
-  }
-
-```
-
-
-I might be able to do this by modifying the data.table potential age calculation function to only allow transitions from 2 to 4, not from 4 to 3. 
-Then, I could mask the four focal habitat maps with the new versions of the four land cover types, to get the direct composite of the habitat types. 
-Then mask this to the max_abn outline.
-
-
-But, can I do this with cover?
-If I work backwards:
-
-
-Maybe I can have it replace values that are in arable cropland again in the next layer ().
-But, the problem is that these will not allow the land cover types to change from grassland to forest. So, they'll be frozen in early stages of succession.
-
-I could simply 
-
-Maybe make cropland NA?
 
 ```{r *create-potential-abn-iucn}
 # site_index <- 3
@@ -1733,82 +1273,6 @@ names(potential_abn_lcc_iucn_habitat) <- site_df$site
 
 ```{r *potential_max}
 # Use cover() to combine the potential_abn_iucn layer with the land cover classes in max_abn_iucn layer
-potential_abn_lcc_iucn_habitat
-max_abn_lcc_iucn_habitat
-
-potential_abn_lcc_iucn_habitat_freq %>% 
-  filter(site == site_df$site[site_index]) %>%
-  left_join(iucn_crosswalk %>% select(map_code, IUCNLevel, lc)) %>%
-  group_by(year) %>%
-  summarise(n_px = sum(count)) %>%
-  print(n = 35)
-
-max_abn_lcc_iucn_habitat_freq %>% 
-  filter(site == site_df$site[site_index]) %>%
-  left_join(iucn_crosswalk %>% select(map_code, IUCNLevel, lc)) %>%
-  group_by(year) %>%
-  summarise(n_px = sum(count)) %>%
-  print(n = 35)
-
-max_potential_abn_lcc_iucn_habitat_freq %>% 
-  filter(site == site_df$site[site_index]) %>%
-  left_join(iucn_crosswalk %>% select(map_code, IUCNLevel, lc)) %>%
-  group_by(year) %>%
-  summarise(n_px = sum(count)) %>%
-  print(n = 35)
-
-
-jung_hab_type_area_df
-
-temp_labels <- jung_hab_type_area_df %>% 
-  arrange(IUCNLevel) %>%
-  filter(site == site_df$site[3]) %>% 
-  .$IUCNLevel
-
-names(temp_labels) <- jung_hab_type_area_df %>% 
-  arrange(lc, IUCNLevel) %>%
-  filter(site == site_df$site[3]) %>% 
-  .$habitat_type
-
-temp_labels <- iucn_crosswalk$IUCNLevel
-names(temp_labels) <- iucn_crosswalk$map_code
-max_potential_abn_lcc_iucn_habitat_freq %>% 
-  filter(site == site_df$site[3]) %>%
-  ggplot(mapping = aes(x = year, y = count, 
-                       color = fct_reorder(as_factor(map_code), count, .desc = TRUE), 
-                       group = map_code)) +
-  labs(color = NULL) +
-  geom_line(size = 1.5) + 
-  scale_color_manual(values = gg_color_hue(12),
-                     labels = as_labeller(temp_labels)
-                     )
-
-max_potential_abn_lcc_iucn_habitat_freq %>% 
-  filter(site == site_df$site[site_index], map_code == 1401) %>% print(n=40)
-
-max_potential_abn_lcc_iucn_habitat_freq %>% 
-  filter(site == site_df$site[3], year == 2017) %>%
-  left_join(select(iucn_crosswalk, map_code, IUCNLevel))
-iucn_crosswalk %>% print(n = 40)
-# cover()
-
-potential_abn_iucn
-
-# make small versions for testing:
-small_ext <- draw()
-potential_abn_lcc_iucn_habitat[[site_index]][[9]] %>% plot()
-max_abn_lcc_iucn_habitat[[site_index]][[9]] %>% plot()
-
-potential_abn_lcc_iucn_habitat[[site_index]]$y2017 %>% plot(ext = small_ext)
-max_abn_lcc_iucn_habitat[[site_index]]$y2017 %>% plot(ext = small_ext)
-
-s1 <- crop(potential_abn_lcc_iucn_habitat[[site_index]], small_ext)
-s2 <- crop(max_abn_lcc_iucn_habitat[[site_index]], small_ext)
-
-iucn_crosswalk %>% print(n = 3000)
-
-s1
-s2
 
 
 # -----------------------------------------------------------------
@@ -1840,18 +1304,6 @@ max_potential_abn_lcc_iucn_habitat <- lapply(1:11, function(i){
                     run_label, ".tif"))
 })
 names(max_potential_abn_lcc_iucn_habitat) <- site_df$site
-
-max_abn_lcc_iucn_habitat
-max_potential_abn_lcc_iucn_habitat
-
-max_potential_abn_lcc_iucn_habitat[[site_index]]$y1997 %>% !is.na(.) %>% plot()
-max_age_mask[[site_index]] %>% !is.na(.) %>% plot()
-
-plot(is.na(max_age_mask[[site_index]]))
-plot(is.na(max_potential_abn_lcc_iucn_habitat[[site_index]]$y1997))
-
-plot(is.na(max_age_mask[[site_index]]) - 
-       is.na(max_potential_abn_lcc_iucn_habitat[[site_index]]$y1997))
 
 ```
 
@@ -1900,102 +1352,6 @@ names(lcc_iucn_habitat_potential) <- site_df$site
 
 ```
 
-
-
-```{r check-lapply-results}
-potential_abn_lcc_iucn_habitat
-potential_abn_lcc_iucn_habitat0
-# Check - everything looks ok.
-# --------------------------------------------- #
-# test to make sure this worked:
-
-# --------
-# test 1 - compare to the full manual test of layer 31:
-plot(potential_abn_lcc_iucn_habitat$chongqing$y2017, ext = small_ext)
-plot(full_test, ext = small_ext)
-
-# --------
-# two ways to compare rasters:
-# 1. Do the same cells have values in each?
-# 2. Are the values of the cells in each equal to each other?
-
-# --------
-# 1.
-tic()
-global(potential_abn_lcc_iucn_habitat$chongqing$y2017, fun = "isNA")
-toc()
-
-tic()
-global(full_test, fun = "isNA") # or global(is.na(full_test), fun = "sum")
-toc()
-
-# --------
-# 2. Fill NAs with 0s, match
-
-# check chongqing
-t1 <- potential_abn_lcc_iucn_habitat$chongqing$y2017
-t2 <- full_test
-
-tic()
-t1 <- classify(t1, rcl = tibble("is" = NA_real_, "becomes" = 0))
-toc()
-
-tic()
-t2 <- classify(t2, rcl = tibble("is" = NA_real_, "becomes" = 0))
-toc()
-
-plot(t1)
-plot(t2)
-global(t1, fun = "isNA")
-global(t2, fun = "isNA")
-
-plot(t1 - t2)
-global(t1 - t2, "sum")
-
-
-# --------
-# test 2 - compare to the extent of potential_abn, for 5 and older.
-
-# compare chongqing
-site_index <- 3
-plot(potential_abn_lcc_iucn_habitat[[site_index]]$y2017, ext = small_ext)
-
-plot(potential_abn_lcc_iucn_habitat$chongqing$y2017>0)
-plot(potential_abn_mask$chongqing$y2017)
-
-t3 <- potential_abn_lcc_iucn_habitat$chongqing$y2017
-t4 <- potential_abn_mask$chongqing$y2017
-as.numeric(global(t3, fun = "isNA")) == 
-  as.numeric(global(t4, fun = "isNA"))
-
-# compare belarus
-plot(potential_abn_lcc_iucn_habitat$belarus$y2017>0)
-plot(potential_abn_mask$belarus$y2017)
-
-t3 <- potential_abn_lcc_iucn_habitat$belarus$y2017
-t4 <- potential_abn_mask$belarus$y2017
-global(t3, fun = "isNA")
-global(t4, fun = "isNA")
-
-
-# compare, sequentially:
-site_index <- 3
-for (site_index in 1:11) {
-# plot(potential_abn_lcc_iucn_habitat[[site_index]]$y2017>0, main = "Main result")
-# plot(potential_abn_mask[[site_index]]$y2017, main = "Potential abn mask")
-
-t3 <- potential_abn_lcc_iucn_habitat[[site_index]]$y2017
-t4 <- potential_abn_mask[[site_index]]$y2017
-print("Do the number of NAs match?")
-print(
-  as.numeric(global(t3, fun = "isNA")) == 
-    as.numeric(global(t4, fun = "isNA"))
-)
-}
-
-# everything looks good. 
-
-```
 
 ```{r freq-abn_lcc}
 
@@ -2148,21 +1504,43 @@ ggplot(data =
              scales = "free")
 
 
+```
 
 
-plot(tmp)
-tmp_freq <- freq(tmp) %>% as_tibble() %>% 
-    mutate(site = site_df$site[i],
-           year = layer + 1986) %>%
-  rename(map_code = value)
+
+```{r plot-max-abn-lcc-iucn}
+site_index <- 3
+
+tmp_classes <- max_abn_lcc_iucn_habitat[[site_index]][[31]] %>% 
+  values() %>% unique() %>% na.omit() %>% 
+  sort() %>% as.vector()
+
+tmp_attributes <- 
+  jung_table %>%
+  arrange(map_code) %>%
+  filter(map_code %in% tmp_classes)
+
+site_jung_l2_freq %>% 
+  filter(site == site_df$site[site_index])
 
 
-tmp_freq %>% 
-  group_by(year, site) %>% 
-  summarise(sum = sum(count)) %>%
-  arrange(site)
+plot(max_abn_lcc_iucn_habitat[[site_index]][[31]],
+     maxcell = 5000000,
+     # main = paste0("IUCN Habitat Types, Level 2: ", names(max_abn_lcc_iucn_habitat[2])),
+     # mar = c(mval+0.5, mval, mval + 1.2, mval + 2), # bltr
+     type = "classes", #legend = FALSE,
+     col = tmp_attributes$cols,
+     levels = tmp_attributes$label
+)
 
-iucn_crosswalk %>% print(n = 40)
+freq(max_abn_lcc_iucn_habitat[[2]][[31]])
+
+tmp_attributes %>% left_join(freq(max_abn_lcc_iucn_habitat[[2]][[31]]), by = c("map_code" = "value"))
+
+plot(site_sf[site_index, ]$geometry, add = TRUE, border = "red")
+plot(vert_sites %>% filter(binomial == "Trachypithecus francoisi") %>% st_geometry(), add = TRUE, border = "red")
+
+site_sf[3, ]
 ```
 
 
@@ -2213,80 +1591,132 @@ global(t1 - t2, "sum")
 
 ## Extract abandonment signal starting from cultivation
 
-Idea 1:
-1. Extract just cropland. 
-2. Calculate the minimum, in order to figure out the year of first cultivation
-(This might require converting the values of each layer to the layer number, which might or might not be straightforward.)
+In order to compare the effect of abandonment on habitat availability for individual species, we need to be able to compare the habitat before and after abandonment.
+This means we have to include the period of cultivation in abandoned pixels *before* they were abandoned. 
+It is not enough to just calculate the habitat provided by abandoned pixels after they are abandoned.
 
-Or, use data.table to identify the first year of cropland.
-Might be able to do this with dt_diff, or by going through each column, selecting cells that are equal to non-crop, and then set these equal to 0.
-Or, by using dt_binary.
+To do this, we developed the function "cc_extract_noncrop_precrop()" (see "_util_functions.R") implemented in the script "cluster/noncrop_precrop_mask.R"
 
-```{r abn-signal-beginning-w-crop}
-dt <- cc_create_bin()
-dt[V1 == 0, NA]
+## Habitat age profile
 
-#
-
-site <- site_df$site[indx]
-lapply(site_df$site, function(site){
-  # Step 1. Load dt_binary
-  dt <- fread(paste0(p_input_rasters, site, "_binary", run_label, ".csv"))
-  
-  # Step 2. cc_calc_age()
-  # ------- The codes I'll want to remove are the ones that correspond to 
-  # ------- the column index.
-  cc_calc_age(dt)
-  dt
-  
-  # Step 3. 
-  
-dt
-cc_extract_noncrop_precrop(dt)
-dt
-
-fwrite(dt, file = paste0(p_input_rasters, site, "_noncrop_precrop_mask", run_label,".csv"))
+```{r habitat-age-profile}
+persistence_dat <- 
+  read_csv(file = paste0(p_derived2, "persistence_dat", run_label, ".csv")) %>%
+  mutate(site = as.factor(site),
+         bins = as.factor(bins),
+         year_abn_bins = as.factor(year_abn_bins),
+         cohort = as.factor(cohort))
 
 
-# Step 4. Convert this into a SpatRaster:
-noncrop_start_mask_tmp <- dt_to_spatraster(dt)
-terra::writeRaster(noncrop_start_mask_tmp,
-                   filename = paste0(p_input_rasters, site, "_noncrop_start_mask", run_label,".tif"),
-                   overwrite = TRUE,
-                   names = names(noncrop_start_mask_tmp))
-})
-
-# load a list of all noncrop_start_mask rasters
-
-noncrop_start_mask <- lapply(1:11, function(i) {
-  terra::rast(paste0(p_input_rasters, site_df$site[i], "_noncrop_start_mask", run_label,".tif"))
-})
+ggplot(data = persistence_dat) + 
+    theme_classic() +
+    labs(y = expression("Area abandoned (10"^{3}*" ha)") , 
+         x = "Year",
+         fill = "Age (years)") +
+    geom_col(mapping = aes(x = year, y = area_ha / 10^3, 
+                           fill = fct_reorder(bins, age)),
+             position = position_stack(reverse = FALSE)) +
+    theme(legend.title = element_text(size = 10)) +
+    scale_fill_brewer(palette = "Greens", direction = 1) +
+      facet_wrap(vars(site), scales = "free_y")
 
 
-# Step 5. Mask the max_abn_iucn_habitat and max_potential_abn_iucn_habitat SpatRasters
-lapply(1:11, function(i) {
-  terra::mask(
-    max_abn_iucn_habitat[[i]], noncrop_start_mask[[i]],
-    maskvalues = NA, inverse = TRUE,
-    names = names(max_abn_iucn_habitat[[i]]),
-    filename = paste0(p_derived, "lcc_iucn_habitat/", site_df$site[i],
-                     "_crop_to_abn_iucn.tif"),
-    overwrite = TRUE
-  )
-})
+age_profile_df <- 
+  persistence_dat %>% 
+  select(site, year, year_abn, age, area_ha) %>%
+  arrange(desc(age)) %>%
+  group_by(site, year) %>% 
+  mutate(total_in_year = sum(area_ha),
+         cumsum_in_year = cumsum(area_ha),
+         p_hab = cumsum_in_year/total_in_year) %>% ungroup() %>%
+  rbind(
+    cbind(
+      tibble(site = rep(site_df$site, each = 25)),
+      lapply(1:1, function(i) {
+        tibble(year = 2017:1993,
+               year_abn = 1987,
+               age = 31:7,
+               area_ha = NA,
+               total_in_year = NA,
+               cumsum_in_year = NA,
+               p_hab = 0)
+        }) %>% bind_rows())) %>% 
+  arrange(site, desc(year), desc(age))
+
+age_profile_df <- age_profile_df %>%
+  left_join(age_profile_df %>% 
+              filter(year == 2017, age == 20) %>%
+              select(site, p_20 = p_hab)) %>%
+  mutate(age = as_integer(age))
+
+age_profile_df %>% filter(!is.na(p_20))
+
+
+gg_hab_age_profile <-
+  age_profile_df %>%
+  filter(year == 2017) %>%
+  ggplot(mapping = aes(x = age, y = p_hab, 
+                       col = fct_reorder(site, desc(p_20)))) +
+  theme_classic() +
+  geom_line(size = 1) + 
+  scale_x_continuous(breaks = c(5, 10, 15, 20, 25, 30)) +
+  scale_color_discrete(labels = fancy_labels) +
+  labs(x = "Habitat age requirement (years)", 
+       y = "Prop. abandonment that is suitable (as of 2017)",
+       # caption = "Year: 2017",
+       color = "Site") 
+
+# save 
+ggsave(gg_hab_age_profile,
+       filename = paste0(p_plots, "habitat_age_profile_2017.pdf"), 
+       width = 5.5, height = 4, units = "in"
+)
 
 
 
+
+# animation:
+# library(gganimate)
+# library(transformr)
+
+
+gg_hab_age_profile_animate <-
+  age_profile_df %>%
+  # filter(year %in% seq(from = 1987, to = 2017, by = 5)) %>%
+    # filter(year < 1995) %>%
+  ggplot(mapping = aes(x = age, y = p_hab, 
+                       # group = interaction(site, year), 
+                       col = fct_reorder(site, desc(p_20)))) +
+  theme_classic() +
+  geom_line(size = 1) + 
+  scale_x_continuous(breaks = c(5, 10, 15, 20, 25, 30)) +
+  scale_color_discrete(labels = fancy_labels) +
+  labs(x = "Habitat Age Requirement (years)", 
+       y = "Proportion of Abandonment that is Suitable Habitat",
+       color = "Site",
+       subtitle = "Year: {round(frame_time, 0)}"
+       ) + 
+  transition_time(year)
+
+anim_save(gg_hab_age_profile_animate,
+       filename = paste0(p_plots, "habitat_age_profile_animated.gif"), 
+       width = 550, height = 400, units = "px", 
+)
 ```
 
-## Fragmentation
 
-Using the R package `landscapemetrics` to calculate various metrics related to landscape configuration, fragmentation, etc. Note that `landscapemetrics` uses calculates metrics from the popular FRAGSTATS program.
+
+# Fragmentation
+
+Using the R package `landscapemetrics` (https://r-spatialecology.github.io/landscapemetrics/) to calculate various metrics related to landscape configuration, fragmentation, etc. Note that `landscapemetrics` uses calculates metrics from the popular FRAGSTATS program.
 
 We seek to answer three primary questions:
 1.	Are patches become more aggregated, connected? -- Clumpiness Index (Aggregation metric)
 2.	Are patches getting larger? -- Mean Patch Area (area and edge metric)
 3.	Are resulting habitats subject to less fragmentation? -- Perimeter-Area Ratio, mean (shape metric)
+
+The below chunks include development of and analysis of data from "cluster/lsm_2024.R" and "cluster/lsm_two_2024.R"
+
 
 
 ```{r landscapemetrics-dev}
@@ -2333,7 +1763,8 @@ site_projections
 ```
 
 ```{r frag-trends}
-# see _util_files.R
+# See "cluster/lsm_2024.R"
+# See _util_files.R
 
 frag_df %>%
   select(site, metric, layer) %>%
@@ -2593,8 +2024,13 @@ frag_mod %>%
                  # )
 ```
 
+
 ```{r hypo-2017}
-# comparing 2017 observed and hypothetical
+# See "cluster/lsm_two_2024.R"
+
+# For the year 2017, comparing the observed landscape with a hypothetical landscape
+# in which all abandoned croplands remained in cultivation through 2017.
+# This is in order to extract the impact of abandonment on fragmentation.
 frag_hypo_df
 
 
@@ -2675,1313 +2111,7 @@ frag_hypo_df %>% mutate(id = "hypo") %>%
 ```
 
 
-
-## Habitat age profile
-
-```{r habitat-age-profile}
-persistence_dat <- 
-  read_csv(file = paste0(p_derived2, "persistence_dat", run_label, ".csv")) %>%
-  mutate(site = as.factor(site),
-         bins = as.factor(bins),
-         year_abn_bins = as.factor(year_abn_bins),
-         cohort = as.factor(cohort))
-
-
-ggplot(data = persistence_dat) + 
-    theme_classic() +
-    labs(y = expression("Area abandoned (10"^{3}*" ha)") , 
-         x = "Year",
-         fill = "Age (years)") +
-    geom_col(mapping = aes(x = year, y = area_ha / 10^3, 
-                           fill = fct_reorder(bins, age)),
-             position = position_stack(reverse = FALSE)) +
-    theme(legend.title = element_text(size = 10)) +
-    scale_fill_brewer(palette = "Greens", direction = 1) +
-      facet_wrap(vars(site), scales = "free_y")
-
-
-age_profile_df <- 
-  persistence_dat %>% 
-  select(site, year, year_abn, age, area_ha) %>%
-  arrange(desc(age)) %>%
-  group_by(site, year) %>% 
-  mutate(total_in_year = sum(area_ha),
-         cumsum_in_year = cumsum(area_ha),
-         p_hab = cumsum_in_year/total_in_year) %>% ungroup() %>%
-  rbind(
-    cbind(
-      tibble(site = rep(site_df$site, each = 25)),
-      lapply(1:1, function(i) {
-        tibble(year = 2017:1993,
-               year_abn = 1987,
-               age = 31:7,
-               area_ha = NA,
-               total_in_year = NA,
-               cumsum_in_year = NA,
-               p_hab = 0)
-        }) %>% bind_rows())) %>% 
-  arrange(site, desc(year), desc(age))
-
-age_profile_df <- age_profile_df %>%
-  left_join(age_profile_df %>% 
-              filter(year == 2017, age == 20) %>%
-              select(site, p_20 = p_hab)) %>%
-  mutate(age = as_integer(age))
-
-age_profile_df %>% filter(!is.na(p_20))
-
-
-gg_hab_age_profile <-
-  age_profile_df %>%
-  filter(year == 2017) %>%
-  ggplot(mapping = aes(x = age, y = p_hab, 
-                       col = fct_reorder(site, desc(p_20)))) +
-  theme_classic() +
-  geom_line(size = 1) + 
-  scale_x_continuous(breaks = c(5, 10, 15, 20, 25, 30)) +
-  scale_color_discrete(labels = fancy_labels) +
-  labs(x = "Habitat age requirement (years)", 
-       y = "Prop. abandonment that is suitable (as of 2017)",
-       # caption = "Year: 2017",
-       color = "Site") 
-
-# save 
-ggsave(gg_hab_age_profile,
-       filename = paste0(p_plots, "habitat_age_profile_2017.pdf"), 
-       width = 5.5, height = 4, units = "in"
-)
-
-
-
-
-# animation:
-# library(gganimate)
-# library(transformr)
-
-
-gg_hab_age_profile_animate <-
-  age_profile_df %>%
-  # filter(year %in% seq(from = 1987, to = 2017, by = 5)) %>%
-    # filter(year < 1995) %>%
-  ggplot(mapping = aes(x = age, y = p_hab, 
-                       # group = interaction(site, year), 
-                       col = fct_reorder(site, desc(p_20)))) +
-  theme_classic() +
-  geom_line(size = 1) + 
-  scale_x_continuous(breaks = c(5, 10, 15, 20, 25, 30)) +
-  scale_color_discrete(labels = fancy_labels) +
-  labs(x = "Habitat Age Requirement (years)", 
-       y = "Proportion of Abandonment that is Suitable Habitat",
-       color = "Site",
-       subtitle = "Year: {round(frame_time, 0)}"
-       ) + 
-  transition_time(year)
-
-anim_save(gg_hab_age_profile_animate,
-       filename = paste0(p_plots, "habitat_age_profile_animated.gif"), 
-       width = 550, height = 400, units = "px", 
-)
-
-
-```
-
-
-## [Old, Development] Assigning via nearest neighbor
-
-```{r direct-assignment}
-site_index <- 9
-
-site_jung_l2_30_freq %>%
-  filter(site == site_df$site[site_index])
-
-jung_hab_type_area_df
-
-iucn_crosswalk %>% arrange(map_code) %>% print(n = 50)
-
-jung_hab_type_area_df %>%
-  filter(site == site_df$site[site_index])
-
-site_jung_l2_30[[site_index]]
-lcc[[site_index]]
-
-
-# reclassify, via direct
-
-dir_back <- 
-      classify(
-        site_jung_l2_30[[site_index]],
-        rcl = iucn_crosswalk %>% select("is" = map_code, "becomes" = lc)#,
-        # filename = paste0(p_derived, "site_jung/", site_df$site[site], "_jung_l2_rcl_", lc_type,".tif"),
-        # overwrite=TRUE
-        )
-
-
-names(site_jung_l2_30_rcl) <- site_df$site
-
-
-# plot
-pdf(file = paste0(p_output, "plots/reclassifying/jung_to_lc_shaanxi.pdf"), width = 10, height = 4.5)
-par(mfrow = c(1, 2))
-plot(dir_back, main = "IUCN habitats reclassified to coarse LC",
-     col = lc_plot_cols$color, levels = lc_plot_cols$name)
-plot(lc[[site_index]][["y2015"]], main = "Land cover, Shaanxi, 2015",
-     col = lc_plot_cols$color, levels = lc_plot_cols$name)
-dev.off()
-
-
-```
-
-```{r direct-resample}
-# ------------------------------ 1. Reclassify ----------------------------------- #
-# first, reclassify the land cover maps to just single categories
-# then, do the same for the IUCN map, leaving the map codes intact.
-site_index <- 9
-lc_class <- 2
-
-tic()
-rcl_lc <- classify(
-        lcc[[site_index]][["y2015"]],
-        rcl = tibble(is = lc_class, becomes = lc_class), # simple rcl, e.g., where 2 stays 2, everything else is converted to NA
-        othersNA = TRUE,
-        filename = paste0(p_tmp, site_df$site[site_index], "_lcc_rcl_", lc_class,".tif"),
-        overwrite=TRUE
-        )
-toc()
-plot(rcl_lc)
-
-tic()
-rcl_lc_alt <- classify(
-        lcc[[site_index]][["y2015"]],
-        rcl = tibble(is = 0:4, becomes = NA) %>% filter(is != 2),
-        # rcl = tibble(is = lc_class, becomes = lc_class),
-        # othersNA = TRUE,
-        filename = paste0(p_tmp, site_df$site[site_index], "_lcc_rcl_", lc_class,"_alt.tif"),
-        overwrite=TRUE
-        )
-toc()
-plot(rcl_lc_alt)
-
-
-tic()
-rcl_lc_alt2 <- subst(lcc[[site_index]][["y2015"]], c(0, 1, 3, 4), NA,
-                     filename = paste0(p_tmp, site_df$site[site_index], "_lcc_rcl_",
-                                       lc_class,"_alt2.tif"),
-                     overwrite=TRUE)
-toc()
-plot(rcl_lc_alt2)
-
-plot(rcl_lc_alt2)
-rcl_iucn
-
-#  IUCN
-
-tic()
-rcl_iucn <- classify(
-        site_jung_l2_30[[site_index]],
-        rcl = iucn_crosswalk %>% filter(lc != 2) %>% select(is = map_code) %>% mutate(becomes = NA),
-        # othersNA = TRUE,
-        filename = paste0(p_tmp, site_df$site[site_index], "_iucn_rcl_", lc_class,".tif"),
-        overwrite=TRUE
-        )
-toc()
-plot(rcl_iucn)
-
-freq(rcl_iucn)
-
-
-tic()
-rcl_iucn_alt <- classify(
-        site_jung_l2_30[[site_index]],
-        rcl = iucn_crosswalk %>% filter(lc == 2) %>% select(is = map_code, becomes = map_code),
-        othersNA = TRUE,
-        filename = paste0(p_tmp, site_df$site[site_index], "_iucn_rcl_", lc_class,"_alt.tif"),
-        overwrite=TRUE
-        )
-toc()
-plot(rcl_iucn_alt)
-```
-
-```{r dir-reclassify-100m}
-site_jung_l2
-
-# reclassify lc and iucn
-tic()
-rcl_iucn_100 <- classify(
-        site_jung_l2[[site_index]],
-        rcl = iucn_crosswalk %>% filter(lc != 2) %>% select(is = map_code) %>% mutate(becomes = NA),
-        # othersNA = TRUE,
-        filename = paste0(p_tmp, site_df$site[site_index], "_iucn_100_rcl_", lc_class, ".tif"),
-        overwrite=TRUE
-        )
-toc()
-plot(rcl_iucn_100)
-
-plot(site_jung_l2[[site_index]])
-plot(rcl_lc)
-
-# ------------------------------------------------------------------- #
-# try the resampling now:
-compareGeom(rcl_iucn_100, rcl_lc)
-ext(rcl_lc)
-ext(rcl_iucn_100)
-
-res(rcl_lc) * 110000
-res(rcl_iucn_100) * 110000
-
-plot(rcl_iucn_100)
-
-# this still doesn't work.
-resam100 <- terra::resample(rcl_iucn_100, rcl_lc, method = "near")
-
-plot(rcl_iucn_100)
-plot(resam100)
-plot(rcl_lc)
-
-ncell(rcl_iucn_100)
-
-```
-
-
-```{r focal-resample}
-# ------------------------------ 2. Resample ----------------------------------- #
-# what I'm trying to do: 
-# convert all forest pixels (lc == 2) in lc map (rcl_lc) and match them to the type of forest habitat type that is closest to it in the IUCN habitat map (rcl_iucn) 
-
-plot(rcl_lc)
-plot(rcl_iucn)
-freq(rcl_iucn)
-
-plot(rcl_iucn_100)
-
-# resample doesn't work, unfortunately. I think this requires different spatial resolutions, extents, etc.
-# these don't fill NA values. 
-
-resam1 <- terra::resample(rcl_iucn_100, rcl_lc, method = "near") # this takes the habitat map (rcl_iucn_100), and essentially crops it to the extent and cell size of rcl_lc.
-resam2 <- terra::resample(rcl_lc, rcl_iucn_100, method = "near") # this simply puts the values from rcl_lc (2s) into the same extent and cell size as rcl_iucn_100 (the habitat map)
-
-plot(rcl_lc)
-plot(rcl_iucn_100)
-plot(resam1)
-plot(resam2)
-
-dist1 <- terra::distance(rcl_iucn, rcl_lc)
-
-# filling NAs
-r <- rast(ncol=30, nrow=30, 
-          # xmn=0, xmx=10, ymn=0,ymx=10,
-          xmin=0, xmax=30, 
-          ymin=0, ymax=30,
-          crs='+proj=longlat +datum=WGS84') 
-r[] <- 1:30
-r[sample(1:ncell(r), size = 800)] <- NA
-plot(r)
-text(r)
-ncell(r)
-
-w <- matrix(1, 5, 5)  #c(0,1,0,1,0,1,0,1,0), nrow=3)
-# x <- raster::focal(r, w, modal, na.rm=TRUE, NAonly=TRUE, pad=TRUE)
-x_1 <- terra::focal(r, w = 3, # fun = function(i) {terra::modal(i, ties = "first", na.rm = TRUE)},
-                  fun = "modal", ties = "first",
-                  na.rm = TRUE, na.policy = "only", expand = TRUE)
-
-x_rand <- terra::focal(r, w = 3, # fun = function(i) {terra::modal(i, ties = "first", na.rm = TRUE)},
-                  fun = "modal", ties = "random",
-                  na.rm = TRUE, na.policy = "only", expand = TRUE)
-
-plot(x_1)
-plot(x_rand)
-
-
-x <- terra::focal(r, w = 3, # fun = function(i) {terra::modal(i, ties = "first", na.rm = TRUE)},
-                  fun = "modal", 
-                  na.rm = TRUE, na.policy = "only", expand = TRUE)
-plot(x)
-
-x <- terra::focal(x, w = 3, # fun = function(i) {terra::modal(i, ties = "first", na.rm = TRUE)},
-                  fun = "modal", 
-                  na.rm = TRUE, na.policy = "only", expand = TRUE)
-
-plot(r)
-plot(x)
-plot(x2)
-plot(x1)
-
-
-# two versions of a for loop:
-while(is.na(global(x, fun = "min"))) {
-    x <- terra::focal(x, w = 3, fun = "modal", 
-                  na.rm = TRUE, na.policy = "only", expand = TRUE)
-}
-
-
-while(
-  is.na(as.vector(unlist(global(x, fun = "mean"))))
-  # minmax(is.na(x))[2,] == 1
-      ) {
-    x <- terra::focal(x, w = 3, fun = "modal", 
-                  na.rm = TRUE, na.only = TRUE, expand = TRUE)
-}
-
-modal()
-
-plot(x)
-
-x <- terra::focal(r, w = 3, fun = "modal", 
-                  na.rm=TRUE, na.only=TRUE, expand=TRUE)
-for (i in 1:20) {
-  x <- terra::focal(x, w = 3, fun = "modal", 
-                  na.rm=TRUE, na.only=TRUE, expand=TRUE)
-}
-
-plot(r)
-plot(x)
-
-plot(is.na(r))
-minmax(is.na(rcl_iucn))[2,] == 1
-freq(rcl_iucn)
-length(is.na(r))
-summary(r)
-tic()
-is.na(as.vector(unlist(global(rcl_iucn, fun = "mean"))))
-toc()
-
-NAflag(rcl_iucn)
-
-tic()
-minmax(is.na(rcl_iucn))[2,] == 1
-toc()
-
-
-plot(x)
-
-
-# xx <- raster::focal(x, w, modal, na.rm=TRUE, NAonly=TRUE, pad=TRUE)
-
-plot(xx)
-text(r, cex=.8)
-text(raster::mask(xx, r, inverse=TRUE), col="red", cex=.8)
-w <- matrix(c(0,1,0,1,0,1,0,1,0), nrow=3)
-
-plot(rcl_iucn)
-tic()
-rcl_iucn_focal <- terra::focal(rcl_iucn, w = 3, fun = "modal", 
-                       na.rm=TRUE, na.only=TRUE, expand=TRUE,
-                       filename = paste0(p_tmp, site_df$site[site_index], "_iucn_rcl_",
-                                         lc_class,"_focal.tif"),
-                       overwrite=TRUE)
-toc()
-
-tic()
-for (i in 1:100) {
-rcl_iucn_focal <- terra::focal(
-  rcl_iucn_focal, w = 3, fun = "modal", 
-  na.rm=TRUE, na.only=TRUE, expand=TRUE,
-  filename = paste0(p_tmp, site_df$site[site_index], "_iucn_rcl_",
-                    lc_class,"_focal.tif"),
-  overwrite=TRUE
-)
-}
-toc()
-
-plot(rcl_iucn)
-plot(rcl_iucn_focal)
-
-freq(rcl_iucn)
-freq(resam3)
-plot(rcl_lc)
-
-
-# try with a user-defined function:
-plot(rcl_iucn)
-tic()
-x <- terra::focal(rcl_iucn, w = 3, fun = function(i) {modal(i, ties = "first", na.rm = TRUE)},
-                  na.only = TRUE, expand = TRUE)
-toc()
-plot(x)
-
-tic()
-x <- terra::focal(x, w = 3, fun = function(i) {modal(i, ties = "first", na.rm = TRUE)},
-                  na.only = TRUE, expand = TRUE)
-toc()
-
-
-
-
-# mask the resampled raster, to get the updated values:
-rcl_lc_mask <- subst(rcl_lc, 2, 0)
-
-iucn_lc_focal <- resam3 + rcl_lc_mask
-
-plot(rcl_iucn)
-plot(iucn_lc_focal)
-plot(rcl_lc_mask)
-
-freq(is.na(resam3))
-freq(is.na(rcl_lc_mask))
-freq(is.na(iucn_lc_focal))
-plot(is.na(iucn_lc_focal))
-plot(is.na(rcl_lc_mask))
-
-
-x <- terra::focal(r, w = 3, fun = "modal", 
-                  na.rm=TRUE, na.only=TRUE, expand=TRUE)
-for (i in 1:20) {
-  x <- terra::focal(x, w = 3, fun = "modal", 
-                  na.rm=TRUE, na.only=TRUE, expand=TRUE)
-}
-
-```
-
-```{r focal-resample-test-s}
-site_index <-1
-lc_class
-
-
-plot(abn_lcc[[site_index]][["y2015"]])
-plot(lcc[[site_index]][["y2015"]])
-
-#. 1.
-# first, reclassify land cover map to extract just one land cover class:
-tic()
-lcc_sub_2 <- classify(
-        lcc[[site_index]][["y2015"]],
-        rcl = tibble(is = lc_class, becomes = lc_class), # simple rcl, e.g., where 2 stays 2, everything else is converted to NA
-        othersNA = TRUE,
-        filename = paste0(p_tmp, site_df$site[site_index], "_lcc_sub_", lc_class,".tif"),
-        overwrite=TRUE
-        )
-toc()
-plot(lcc_sub_2)
-
-# this will be used to mask the resampled IUCN habitat map.
-
-
-# 2. 
-# then, reclassify the habitat map to extract only those habitat types that fall within the above land cover class:
-# reclassify lc and iucn
-tic()
-iucn_sub_2 <- classify(
-        site_jung_l2[[site_index]] %>% 
-          crop(., lcc[[site_index]]), # crop first, since focal takes care of NA border cells
-        rcl = iucn_crosswalk %>% filter(lc != 2) %>% select(is = map_code) %>% mutate(becomes = NA),
-        # othersNA = TRUE,
-        filename = paste0(p_tmp, site_df$site[site_index], "_iucn_sub_", lc_class, ".tif"),
-        overwrite=TRUE
-        )
-toc()
-plot(iucn_sub_2)
-
-
-# 3.
-# then, start the resampling process:
-tic()
-x <- terra::focal(iucn_sub_2, w = 3, 
-                  fun = "modal", na.rm = TRUE, na.policy = "only", expand = TRUE
-                  )
-toc()
-plot(x)
-
-# it's faster without saving to file each time. 
-tic()
-for (i in 1:100) {
-x <- terra::focal(x, w = 3,
-                  fun = "modal", na.rm = TRUE, na.policy = "only", expand = TRUE
-)
-}
-toc()
-plot(x)
-plot(is.na(x))
-
-# two versions of a for loop:
-tic()
-while(is.na(global(x, fun = "min"))) {
-    x <- terra::focal(x, w = 3, fun = "modal", 
-                  na.rm = TRUE, na.policy = "only", expand = TRUE)
-}
-toc()
-
-
-
-# save to file
-
-
-# mask to my land cover
-
-plot(rcl_iucn)
-tic()
-rcl_iucn_focal <- terra::focal(rcl_iucn, w = 3, fun = "modal", 
-                       na.rm=TRUE, na.only=TRUE, expand=TRUE,
-                       filename = paste0(p_tmp, site_df$site[site_index], "_iucn_rcl_",
-                                         lc_class,"_focal.tif"),
-                       overwrite=TRUE)
-toc()
-
-tic()
-for (i in 1:100) {
-rcl_iucn_focal <- terra::focal(
-  rcl_iucn_focal, w = 3, fun = "modal", 
-  na.rm=TRUE, na.only=TRUE, expand=TRUE,
-  filename = paste0(p_tmp, site_df$site[site_index], "_iucn_rcl_",
-                    lc_class,"_focal.tif"),
-  overwrite=TRUE
-)
-}
-toc()
-```
-
-```{r compare-ratios}
-
-
-```
-
-
-```{r dist-direction-resample}
-# https://stackoverflow.com/questions/27562076/if-raster-value-na-search-and-extract-the-nearest-non-na-pixel/
-  
-set.seed(2)
-# set projected CRS
-r <- rast(ncol=10, nrow=10, 
-          # xmn=0, xmx=10, ymn=0,ymx=10,
-          xmin=0, xmax=10, ymin=0,ymax=10,
-          crs='+proj=longlat +datum=WGS84') 
-r[] <- 1:10
-r[sample(1:ncell(r), size = 50)] <- NA
-plot(r)
-text(r)
-
-# create sample points
-xy <- data.frame(x=runif(10,1,10), y=runif(10,1,10))
-
-# use normal extract function to show that NAs are extracted for some points
-# extracted <- raster::extract(x = r, y = xy)
-extracted <- terra::extract(x = r, y = xy)
-
-plot(extracted)
-
-# Calculate the distance and direction from all NA pixels to the nearest non-NA pixel:
-
-# dist <- raster::distance(r)
-dist <- terra::distance(r) # distance in meters
-
-plot(dist)
-text(dist)
-names(dist) <- "dist"
-
-# you can also set a maximum distance: dist[dist > maxdist] <- NA
-direct <- terra::direction(r, from=FALSE, degrees = TRUE)
-# this is the number of degrees, moving right, from true north. 
-# so, 90 is right, 180 is below, 270 (-90) is left, and 0 is above. 
-
-# radians are measured from the rightmost point. So 
-minmax(direct)
-
-plot(direct, type = "classes")
-text(direct)
-plot(r)
-text(r)
-
-names(direct) <- "direct"
-
-
-# Retrieve coordinates of NA pixels
-
-# NA raster
-rna <- is.na(r) # returns NA raster
-plot(rna)
-names(rna) <- "is.na"
-
-plot(c(r, dist, direct, rna), type = "classes")
-
-
-
-tdr <- as.data.table.raster(
-  brick(r, dist, direct, rna)
-  )
-
-tdt <- spatraster_to_dt(
-  c(r, dist, direct, rna)
-  )
-
-head(tdt)
-
-
-
-# store coordinates in new raster: https://stackoverflow.com/a/35592230/3752258 
-plot(rna)
-na.x <- init(rna, 'x')
-na.y <- init(rna, 'y')
-
-plot(na.x)
-plot(na.y)
-values(na.x)
-
-# calculate coordinates of the nearest Non-NA pixel
-# assume that we have a orthogonal, projected CRS, so we can use (Pythagorean) calculations
-co.x <- na.x + dist * sin(direct)
-co.y <- na.y + dist * cos(direct)
-
-plot(sin(direct))
-plot(dist)
-
-plot(co.x)
-plot(co.y)
-values(co.x)
-
-tdt[, ':='(co.x = x + dist * sin(direct),
-           co.y = y + dist * cos(direct))]
-
-tdt[, ]
-
-# matrix with point coordinates of nearest non-NA pixel
-co <- cbind(co.x[], co.y[])
-co
-
-# Extract values of nearest non-NA cell with coordinates 'co'
-
-# extract values of nearest non-NA cell with coordinates co
-NAVals <- terra::extract(r, co, method='simple') 
-NAVals <- raster::extract(r, co, method='simple') 
-plot(r)
-plot(NAVals)
-
-r.NAVals <- rna # initiate new raster
-r.NAVals[] <- NAVals # store values in raster
-plot(r.NAVals)
-plot(r)
-
-# Fill the original raster with the new values
-# cover nearest non-NA value at NA locations of original raster
-plot(r)
-r.filled <- cover(x=r, y= r.NAVals)
-plot(r.filled)
-
-sampled <- raster::extract(x = r.filled, y = xy)
-
-# compare old and new values
-print(data.frame(xy, extracted, sampled))
-
-```
-
-```{r try-for-s}
-# this really crashed - too computationally intensive for raster.
-# Unfortunately, there is no "direction()" function for {terra}
-
-# Calculate the distance and direction from all NA pixels to the nearest non-NA pixel:
-r
-rcl_iucn
-plot(rcl_iucn)
-tic()
-dist <- raster::distance(rcl_iucn)
-toc()
-# dist_t <- terra::distance(r)
-
-plot(dist)
-names(dist) <- "dist"
-
-# you can also set a maximum distance: dist[dist > maxdist] <- NA
-direct <- direction(r, from=FALSE, degrees = FALSE)
-plot(direct)
-names(direct) <- "direct"
-
-
-# Retrieve coordinates of NA pixels
-
-# NA raster
-rna <- is.na(r) # returns NA raster
-plot(rna)
-names(rna) <- "is.na"
-
-
-
-
-# store coordinates in new raster: https://stackoverflow.com/a/35592230/3752258 
-na.x <- init(rna, 'x')
-na.y <- init(rna, 'y')
-
-plot(na.x)
-plot(na.y)
-values(na.x)
-
-# calculate coordinates of the nearest Non-NA pixel
-# assume that we have a orthogonal, projected CRS, so we can use (Pythagorean) calculations
-co.x <- na.x + dist * sin(direct)
-co.y <- na.y + dist * cos(direct)
-
-plot(co.x)
-plot(co.y)
-
-# matrix with point coordinates of nearest non-NA pixel
-co <- cbind(co.x[], co.y[])
-co
-
-# extract values of nearest non-NA cell with coordinates co
-NAVals <- raster::extract(r, co, method='simple') 
-plot(NAVals)
-
-r.NAVals <- rna # initiate new raster
-r.NAVals[] <- NAVals # store values in raster
-plot(r.NAVals)
-plot(r)
-
-# Fill the original raster with the new values
-# cover nearest non-NA value at NA locations of original raster
-plot(r)
-r.filled <- cover(x=r, y= r.NAVals)
-plot(r.filled)
-
-
-
-
-
-
-
-# ---------------------------------- trying for a cropped corner of the iucn map ------ #
-
-crop_ext <- draw()
-
-rcl_iucn_100_crop <- crop(rcl_iucn_100, crop_ext)
-plot(rcl_iucn_100_crop)
-
-# distance:
-tic()
-dist1 <- terra::distance(rcl_iucn_100_crop)
-toc() # about 6 minutes. For just 2 million cells. The biggest rasters have more than 50 times as many cells. So it might take something like 5 hours per raster. Yikes!
-names(dist1) <- "dist"
-
-rcl_iucn_100_crop_r <- raster(rcl_iucn_100_crop)
-plot(rcl_iucn_100_crop_r)
-
-tic()
-direct1 <- direction(rcl_iucn_100_crop_r, from=FALSE, degrees = FALSE)
-toc() # 2626 seconds. 44 minutes about. 
-names(direct1) <- "direct"
-
-plot(dist1)
-plot(direct1)
-
-direct1_t <- rast(direct1)
-plot(direct1_t)
-
-
-# Retrieve coordinates of NA pixels
-# NA raster
-rna <- is.na(rcl_iucn_100_crop) # returns NA raster
-plot(rna)
-names(rna) <- "is.na"
-
-# store coordinates in new raster: https://stackoverflow.com/a/35592230/3752258 
-na.x <- init(rna, 'x')
-na.y <- init(rna, 'y')
-
-plot(na.x)
-plot(na.y)
-
-# calculate coordinates of the nearest Non-NA pixel
-# assume that we have a orthogonal, projected CRS, so we can use (Pythagorean) calculations
-co.x <- na.x + dist1 * sin(direct1_t)
-co.y <- na.y + dist1 * cos(direct1_t)
-
-plot(co.x)
-plot(co.y)
-co
-
-# matrix with point coordinates of nearest non-NA pixel
-co <- cbind(co.x[], co.y[])
-co
-head(co)
-names(co) <- c("x", "y")
-
-# extract values of nearest non-NA cell with coordinates co
-NAVals <- raster::extract(rcl_iucn_100_crop_r, co, method='simple') 
-plot(NAVals)
-head(NAVals)
-NAVals %>% 
-  filter(!is.na(iucn_habitatclassification_composite_lvl2_ver004))
-
-!is.na(NAVals) %>% sum()
-
-r.NAVals <- rna # initiate new raster
-plot(rna)
-plot(r.NAVals)
-values(r.NAVals) <- NAVals[,1] # store values in raster
-plot(r.NAVals)
-plot(r)
-
-# Fill the original raster with the new values
-# cover nearest non-NA value at NA locations of original raster
-plot(r)
-r.filled <- cover(x=r, y= r.NAVals)
-plot(r.filled)
-
-```
-
-
-
-```{r calculate-overlap}
-crosswalk_jac <- lapply(1:11, 
-                        function(site) {
-  tmp_t <- terra::rast(
-    list(
-      lc[[site]]$y2015, # land cover in 2015
-      site_jung_l2_30_rcl[[site]] # IUCN habitat types, reclassified
-    )
-    )
-
-  # convert to data.table
-  tmp_dt <- spatraster_to_dt(tmp_t, xy_switch = FALSE)
-  
-  # calculate Jaccard similarity
-  jac_df <- lapply(c("lc", "lc2", "lc3", "lc4"), function(rcl_version){
-    tibble(site = site_df$site[site],
-           lc = 1:4,
-           ver = rcl_version) %>%
-      mutate(jaccard = sapply(lc, #1:4, 
-                              function(lc_code) {
-        int <- tmp_dt[y2015 == lc_code & get(rcl_version) == lc_code, .N] # intersection
-        a <- tmp_dt[y2015 == lc_code, .N] 
-        b <- tmp_dt[get(rcl_version) == lc_code, .N]
-        int / (a + b - int) # int / union
-        }))
-    
-    }
-    ) %>% bind_rows()
-
-  jac_df
-  }) %>% 
-  bind_rows()
-```
-
-```{r calculate-overlap-1km}
-# 
-1000^2
-1000/30 # 33.33
-
-plot(lcc$shaanxi$y2017)
-agg_t <- terra::aggregate(lcc$shaanxi$y2017, fact = 37.7, fun = "median")
-
-res(agg_t)[1] * 110 * 1000 # 110 km per degree, and 1000 m per km 
-plot(agg_t)
-
-978 ^ 2
-1000 ^ 2
-
-og_size <- terra::cellSize(lcc$shaanxi$y2017, unit = "m")
-agg_size <- terra::cellSize(agg_t, unit = "m")
-
-agg_size
-plot(agg_size)
-plot(og_size)
-
-sqrt(768320/705)
-sqrt(1000000/700)
-
-
-```
-
-# Basic plots
-## Plot Yin et al. 2020 land cover:
-```{r plot-lc}
-inset_map_titles <- paste0("(", gsub("_", "", site_df$label), ") ", site_df$description)
-# cat(inset_map_titles, sep = "; ")
-new_titles <- inset_map_titles
-new_titles[1] <- "(b) Vitebsk, Belarus /\nSmolensk, Russia"
-new_titles[8] <- "(o) Orenburg, Russia /\nUralsk, Kazakhstan"
-
-fancy_labels
-
-year_index <- 1
-
-lapply(c(1, 6, 11, 16, 21, 26, 31
-         ),
-       function(year_index) {
-  
-  pdf(file = paste0(p_plots, "land_cover_", 1986 + year_index, ".pdf"), width = 7, height = 6)
-  mval <- 1.5
-  par(mfrow = c(3, 4), 
-        # mar=c(0,0,0,0), 
-        oma=c(1,1,0,0),
-        adj = 0,
-        cex.main = 1#,
-        # tcl = -0.2
-        )
-  
-  # if you use maxcell, the 0s start showing up, which messes up the color scale... beware!
-  for(i in 1:11) {
-    terra::plot(lcc[[i]][[year_index]],
-                # site_jung_l2[[i]], # for testing
-                col = lc_plot_cols$color, levels = lc_plot_cols$name, 
-                colNA = "gray95",
-                mar = c(mval - 1, mval - 0.9, mval + 1.25, mval - 0.9), # bltr     
-                legend = FALSE, #maxcell = 5000000,
-                cex = 1, # controls title sizes
-                type = "classes", main = new_titles[i]#"Land cover, 2015",
-       )
-  }
-  
-  
-  # pdf(file = paste0(p_output, "plots/jung_sites_colors_legend.pdf"), width = 7.5, height = 7.5)
-  plot.new()
-  plot(lcc[[i]]$y2017, type = "classes",
-       col = lc_plot_cols$color, levels = lc_plot_cols$name,
-       legend = "left",
-       plg = list(cex = 1.5,
-                  title = paste0("Land cover, ", 1986 + year_index),
-                                  # text.width = 100,
-                  title.adj = 0#,
-                  # y.intersp	= 1.1
-                  # xjust = 0.5
-                  ),
-       legend.only = TRUE)
-  
-  dev.off()
-})
-
-
-# turn into a gif:
-gif_files <-
-  list.files(paste0(p_plots), full.names = TRUE) %>% 
-    grep("land_cover_[0-9]{4}.pdf", ., value = TRUE)
-lc_gif <- image_animate(image_read(paste0(p_plots, "land_cover_test_gif.gif")), fps = 2)
-image_write(lc_gif, paste0(p_plots, "land_cover_gif.gif"))
-
-
-# turn this into a gif:
-
-lapply(1:11, function(site_index) {
-  file_out_tmp <- paste0(p_plots, "animations/", "abn_age",
-                       site_df$label[site_index], ".gif")
-  saveGIF(
-    terra::animate(age_t[[site_index]][[c(2,2:31)]], 
-                   # levels = rcl_df$labels %>% unique() %>% .[-1],
-                   col = viridis(n = 25, direction = -1),
-                   main = paste0(inset_map_titles[site_index], ", Abandonment Age, ", 1987:2017),
-                   type = "continuous",
-                   range = c(5, 30),
-                   maxcell = 500000,
-                   colNA = "gray95",
-                   # legend = FALSE,
-                   mar = c(mval+0.5, mval, mval + 0.7, mval+1.5),
-                   n = 1),
-    movie.name = file_out_tmp)
-  
-  # Reload:
-  tmp_gif <- image_animate(image_read(file_out_tmp), fps = 4)
-  image_write(tmp_gif, file_out_tmp)
-})
-```
-
-```{r lc-legend}
-pdf(file = paste0(p_output, "plots/lc_legend2.pdf"), width = 6, height = 3.5)
-plot.new()
-plot(lcc[[i]]$y2017, type = "classes",
-     col = lc_plot_cols$color, 
-     # levels = lc_plot_cols$name,
-     levels = c("1 Non veg.", "2 Woody veg. (Forest)", "3 Cropland", "4 Herbaceous veg. (Grassland)"),
-     legend = "left",
-     plg = list(cex = 1.8,
-                title = "Land cover classes",
-                                # text.width = 100,
-                title.adj = 0#,
-                # y.intersp	= 1.1
-                # xjust = 0.5
-                ),
-     legend.only = TRUE)
-
-dev.off()
-
-pdf(file = paste0(p_output, "plots/lc_legend_simple.pdf"), width = 3, height = 2.5)
-plot.new()
-par(mfrow = c(1, 1), 
-        # mar=c(0,0,0,0), 
-        oma=c(0.2,0.2,0.2,0.2),
-        adj = 0,
-        cex.main = 1#,
-        # tcl = -0.2
-        )
-terra::plot(lcc[[9]]$y2017, type = "classes",
-     col = lc_plot_cols$color, 
-     levels = lc_plot_cols$name,
-     legend = "left",
-     plg = list(cex = 1.7,
-                title = "Land cover",
-                                # text.width = 100,
-                title.adj = 0#,
-                # y.intersp	= 1.1
-                # xjust = 0.5
-                ),
-     legend.only = TRUE)
-
-dev.off()
-```
-
-```{r lc-abn}
-
-plot(abn_lcc[[9]][[31]])
-plot(max_abn_lcc[[9]][[1]])
-
-year_index <- 31
-i <- 9
-
-
-coltab(max_abn_lcc[[9]])
-# must give colors for values 0, 1, 2, 3, 4, etc.
-coltab(max_abn_lcc[[9]], layer = 31) <- lc_plot_cols$color[c(1, 1, 2, 3, 4)]
-plot(max_abn_lcc[[9]][[31]])
-
-# what colors do I need for the levels?
-max_abn_lcc_freq %>% 
-  # filter(year == 1987) %>% 
-  group_by(site, year) %>% 
-  summarise(n = n(), lc = str_c(unique(lc), collapse = ", ")) %>% 
-  # filter(n != 3) %>%
-  ungroup() %>% 
-  select(lc) %>% unique()
-
-# plot --------------------------------------------------- #
-lapply(
-  c(1),
-  # c(1, 6, 11, 16, 21, 26, 31),
-       function(year_index) {
-  
-  pdf(file = paste0(p_plots, "abn_land_cover_", 1986 + year_index, ".pdf"), width = 7, height = 6)
-  mval <- 1.5
-  par(mfrow = c(3, 4), 
-        # mar=c(0,0,0,0), 
-        oma=c(1,1,0,0),
-        adj = 0,
-        cex.main = 1#,
-        # tcl = -0.2
-        )
-  
-  # if you use maxcell, the 0s start showing up, which messes up the color scale... beware!
-  for(i in 1:11) {
-    terra::plot(max_abn_lcc[[i]][[year_index]],
-                # site_jung_l2[[i]], # for testing
-                col = c("dark green", lc_plot_cols$color[3:4]),
-                levels = lc_plot_cols$name[2:4],
-                # breaks = c(0, 1, 2, 3, 4),
-                colNA = "gray95",
-                # mar = c(mval - 1, mval - 0.9, mval + 1.25, mval - 0.9), # bltr, for ppt
-                mar = c(1.5, 1, 2.2, 1), # bltr, for ms     
-
-                legend = FALSE,
-                #maxcell = 5000000,
-                cex = 1, # controls title sizes
-                type = "classes", main = new_titles[i]#"Land cover, 2015",
-       )
-  }
-  
-  
-  # pdf(file = paste0(p_output, "plots/jung_sites_colors_legend.pdf"), width = 7.5, height = 7.5)
-  plot.new()
-  plot(max_abn_lcc[[i]]$y2017, type = "classes",
-       col = c("dark green", lc_plot_cols$color[3:4]),
-       levels = c("Forest", "Cropland", "Grassland"), #lc_plot_cols$name[2:4],
-       legend = "left",
-       plg = list(cex = 1.5,
-                  title = paste0("Land cover, ", 1986 + year_index),
-                                  # text.width = 100,
-                  title.adj = 0#,
-                  # y.intersp	= 1.1
-                  # xjust = 0.5
-                  ),
-       legend.only = TRUE)
-  
-  dev.off()
-})
-```
-
-
-
-## Other Landcover
-
-```{r nlcd}
-install.packages("terra")
-library(terra)
-library(tictoc)
-
-# update filenames to match yours:
-nlcd <- rast(paste0(p_dat, "LU/nlcd_2019_land_cover_l48_20210604/nlcd_2019_land_cover_l48_20210604.img"))
-plot(nlcd)
-# freq(nlcd) # I used this to produce a table of the classes, but warning... it took a long time.
-nlcd_classes <- read_csv("/Users/christophercrawford/Downloads/nlcd_freq.csv")
-
-terraOptions()
-terraOptions(tempdir = paste0(p_dat, "LU/nlcd_temp"), todisk = TRUE, progress=10)
-
-tic()
-nlcd <- 
-  classify(nlcd,
-           rcl = tibble("is" = nlcd_classes$value, 
-                        becomes = if_else(is == 81, 1, NA_real_)), # note, it takes way longer to change values to 0 than to NA_real_
-           filename = paste0(p_dat, "LU/nlcd_2019_pasture_mask.tif"),
-           overwrite = TRUE)
-toc() # 605 seconds
-
-
-# load sf polygons ------------- #
-install.packages("rnaturalearth")
-library(rnaturalearth)
-
-usa <- rnaturalearth::ne_states(country = "United States of America", returnclass = "sf")
-conus <- usa %>% filter(!name %in% c("Alaska", "Hawaii"))
-plot(conus$geometry)
-conus_aea <- st_transform(conus, crs(nlcd)) # reproject to aea
-
-
-# plot the pasture mask
-pdf(file = paste0(p_dat, "LU/nlcd_pasture_mask.pdf"), width = 7, height = 4)
-plot(nlcd, main = "NLCD Pasture Mask")
-plot(conus_aea$geometry, add = T, border = "gray70")
-dev.off()
-
-# crop pnv to conus
-pnv_250 <- rast(paste0(p_dat, "/Habitats/PNV/Hengl2019/250m/pnv_biome.type_biome00k_c_250m_s0..0cm_2000..2017_v0.2.tif"))
-pnv_conus <- crop(pnv_250, conus)
-
-# reproject pnv to aea
-pnv_conus_aea <- terra::project(x = pnv_conus, 
-                         y = "+proj=aea +lat_0=23 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
-                         filename = paste0(p_dat, "Habitats/PNV/pnv_conus_aea.tif"))
-
-plot(pnv_conus_aea) # it worked!
-plot(conus_aea$geometry, add = T)
-
-
-# extract only forested or reforestable areas:
-pnv_classes <- read_csv("/Users/christophercrawford/Downloads/pnv_classes.csv")
-
-filter(pnv_classes, reforestable == "yes")$Number # reforestable classes
-filter(pnv_classes, reforestable == "yes")$Number
-pnv_classes
-
-# you can then reclassify to get a mask that's just those "reforestable" areas, with something like:
-tic()
-pnv_reforestable_mask <- 
-  classify(pnv_conus_aea,
-           # note, it takes way longer to change values to 0 than to NA_real_
-           rcl = tibble("is" = 1:32, 
-                        becomes = if_else(is %in% filter(pnv_classes, reforestable == "yes")$Number, 1, NA_real_)),
-           othersNA = TRUE,
-           filename = paste0(p_dat, "LU/pnv_reforestable_mask.tif"),
-           overwrite = TRUE)
-toc()  # 23 seconds
-
-# plot the pasture mask
-# pdf()
-pdf(file = paste0(p_dat, "LU/pnv_reforestable_mask.pdf"), width = 7, height = 4)
-# plot(pnv_conus_aea)
-plot(pnv_reforestable_mask, main = "PNV Reforestable Areas Mask")
-plot(conus_aea$geometry, add = T, border = "gray70")
-dev.off()
-
-
-print(gg_time_to_range_all_l3)
-dev.off()
-
-# then you can go about getting the resolution to match, etc.
-
-# just doing it with a smaller subset:
-
-nj <- usa %>% filter(name == "New Jersey")
-mi <- usa %>% filter(name == "Michigan")
-
-# to crop the nlcd to nj, first reproject the nj sf object to aea
-nj_aea <- st_transform(nj, crs(nlcd))
-plot(nj_aea$geometry)
-plot(nj$geometry)
-
-# make sure 
-pnv_nj <- crop(pnv_250, nj)
-tic()
-nlcd_nj <- crop(nlcd, nj_aea)
-toc() # 1 second
-plot(nlcd_nj)
-plot(pnv_nj)
-
-nlcd_nj_pasture <- 
-  classify(nlcd_nj,
-           # takes way longer to change values to 0 than to NA_real_
-           rcl = tibble("is" = nlcd_values, becomes = if_else(is == 81, 1, NA_real_)), 
-           filename = paste0(p_dat, "LU/nlcd_nj_2019_pasture_mask.tif"),
-           overwrite = TRUE)
-plot(nlcd_nj_pasture)
-plot(nj_aea$geometry, add = T)
-
-rasterOptions(todisk = TRUE)
-
-
-pnv_nj_aea <- project(x = pnv_nj, y = nlcd_nj, filename = paste0(p_dat, "Habitats/PNV/pnv_nj_aea.tif"))
-
-# it worked!
-plot(nlcd_nj)
-plot(pnv_nj_aea, add = T)
-plot(nj_aea$geometry, add = T)
-```
-
-
-
-
-# Ecoregions (TNC/WWF)
-
-```{r biomes}
-# The Nature Conservancy's version of Ecoregions
-# data available from: https://geospatial.tnc.org/datasets/b1636d640ede4d6ca8f5e369f2dc368b/about
-# Note: this version was not used in the final analysis or publication. 
-# Use this version only if you need to match to PREDICTS.
-tic()
-ecoregions <- st_read(paste0(p_dat, "Habitats/terr-ecoregions-TNC/tnc_terr_ecoregions.shp")) %>%
-  st_make_valid()
-toc() # 20 seconds about. (making the geometries valid is quick!)
-
-
-# rename the column for WWF_MHTNAM to biome (this matches PREDICTS)
-ecoregions <- ecoregions %>% mutate(biome = WWF_MHTNAM)
-ecoregions %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
-
-# union ecoregions within each biome
-biome_names <- ecoregions %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
-biome_l <- vector(mode = "list", length = 16L)
-names(biome_l) <- biome_names
-
-tic()
-for(i in 1:16) {
-  biome_l[[i]] <- ecoregions %>% 
-    filter(biome == biome_names[i]) %>%
-    st_union() %>%
-    st_sf() %>%
-    mutate(biome = biome_names[i])
-}
-toc() # took a bit of a while - maybe 60 seconds.
-
-biomes <- bind_rows(biome_l)
-
-# I tried aggregate, st_union, st_combine, merge, etc., and I couldn't find a simple way to dissolve an sf object based on an attribute, other than doing them all individually, then binding them back together. 
-
-
-# save biomes sf file
-st_write(biomes, dsn = paste0(p_dat, "Habitats/biomes.shp"))
-save(biomes, file = paste0(p_dat, "Habitats/biomes.rds"))
-
-biomes <- st_read(paste0(p_dat, "Habitats/biomes.shp"))
-
-plot(st_geometry(biomes[4,]))
-
-
-# Crop ecoregions to the sites:
-
-site_ecoregions <- lapply(1:11, function(i) {
-  temp <- st_crop(ecoregions, terra::ext(lc[[i]]))
-  temp <- temp %>% mutate(site = site_df$site[i])
-  temp
-}) %>% bind_rows()
-
-obj_size(site_ecoregions)
-st_write(site_ecoregions, dsn = paste0(p_derived, "site_ecoregions.shp"))
-
-site_ecoregions <- st_read(paste0(p_derived, "site_ecoregions.shp"))
-
-```
+# Ecoregions & Biomes
 
 ```{r ecoregions-2017}
 # Ecoregion & Biome Data available from: https://ecoregions.appspot.com/
@@ -4044,6 +2174,65 @@ st_write(ecoregions2017_simple, dsn = paste0(p_derived, "ecoregions2017_simple.s
 ecoregions2017_simple <- st_read(paste0(p_derived, "ecoregions2017_simple.shp"))
 ```
 
+
+```{r tnc-ecoregions}
+# The Nature Conservancy's version of Ecoregions
+# data available from: https://geospatial.tnc.org/datasets/b1636d640ede4d6ca8f5e369f2dc368b/about
+# Note: this version was not used in the final analysis or publication. 
+# Use this version only if you need to match to PREDICTS.
+tic()
+ecoregions <- st_read(paste0(p_dat, "Habitats/terr-ecoregions-TNC/tnc_terr_ecoregions.shp")) %>%
+  st_make_valid()
+toc() # 20 seconds about. (making the geometries valid is quick!)
+
+
+# rename the column for WWF_MHTNAM to biome (this matches PREDICTS)
+ecoregions <- ecoregions %>% mutate(biome = WWF_MHTNAM)
+ecoregions %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
+
+# union ecoregions within each biome
+biome_names <- ecoregions %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
+biome_l <- vector(mode = "list", length = 16L)
+names(biome_l) <- biome_names
+
+tic()
+for(i in 1:16) {
+  biome_l[[i]] <- ecoregions %>% 
+    filter(biome == biome_names[i]) %>%
+    st_union() %>%
+    st_sf() %>%
+    mutate(biome = biome_names[i])
+}
+toc() # took a bit of a while - maybe 60 seconds.
+
+biomes <- bind_rows(biome_l)
+
+# I tried aggregate, st_union, st_combine, merge, etc., and I couldn't find a simple way to dissolve an sf object based on an attribute, other than doing them all individually, then binding them back together. 
+
+
+# save biomes sf file
+st_write(biomes, dsn = paste0(p_dat, "Habitats/biomes.shp"))
+save(biomes, file = paste0(p_dat, "Habitats/biomes.rds"))
+
+biomes <- st_read(paste0(p_dat, "Habitats/biomes.shp"))
+
+plot(st_geometry(biomes[4,]))
+
+
+# Crop ecoregions to the sites:
+
+site_ecoregions <- lapply(1:11, function(i) {
+  temp <- st_crop(ecoregions, terra::ext(lc[[i]]))
+  temp <- temp %>% mutate(site = site_df$site[i])
+  temp
+}) %>% bind_rows()
+
+obj_size(site_ecoregions)
+st_write(site_ecoregions, dsn = paste0(p_derived, "site_ecoregions.shp"))
+
+site_ecoregions <- st_read(paste0(p_derived, "site_ecoregions.shp"))
+
+```
 
 ```{r plot-ecoregions}
 
@@ -4143,135 +2332,8 @@ ggsave(plot =
 
 ```
 
-```{r savanna-ecoregion}
-
-ecoregions$ECO_NAME %>% grep("Ordos", ., value = TRUE)
-
-site_ecoregions %>% 
-  st_drop_geometry() %>%
-  select(site, ECO_NAME)
-
-ecoregions %>% 
-  filter(ECO_NAME == "Ordos Plateau Steppe") %>%
-  st_geometry() %>%
-  plot()
-
-
-plot(ext(lc$shaanxi$y2017) + 2)
-plot(ext(lc$shaanxi$y2017), add = T, border = "green")
-ecoregions %>% 
-  # filter(ECO_NAME == "Ordos Plateau Steppe") %>%
-  st_geometry() %>%
-  plot(add = T, col = "gray")
-
-crop1 <- st_crop(ecoregions, terra::ext(lc[[9]]) + 3)
-crop1 %>% st_drop_geometry()
-plot(crop1["biome"], leg = "bottom")
-plot(crop1$geometry)
-
-plot(ext(lc$shaanxi$y2017), add = T, border = "green")
-
-# ------------------------------------------------ #
-# simplify ecoregions sf file so that plotting at a global scale is manageable
-# ------------------------------------------------ #
-
-ecoregions_simple <- st_simplify(ecoregions, dTolerance = 10000, preserveTopology = TRUE)
-obj_size(ecoregions_simple)
-biomes_simple <- st_simplify(biomes, dTolerance = 10000, preserveTopology = TRUE)
-obj_size(biomes_simple)
-
-ecoregions_simple %>% 
-  st_drop_geometry() %>% select(biome) %>% unique() %>% nrow()
-
-# ------------------------------------------------ #
-# filter and plot
-# ------------------------------------------------ #
-plot(forest_c, col = brewer_pal(palette = "Greens")(9), colNA = "gray80")
-
-ecoregions_simple %>% 
-  select(ECO_NAME, biome) %>%
-  filter(ECO_NAME %in% 
-           grep("Forest|Desert|Woodlands|Mountain|Range|Tundra|Mangroves|Lake|Ice", 
-                ecoregions_simple$ECO_NAME, 
-                value = TRUE, invert = TRUE)) %>%
-  st_geometry() %>% plot(add = T)
-
-
-
-
-
-# subset region:
-my_ext <- terra::draw()
-
-plot(forest_c, col = brewer_pal(palette = "Greens")(9), colNA = "gray80",
-     ext = my_ext + 1.5)
-
-ecoregions_simple %>% select(ECO_NAME) %>% plot(add = TRUE)
-plot(usa$geometry, add = TRUE)
-
-
-
-# ------------------------------------------------ #
-# simplest filtering: just "savanna" biome
-# ------------------------------------------------ #
-
-# add just savannas in red:
-ecoregions_simple %>% 
-  select(ECO_NAME, biome) %>%
-  filter(biome %in% grep("Savanna",
-                         ecoregions_simple$biome,
-                         value = TRUE, invert = FALSE)
-         ) %>%
-  st_geometry() %>% plot(border = "red", add = TRUE)
-
-# Complex filtering
-ecoregions_simple %>% 
-  # st_drop_geometry() %>% 
-  select(ECO_NAME, biome) %>%
-  # .$ECO_NAME %>%
-  filter(ECO_NAME %in%
-           grep("Forest|Desert|Mountain|Range|Tundra|Mangroves|Lake|Ice", 
-                ecoregions_simple$ECO_NAME, 
-                value = TRUE, invert = TRUE),
-         biome %in%
-           grep("Forest|Tundra|Desert",
-                ecoregions_simple$biome,
-                value = TRUE, invert = TRUE)) %>%
-  st_geometry() %>% plot(border = "red", add = TRUE)
-  plot(extent = my_ext)
-
-plot(usa$geometry, graticule = TRUE, axes = TRUE, add = T, border = "red")
-
-
-
-ecoregions_simple %>% 
-  filter(ECO_NAME == "Ordos Plateau Steppe") %>%
-  st_geometry() %>% plot()
-  # plot(add = T, col = "gray")
-
-biomes_simple["biome"] %>% 
-  # st_drop_geometry() %>%
-  # filter(biome %in% grep("Savanna", biomes_simple$biome, value = TRUE)) %>%
-  # st_geometry() %>%
-  plot()
-
-grep("Savanna", biomes_simple$biome, value = TRUE)
-
-biomes_simple %>%
-  filter()
-  st_geometry() %>%
-  plot()
-
-site_ecoregions %>% 
-  filter(site == site_df$site[i])
-
-# ecoregions_by_site
-
-```
-
-
 ```{r plot-biomes}
-# load biomes - see "biomes" chunk above
+# load biomes - see "tnc-ecoregions" chunk above
 biomes <- st_read(paste0(p_dat, "Habitats/biomes.shp"))
 
 
@@ -4405,56 +2467,5 @@ ggsave(plot =
     width = 7.5, height = 6.75, units = "in"
 )
 
-
-```
-
-```{r mn-biome}
-usa <- ne_states(returnclass = "sf", country = "United States of America")
-mn <- usa %>%
-  filter(name == "Minnesota")
-
-wi <- usa %>% filter(name == "Wisconsin")
-plot(mn$geometry)
-plot(wi$geometry)
-mn_biome <- st_crop(biomes, extent(mn))
-wi_biome <- st_crop(biomes, extent(wi))
-
-ggplot() +
-  theme_classic() + 
-  geom_sf(data = mn_biome, aes(fill = biome))
-
-ggplot() +
-  theme_classic() + 
-  geom_sf(data = wi_biome, aes(fill = biome))
-
-ggplot() + theme_classic() + 
-  geom_sf(data = mn_biome, aes(fill = biome)) +
-  geom_sf(data = wi_biome, aes(fill = biome))
-
-
-```
-
-
-```{r biome-with-raster}
-ggplot() +
-  theme_classic() + 
-  geom_sf(data = biomes_crop %>% filter(site == "shaanxi"), aes(fill = biome)) + 
-  labs(fill = NULL) +
-  theme(legend.position = "bottom",
-        legend.text = element_text(size = 7)) + 
-  guides(fill = guide_legend(ncol = 2)) +
-  scale_fill_manual(values = biome_pal, labels = str_wrap(names(biome_pal), 24)
-                    ) + 
-  facet_wrap(vars(site), labeller = as_labeller(cap_update_labels)) + 
-  geom_raster(age_r$shaanxi$y2017, mapping = aes(fill = y2017))
-
-
-plot(biomes_crop %>% filter(site == "shaanxi") %>% select(biome))
-
-p <- gplot(age_r$shaanxi$y2017) + 
-  geom_raster(aes(fill = value)) +
-  # facet_wrap(~ variable) +
-  scale_fill_gradientn(colours = terrain.colors(100)) +
-  coord_quickmap()
 
 ```
