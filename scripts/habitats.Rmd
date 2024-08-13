@@ -10,12 +10,12 @@ editor_options:
 This script is part of the **Effects of cropland abandonment on biodiversity** project, developed by Christopher L. Crawford (chris.L.crawford@gmail.com) at Princeton University beginning in Fall 2021.
 See https://github.com/chriscra/biodiversity_abandonment.
 
-5 primary sections:
+Contents:
 
 1. Prepping the Jung et al. 2020 map of IUCN Level 2 Habitats (for the year 2015)
 2. Interpolating Yin et al. 2020 Land Covers to IUCN Level 2 Habitat Types (Jung et al. 2020)
 3. Analyzing Landscape Configuration and Fragmentation via {landscapemetrics} (see "cluster/lsm_2024.R" and "cluster/lsm_two_2024.R")
-4. Plotting Ecoregions & Biomes for each site. 
+4. Miscellaneous spatial data, including site area, elevation, and ecoregions & biomes for each site.
 
 ```{r initialize}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
@@ -49,8 +49,439 @@ raster::removeTmpFiles()
 warnings()
 ```
 
+# 1. Miscellaneous spatial data
 
-# IUCN Habitat types
+```{r calculate-area-ha}
+ifelse(
+  !dir.exists(paste0(p_derived, "site_area_ha")), 
+  dir.create(paste0(p_derived, "site_area_ha")), 
+  "Directory already exists")
+
+
+site_area_ha <- lapply(1:11, function(i) {
+  terra::cellSize(age_t[[i]]$y2017, unit = "ha", mask = FALSE,
+                  overwrite = TRUE,
+                  names = paste0(site_df$site[i], "_area_ha"),
+                  filename = paste0(p_derived, "site_area_ha/", site_df$site[i], "_area_ha.tif"))
+  }
+)
+
+
+site_area_ha <- lapply(
+  list.files(paste0(p_derived, "site_area_ha"), full.names = TRUE), 
+  function(i) rast(i)
+  )
+names(site_area_ha) <- site_df$site
+```
+
+```{r crop_elevation_map}
+# download SRTM 30 m elevation data from Google Earth Engine (https://developers.google.com/earth-engine/datasets/catalog/USGS_SRTMGL1_003). Multiple variables include: a. Elevation; b. Slope; c. Terrain Ruggedness Index (TRI); d. Topographic Wetness Index
+p_predictors <- "/Volumes/GoogleDrive/My Drive/data/Abandonment/predictors"
+
+elevation_l <- lapply(1:11, function(i) {
+  p_predictors %>% 
+    list.files(full.names = T) %>% 
+    grep("srtm",., value = T) %>%
+    grep(paste0(site_df$label[i], ".tif"), ., value = T) %>%
+    rast()
+})
+names(elevation_l) <- site_df$site
+
+
+elevation_l_crop <- lapply(1:11, function(i) {
+  terra::crop(
+  elevation_l[[i]], 
+  age_t[[i]],
+  filename = paste0(p_derived, "elevation/", site_df$site[i], "_srtm_crop.tif"),
+  overwrite = TRUE
+  )
+})
+
+
+
+terrain_l <- lapply(1:11, function(i) {
+  terra::terrain(elevation_l_crop[[i]]$elevation, 
+          v = c('slope', 'aspect', 'TRI', "TPI", "roughness"), 
+          unit='degrees',
+          filename = paste0(p_derived, "elevation/", site_df$site[i], "_terrain.tif")
+          )
+})
+names(terrain_l) <- site_df$site
+
+
+
+# reload
+
+terrain <- lapply(1:11, function(i) {
+  rast(
+  c(paste0(p_derived, "elevation/", site_df$site[i], "_srtm_crop.tif"),
+    paste0(p_derived, "elevation/", site_df$site[i], "_terrain.tif")
+    ))
+})
+
+names(terrain) <- site_df$site
+```
+
+## Ecoregions & Biomes
+
+```{r ecoregions-2017}
+# Ecoregion & Biome Data available from: https://ecoregions.appspot.com/
+# Dinerstein, E. et al. An Ecoregion-Based Approach to Protecting Half the Terrestrial Realm. BioScience 67, 534–545 (2017).
+
+tic()
+ecoregions2017 <- st_read(paste0(p_dat, "Habitats/Ecoregions2017/Ecoregions2017.shp")) %>%
+  st_make_valid()
+toc() # 20 seconds about. (making the geometries valid is quick!)
+
+
+# rename the column for WWF_MHTNAM to biome (this matches PREDICTS)
+ecoregions <- ecoregions %>% mutate(biome = WWF_MHTNAM)
+ecoregions %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
+
+
+
+# simplify polygons:
+ecoregions2017_simple <- st_simplify(ecoregions2017, dTolerance = 10000, preserveTopology = TRUE)
+obj_size(ecoregions2017_simple)
+
+# plot with Cook-Patton
+plot(cook_patton_abg, col = brewer_pal(palette = "Greens")(9), colNA = "gray80")
+
+# add just savannas in red:
+ecoregions2017_simple %>% 
+  select(ECO_NAME, BIOME_NAME) %>%
+  filter(BIOME_NAME %in% grep("Savanna",
+                         ecoregions2017_simple$BIOME_NAME,
+                         value = TRUE, invert = FALSE)
+         ) %>%
+  st_geometry() %>% plot(border = "red", add = TRUE)
+
+site_sf$geometry %>% plot(border = "orange", add= TRUE)
+
+
+# crop to sites:
+site_ecoregions2017 <- lapply(1:11, function(i) {
+  temp <- st_crop(ecoregions2017, terra::ext(lc[[i]]))
+  temp <- temp %>% mutate(site = site_df$site[i])
+  temp
+}) %>% bind_rows()
+
+warnings()
+
+plot(site_ecoregions2017$geometry)
+obj_size(site_ecoregions2017)
+site_ecoregions2017 %>% st_drop_geometry()
+names(site_ecoregions2017)
+
+site_ecoregions2017$ECO_NAME %>% unique()
+site_ecoregions2017$BIOME_NAME %>% unique()
+
+
+
+st_write(site_ecoregions2017, dsn = paste0(p_derived, "site_ecoregions2017.shp"))
+site_ecoregions2017 <- st_read(paste0(p_derived, "site_ecoregions2017.shp"))
+
+st_write(ecoregions2017_simple, dsn = paste0(p_derived, "ecoregions2017_simple.shp"))
+ecoregions2017_simple <- st_read(paste0(p_derived, "ecoregions2017_simple.shp"))
+```
+
+
+```{r tnc-ecoregions}
+# The Nature Conservancy's version of Ecoregions
+# data available from: https://geospatial.tnc.org/datasets/b1636d640ede4d6ca8f5e369f2dc368b/about
+# Note: this version was not used in the final analysis or publication. 
+# Use this version only if you need to match to PREDICTS.
+tic()
+ecoregions <- st_read(paste0(p_dat, "Habitats/terr-ecoregions-TNC/tnc_terr_ecoregions.shp")) %>%
+  st_make_valid()
+toc() # 20 seconds about. (making the geometries valid is quick!)
+
+
+# rename the column for WWF_MHTNAM to biome (this matches PREDICTS)
+ecoregions <- ecoregions %>% mutate(biome = WWF_MHTNAM)
+ecoregions %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
+
+# union ecoregions within each biome
+biome_names <- ecoregions %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
+biome_l <- vector(mode = "list", length = 16L)
+names(biome_l) <- biome_names
+
+tic()
+for(i in 1:16) {
+  biome_l[[i]] <- ecoregions %>% 
+    filter(biome == biome_names[i]) %>%
+    st_union() %>%
+    st_sf() %>%
+    mutate(biome = biome_names[i])
+}
+toc() # took a bit of a while - maybe 60 seconds.
+
+biomes <- bind_rows(biome_l)
+
+# I tried aggregate, st_union, st_combine, merge, etc., and I couldn't find a simple way to dissolve an sf object based on an attribute, other than doing them all individually, then binding them back together. 
+
+
+# save biomes sf file
+st_write(biomes, dsn = paste0(p_dat, "Habitats/biomes.shp"))
+save(biomes, file = paste0(p_dat, "Habitats/biomes.rds"))
+
+biomes <- st_read(paste0(p_dat, "Habitats/biomes.shp"))
+
+plot(st_geometry(biomes[4,]))
+
+
+# Crop ecoregions to the sites:
+
+site_ecoregions <- lapply(1:11, function(i) {
+  temp <- st_crop(ecoregions, terra::ext(lc[[i]]))
+  temp <- temp %>% mutate(site = site_df$site[i])
+  temp
+}) %>% bind_rows()
+
+obj_size(site_ecoregions)
+st_write(site_ecoregions, dsn = paste0(p_derived, "site_ecoregions.shp"))
+
+site_ecoregions <- st_read(paste0(p_derived, "site_ecoregions.shp"))
+
+```
+
+```{r plot-ecoregions}
+
+site_ecoregions %>% st_drop_geometry() %>%
+  select(ECO_NAME, biome, site) %>%
+  as_tibble() %>% print(n = 30)
+
+site_ecoregions2017 %>% names()
+
+site_ecoregions2017 %>% st_drop_geometry() %>%
+  select(ECO_NAME, BIOME_NAME, site) %>%
+  as_tibble() %>% print(n = 30)
+
+
+# plot ecoregions by site:
+  
+i
+gg_ecoregions_all <-
+  ggplot(data = site_ecoregions %>%
+           filter(site == site_df$site[i]), 
+         aes(fill = str_wrap(ECO_NAME, 15))) +
+  theme_classic() + 
+  geom_sf() + 
+  labs(fill = "Ecoregion") +
+  theme(legend.position = "right"#,
+        # legend.text = element_text(size = 7)
+        ) #+ 
+  # guides(fill = guide_legend(ncol = 2)) +
+  # scale_fill_manual(values = biome_pal, labels = str_wrap(names(biome_pal), 24)
+                    # ) + 
+  # facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
+
+gg_ecoregions_all_2017 <-
+  ggplot(data = site_ecoregions2017 %>%
+           filter(site == site_df$site[i]), 
+         aes(fill = str_wrap(ECO_NAME, 15))) +
+  theme_classic() + 
+  geom_sf() + 
+  labs(fill = "Ecoregion") +
+  theme(legend.position = "right")
+  
+ecoregions_by_site <-
+  lapply(1:11, function(i){
+    ggplot(data = site_ecoregions %>% 
+             filter(site == site_df$site[i]), 
+           aes(fill = str_wrap(ECO_NAME, 15))) +
+      theme_classic() + 
+      geom_sf() + 
+      labs(fill = NULL) +
+      theme(legend.position = "right",
+            axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) + 
+      guides(fill = guide_legend(ncol = 1)) + 
+      # scale_fill_manual(labels = str_wrap(names(biome_pal), 24)) +
+      # scale_fill_manual(values = biome_pal) + 
+      facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
+  })
+
+gg_ecoregions_by_site_2017 <-
+  lapply(1:11, function(i){
+    ggplot(data = site_ecoregions2017 %>% 
+             filter(site == site_df$site[i]), 
+           aes(fill = str_wrap(ECO_NAME, 15))) +
+      theme_classic() + 
+      geom_sf() + 
+      labs(fill = NULL) +
+      theme(legend.position = "right",
+            axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) + 
+      guides(fill = guide_legend(ncol = 1)) + 
+      # scale_fill_manual(labels = str_wrap(names(biome_pal), 24)) +
+      # scale_fill_manual(values = biome_pal) + 
+      facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
+  })
+
+
+ggsave(plot = 
+         # plot_grid(
+           plot_grid(
+             plotlist = ecoregions_by_site, 
+             ncol = 4, nrow = 3),
+           # as_ggplot(biome_legend),
+           # nrow = 2, rel_heights = c(2, 0.2)),
+       filename = paste0(p_plots, "ecoregions_by_site_wide.pdf"), 
+    width = 15, height = 9, units = "in"
+)
+
+ggsave(plot = 
+         # plot_grid(
+           plot_grid(
+             plotlist = gg_ecoregions_by_site_2017, 
+             ncol = 4, nrow = 3),
+           # as_ggplot(biome_legend),
+           # nrow = 2, rel_heights = c(2, 0.2)),
+       filename = paste0(p_plots, "ecoregions2017_by_site_wide.pdf"), 
+    width = 15, height = 9, units = "in"
+)
+
+
+```
+
+```{r plot-biomes}
+# load biomes - see "tnc-ecoregions" chunk above
+biomes <- st_read(paste0(p_dat, "Habitats/biomes.shp"))
+
+
+ggplot() + theme_classic() + 
+  geom_sf(data = biomes, aes(fill = biome))
+
+# "Biomes ... are defined by The Nature Conservancy's terrestrial ecoregions of the world dataset"
+
+# make a list of cropped biomes cropped to each site:
+site_biomes <- lapply(1:11, function(i) {
+  temp <- st_crop(biomes, ext(lc[[i]]))
+  temp <- temp %>% mutate(site = site_df$site[i])
+  temp
+}) %>% bind_rows()
+
+st_write(site_biomes, dsn = paste0(p_derived, "site_biomes.shp"))
+
+
+site_biome_names <- site_biomes %>% 
+  st_drop_geometry() %>% select(biome) %>% 
+  arrange(biome) %>% unique() %>% .$biome
+
+# all site - but facet_wrap doesn't work with geom_sf with free scales
+ggplot() + theme_classic() + 
+  geom_sf(data = site_biomes, aes(fill = biome)) + 
+  # theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
+  facet_wrap(vars(site))
+
+
+biome_pal <- gg_color_hue(9)
+names(biome_pal) <- site_biome_names
+
+site_df
+site_biomes %>% st_drop_geometry() %>% select(biome, site) %>%
+  
+
+
+str_wrap(names(biome_pal), 20)
+
+site_biomes %>% 
+  st_drop_geometry() %>% select(biome, site)
+  
+gg_biomes_all <-
+  ggplot(data = site_biomes, aes(fill = biome)) +
+  theme_classic() + 
+  geom_sf() + 
+  labs(fill = NULL) +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 7)) + 
+  guides(fill = guide_legend(ncol = 2)) +
+  scale_fill_manual(values = biome_pal, labels = str_wrap(names(biome_pal), 24)
+                    ) + 
+  facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
+
+  
+biomes_by_site <-
+  lapply(1:11, function(i){
+    ggplot(data = site_biomes %>% filter(site == site_df$site[i]), aes(fill = biome)) +
+      theme_classic() + 
+      geom_sf() + 
+      labs(fill = NULL) +
+      theme(legend.position = "none",
+            axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) + 
+      guides(fill = guide_legend(ncol = 1)) + 
+      scale_fill_manual(values = biome_pal) + 
+      facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
+  })
+
+biome_legend <- ggpubr::get_legend(gg_biomes_all + 
+                                     guides(fill = guide_legend(nrow = 2)) +
+                                     theme(legend.position = "bottom"))
+
+ggsave(plot = 
+         plot_grid(
+           plot_grid(plotlist = biomes_by_site, ncol = 4, nrow = 3),
+           as_ggplot(biome_legend),
+           nrow = 2, rel_heights = c(2, 0.2)),
+       filename = paste0(p_plots, "biomes_by_site.pdf"), 
+    width = 7.5, height = 6.75, units = "in"
+)
+
+
+# ------------------------------------------------------------ #
+# Ecoregions 2017 - biomes
+# ------------------------------------------------------------ #
+
+biome2017_pal <- gg_color_hue(9)
+names(biome2017_pal) <- site_ecoregions2017 %>% 
+  st_drop_geometry() %>% select(BIOME_NAME) %>% 
+  arrange(BIOME_NAME) %>% unique() %>% .$BIOME_NAME
+
+
+gg_biomes2017_by_site <-
+  lapply(1:11, function(i){
+    ggplot(data = site_ecoregions2017 %>% 
+             filter(site == site_df$site[i]), 
+           aes(fill = BIOME_NAME)) +
+      theme_classic() + 
+      geom_sf() + 
+      labs(fill = NULL) +
+      theme(legend.position = "none",
+            axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) + 
+      guides(fill = guide_legend(ncol = 1)) + 
+      scale_fill_manual(values = biome2017_pal) + 
+      facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
+  })
+
+gg_biomes2017_all <-
+  ggplot(data = site_ecoregions2017, aes(fill = BIOME_NAME)) +
+  theme_classic() + 
+  geom_sf() + 
+  labs(fill = NULL) +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 7)) + 
+  guides(fill = guide_legend(ncol = 2)) +
+  scale_fill_manual(values = biome2017_pal, 
+                    labels = str_wrap(names(biome2017_pal), 24)
+                    ) + 
+  facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
+
+biome2017_legend <- ggpubr::get_legend(gg_biomes2017_all + 
+                                     guides(fill = guide_legend(nrow = 2)) +
+                                     theme(legend.position = "bottom"))
+
+ggsave(plot = 
+         plot_grid(
+           plot_grid(plotlist = gg_biomes2017_by_site, ncol = 4, nrow = 3),
+           as_ggplot(biome2017_legend),
+           nrow = 2, rel_heights = c(2, 0.2)),
+       filename = paste0(p_plots, "biomes2017_by_site.pdf"), 
+    width = 7.5, height = 6.75, units = "in"
+)
+
+
+```
+
+# 2. IUCN Habitat types
 
 Interpolate our annual land cover time series from Yin et al. 2020 (which just has four land cover types) into IUCN Level 2 Habitat Types based on the 2015 IUCN Level 2 Habitat Types map from Jung et al. 2020.
 
@@ -915,7 +1346,7 @@ dev.off()
 ```
 
 
-# Assign Yin et al. 2020 Land Covers to IUCN Level 2 Habitat Types
+# 3. Assign Yin et al. 2020 Land Covers to IUCN Level 2 Habitat Types
 
 In a previous version of the AOH function, we calculated the area in each land cover class (i.e., of the four land cover classes in the original Yin et al. 2020 land cover maps).
 We created a crosswalk to translate our coarse land cover classes into the finer habitat types used by the IUCN and mapped by Jung et al. 2020 for the year 2015  
@@ -951,6 +1382,223 @@ This process follows seven steps:
 7. Use this as the final habitat map for calculating area of habitat.
 
 **NOTE**: the final input maps for Calculations 1a and 1b ("crop_abn_iucn" observed and potential) are created in the script "cluster/noncrop_precrop_mask.R".
+
+## Yin et al. 2020 land cover classes in abandoned croplands 
+
+```{r create-abn-age-masks}
+# These masks are used in later code, 
+
+# ------------------------------------------------------------ #
+# create a mask of the abandonment age map, excluding ages < 5
+
+tic()
+abn_mask <- lapply(1:11, function(i) {
+  abn_mask_tmp <- 
+    classify(
+      age_t[[i]],
+      rcl = tibble(from = 5,
+                   to = 30,
+                   becomes = 0),
+      othersNA = TRUE,
+      include.lowest = TRUE, right = TRUE,
+      filename = paste0(p_dat_derived, "age_rasters/", run_label, "/",
+                        site_df$site[i], "_abn_5_30_mask", run_label,".tif"),
+      names = paste0("y", 1987:2017),
+      overwrite = TRUE)
+})
+toc()
+
+abn_mask <- lapply(1:11, function(i){
+  rast(paste0(p_dat_derived, "age_rasters/", run_label, "/",
+              site_df$site[i], "_abn_5_30_mask", run_label,".tif"))
+})
+
+names(abn_mask) <- site_df$site
+
+
+# ------------------------------------------------------------ #
+# create a mask of the *potential* abandonment age map, excluding ages < 5
+tic()
+potential_abn_mask <- lapply(1:11, function(i) {
+  potential_abn_mask_tmp <- 
+    classify(
+      potential_age_t[[i]],
+      rcl = tibble(from = 5,
+                   to = 30,
+                   becomes = 0),
+      othersNA = TRUE,
+      include.lowest = TRUE, right = TRUE,
+      filename = paste0(p_dat_derived, "age_rasters/", run_label, "/",
+                        site_df$site[i], "_potential_abn_5_30_mask", run_label,".tif"),
+      names = paste0("y", 1987:2017),
+      overwrite = TRUE)
+})
+toc()
+
+potential_abn_mask <- lapply(1:11, function(i){
+  rast(paste0(p_dat_derived, "age_rasters/", run_label, "/",
+              site_df$site[i], "_potential_abn_5_30_mask", run_label,".tif"))
+})
+
+names(potential_abn_mask) <- site_df$site
+
+
+# ---------------------------------------------------------------- #
+# create mask of just 5-30 max_age
+
+tic()
+max_age_mask <- lapply(1:11, function(i) {
+  max_age_mask_tmp <- 
+    classify(
+      max_age_t[[i]],
+      rcl = tibble(from = 5,
+                   to = 30,
+                   becomes = 0),
+      othersNA = TRUE,
+      include.lowest = TRUE, right = TRUE,
+      filename = 
+        paste0(p_dat_derived, "max_age/", run_label, "/",
+              site_df$site[i], "_max_age_5_30_mask", run_label,".tif"),
+      names = "max_age_5_30_mask",
+      overwrite = TRUE)
+})
+toc()
+
+
+max_age_mask <- lapply(1:11, function(i){
+  rast(paste0(p_dat_derived, "max_age/", run_label, "/",
+              site_df$site[i], "_max_age_5_30_mask", run_label,".tif"))
+})
+names(max_age_mask) <- site_df$site
+
+```
+
+
+```{r land-cover-of-abn-pixels}
+
+# Calculate the land cover of abandoned pixels for each year.
+# These are not strictly required for the lc to iucn interpolation, 
+# but are sometimes useful for reference.
+
+tic()
+abn_lcc <- lapply(1:11, function(i) {
+  # make sure to restrict lcc to only 1987:2017 (Nebraska, Wisconsin)
+  # i <- 9
+  cat("Masking:", site_df$site[i], "...", fill = TRUE)
+  tmp <- abn_mask[[i]] + lcc[[i]][[paste0("y", 1987:2017)]]
+  
+  cat("Writing SpatRaster to file:", site_df$site[i], "...", fill = TRUE)
+  writeRaster(tmp, 
+              filename = paste0(p_derived, "abn_lcc/",
+                        site_df$site[i], "_abn_lcc", run_label, ".tif"), 
+              overwrite = TRUE,
+              names = names(tmp))
+  cat(site_df$site[i], "done!", fill = TRUE)
+
+})
+toc()
+
+
+# reload
+abn_lcc <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "abn_lcc/",
+              site_df$site[i], "_abn_lcc", run_label, ".tif"))
+  })
+names(abn_lcc) <- site_df$site
+
+
+plot(abn_lcc[[9]][[31]])
+
+
+
+
+# ---------------------------------------------------------------- #
+# calculate land cover (Yin et al. 2020) of all pixels that were ever abandoned
+# ---------------------------------------------------------------- #
+
+tic()
+max_abn_lcc <- lapply(1:11, function(i) {
+  # make sure to restrict lc to only 1987:2017 (Nebraska, Wisconsin)
+  # i <- 9
+  cat("Masking:", site_df$site[i], "...", fill = TRUE)
+  tmp <- max_age_mask[[i]] + lcc[[i]][[paste0("y", 1987:2017)]]
+  
+  cat("Writing SpatRaster to file:", site_df$site[i], "...", fill = TRUE)
+  writeRaster(tmp, 
+              filename = paste0(p_derived, "abn_lcc/",
+                        site_df$site[i], "_max_abn_lcc", run_label, ".tif"), 
+              overwrite = TRUE,
+              names = paste0("y", 1987:2017))
+  cat(site_df$site[i], "done!", fill = TRUE)
+
+})
+toc()
+
+
+# reload
+max_abn_lcc <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "abn_lcc/",
+              site_df$site[i], "_max_abn_lcc", run_label, ".tif"))
+  })
+names(max_abn_lcc) <- site_df$site
+
+```
+
+```{r lc-frequencies-in-abn}
+# not strictly necessary.
+
+abn_lcc_freq <- lapply(1:11, function(i) {
+  # the first five years (1987:1991) are NA, due to abandonment definition.
+  tmp <- freq(abn_lcc[[paste0("y", 1992:2017)]]) %>% 
+    as_tibble() %>%
+    rename(year = layer, lc = value) %>%
+    mutate(year = year + 1991,
+           site = site_df$site[i]) %>%
+    select(site, year, lc, count)
+  
+  tmp
+}
+) %>% bind_rows
+
+# write to file
+write_csv(abn_lcc_freq, file = paste0(p_derived, "abn_lcc_freq.csv"))
+
+abn_lcc_freq
+
+# convert to percentages and plot
+
+abn_lcc_freq %>% 
+  group_by(site, year) %>%
+  summarise(site, year, lc, count,
+            total = sum(count)) %>%
+  ungroup() %>% 
+  mutate(px = count/total * 100) %>%
+  # filter(lc == 3) %>%
+  ggplot(mapping = aes(x = year, y = px, col = as_factor(lc))) + 
+  geom_line() + 
+  labs(x = "Year", y = "Percent of all abandoned pixels", col = "Land cover class") +
+  facet_wrap(vars(site), scales = "free") + theme(legend.position = "bottom")
+
+
+
+
+ggplot(data = abn_lcc_freq, 
+       mapping = aes(x = year, y = area_ha, col = as_factor(lc))) + 
+  geom_line() + 
+  labs(x = "Year", y = "Area (ha)", col = "Land cover class") +
+  # facet_wrap(vars(site), scales = "free") + 
+  theme(legend.position = "bottom")
+
+ggplot(data = abn_lcc_freq, 
+       mapping = aes(x = year, y = count, col = as_factor(lc))) + 
+  geom_line() + 
+  labs(x = "Year", y = "Pixels", col = "Land cover class") +
+  # facet_wrap(vars(site), scales = "free") + 
+  theme(legend.position = "bottom")
+
+```
+
+## IUCN interpolation
 
 ```{r lcc-iucn-habitat-composite}
 # this chunk produces the full site maps of iucn level 2 habitat types, for "Calculation 3" in final manuscript (aka "full_iucn", files ending in "_lcc_iucn_habitat.tif")
@@ -1705,7 +2353,7 @@ anim_save(gg_hab_age_profile_animate,
 
 
 
-# Fragmentation
+# 4. Fragmentation
 
 Using the R package `landscapemetrics` (https://r-spatialecology.github.io/landscapemetrics/) to calculate various metrics related to landscape configuration, fragmentation, etc. Note that `landscapemetrics` uses calculates metrics from the popular FRAGSTATS program.
 
@@ -2107,364 +2755,4 @@ frag_hypo_df %>% mutate(id = "hypo") %>%
     # legend.position = "bottom",
         axis.text.x = element_text(angle = 40, vjust = 1, hjust = 1)
 )
-```
-
-
-# Ecoregions & Biomes
-
-```{r ecoregions-2017}
-# Ecoregion & Biome Data available from: https://ecoregions.appspot.com/
-# Dinerstein, E. et al. An Ecoregion-Based Approach to Protecting Half the Terrestrial Realm. BioScience 67, 534–545 (2017).
-
-tic()
-ecoregions2017 <- st_read(paste0(p_dat, "Habitats/Ecoregions2017/Ecoregions2017.shp")) %>%
-  st_make_valid()
-toc() # 20 seconds about. (making the geometries valid is quick!)
-
-
-# rename the column for WWF_MHTNAM to biome (this matches PREDICTS)
-ecoregions <- ecoregions %>% mutate(biome = WWF_MHTNAM)
-ecoregions %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
-
-
-
-# simplify polygons:
-ecoregions2017_simple <- st_simplify(ecoregions2017, dTolerance = 10000, preserveTopology = TRUE)
-obj_size(ecoregions2017_simple)
-
-# plot with Cook-Patton
-plot(cook_patton_abg, col = brewer_pal(palette = "Greens")(9), colNA = "gray80")
-
-# add just savannas in red:
-ecoregions2017_simple %>% 
-  select(ECO_NAME, BIOME_NAME) %>%
-  filter(BIOME_NAME %in% grep("Savanna",
-                         ecoregions2017_simple$BIOME_NAME,
-                         value = TRUE, invert = FALSE)
-         ) %>%
-  st_geometry() %>% plot(border = "red", add = TRUE)
-
-site_sf$geometry %>% plot(border = "orange", add= TRUE)
-
-
-# crop to sites:
-site_ecoregions2017 <- lapply(1:11, function(i) {
-  temp <- st_crop(ecoregions2017, terra::ext(lc[[i]]))
-  temp <- temp %>% mutate(site = site_df$site[i])
-  temp
-}) %>% bind_rows()
-
-warnings()
-
-plot(site_ecoregions2017$geometry)
-obj_size(site_ecoregions2017)
-site_ecoregions2017 %>% st_drop_geometry()
-names(site_ecoregions2017)
-
-site_ecoregions2017$ECO_NAME %>% unique()
-site_ecoregions2017$BIOME_NAME %>% unique()
-
-
-
-st_write(site_ecoregions2017, dsn = paste0(p_derived, "site_ecoregions2017.shp"))
-site_ecoregions2017 <- st_read(paste0(p_derived, "site_ecoregions2017.shp"))
-
-st_write(ecoregions2017_simple, dsn = paste0(p_derived, "ecoregions2017_simple.shp"))
-ecoregions2017_simple <- st_read(paste0(p_derived, "ecoregions2017_simple.shp"))
-```
-
-
-```{r tnc-ecoregions}
-# The Nature Conservancy's version of Ecoregions
-# data available from: https://geospatial.tnc.org/datasets/b1636d640ede4d6ca8f5e369f2dc368b/about
-# Note: this version was not used in the final analysis or publication. 
-# Use this version only if you need to match to PREDICTS.
-tic()
-ecoregions <- st_read(paste0(p_dat, "Habitats/terr-ecoregions-TNC/tnc_terr_ecoregions.shp")) %>%
-  st_make_valid()
-toc() # 20 seconds about. (making the geometries valid is quick!)
-
-
-# rename the column for WWF_MHTNAM to biome (this matches PREDICTS)
-ecoregions <- ecoregions %>% mutate(biome = WWF_MHTNAM)
-ecoregions %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
-
-# union ecoregions within each biome
-biome_names <- ecoregions %>% st_drop_geometry() %>% select(biome) %>% unlist(use.names = FALSE) %>% unique()
-biome_l <- vector(mode = "list", length = 16L)
-names(biome_l) <- biome_names
-
-tic()
-for(i in 1:16) {
-  biome_l[[i]] <- ecoregions %>% 
-    filter(biome == biome_names[i]) %>%
-    st_union() %>%
-    st_sf() %>%
-    mutate(biome = biome_names[i])
-}
-toc() # took a bit of a while - maybe 60 seconds.
-
-biomes <- bind_rows(biome_l)
-
-# I tried aggregate, st_union, st_combine, merge, etc., and I couldn't find a simple way to dissolve an sf object based on an attribute, other than doing them all individually, then binding them back together. 
-
-
-# save biomes sf file
-st_write(biomes, dsn = paste0(p_dat, "Habitats/biomes.shp"))
-save(biomes, file = paste0(p_dat, "Habitats/biomes.rds"))
-
-biomes <- st_read(paste0(p_dat, "Habitats/biomes.shp"))
-
-plot(st_geometry(biomes[4,]))
-
-
-# Crop ecoregions to the sites:
-
-site_ecoregions <- lapply(1:11, function(i) {
-  temp <- st_crop(ecoregions, terra::ext(lc[[i]]))
-  temp <- temp %>% mutate(site = site_df$site[i])
-  temp
-}) %>% bind_rows()
-
-obj_size(site_ecoregions)
-st_write(site_ecoregions, dsn = paste0(p_derived, "site_ecoregions.shp"))
-
-site_ecoregions <- st_read(paste0(p_derived, "site_ecoregions.shp"))
-
-```
-
-```{r plot-ecoregions}
-
-site_ecoregions %>% st_drop_geometry() %>%
-  select(ECO_NAME, biome, site) %>%
-  as_tibble() %>% print(n = 30)
-
-site_ecoregions2017 %>% names()
-
-site_ecoregions2017 %>% st_drop_geometry() %>%
-  select(ECO_NAME, BIOME_NAME, site) %>%
-  as_tibble() %>% print(n = 30)
-
-
-# plot ecoregions by site:
-  
-i
-gg_ecoregions_all <-
-  ggplot(data = site_ecoregions %>%
-           filter(site == site_df$site[i]), 
-         aes(fill = str_wrap(ECO_NAME, 15))) +
-  theme_classic() + 
-  geom_sf() + 
-  labs(fill = "Ecoregion") +
-  theme(legend.position = "right"#,
-        # legend.text = element_text(size = 7)
-        ) #+ 
-  # guides(fill = guide_legend(ncol = 2)) +
-  # scale_fill_manual(values = biome_pal, labels = str_wrap(names(biome_pal), 24)
-                    # ) + 
-  # facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
-
-gg_ecoregions_all_2017 <-
-  ggplot(data = site_ecoregions2017 %>%
-           filter(site == site_df$site[i]), 
-         aes(fill = str_wrap(ECO_NAME, 15))) +
-  theme_classic() + 
-  geom_sf() + 
-  labs(fill = "Ecoregion") +
-  theme(legend.position = "right")
-  
-ecoregions_by_site <-
-  lapply(1:11, function(i){
-    ggplot(data = site_ecoregions %>% 
-             filter(site == site_df$site[i]), 
-           aes(fill = str_wrap(ECO_NAME, 15))) +
-      theme_classic() + 
-      geom_sf() + 
-      labs(fill = NULL) +
-      theme(legend.position = "right",
-            axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) + 
-      guides(fill = guide_legend(ncol = 1)) + 
-      # scale_fill_manual(labels = str_wrap(names(biome_pal), 24)) +
-      # scale_fill_manual(values = biome_pal) + 
-      facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
-  })
-
-gg_ecoregions_by_site_2017 <-
-  lapply(1:11, function(i){
-    ggplot(data = site_ecoregions2017 %>% 
-             filter(site == site_df$site[i]), 
-           aes(fill = str_wrap(ECO_NAME, 15))) +
-      theme_classic() + 
-      geom_sf() + 
-      labs(fill = NULL) +
-      theme(legend.position = "right",
-            axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) + 
-      guides(fill = guide_legend(ncol = 1)) + 
-      # scale_fill_manual(labels = str_wrap(names(biome_pal), 24)) +
-      # scale_fill_manual(values = biome_pal) + 
-      facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
-  })
-
-
-ggsave(plot = 
-         # plot_grid(
-           plot_grid(
-             plotlist = ecoregions_by_site, 
-             ncol = 4, nrow = 3),
-           # as_ggplot(biome_legend),
-           # nrow = 2, rel_heights = c(2, 0.2)),
-       filename = paste0(p_plots, "ecoregions_by_site_wide.pdf"), 
-    width = 15, height = 9, units = "in"
-)
-
-ggsave(plot = 
-         # plot_grid(
-           plot_grid(
-             plotlist = gg_ecoregions_by_site_2017, 
-             ncol = 4, nrow = 3),
-           # as_ggplot(biome_legend),
-           # nrow = 2, rel_heights = c(2, 0.2)),
-       filename = paste0(p_plots, "ecoregions2017_by_site_wide.pdf"), 
-    width = 15, height = 9, units = "in"
-)
-
-
-```
-
-```{r plot-biomes}
-# load biomes - see "tnc-ecoregions" chunk above
-biomes <- st_read(paste0(p_dat, "Habitats/biomes.shp"))
-
-
-ggplot() + theme_classic() + 
-  geom_sf(data = biomes, aes(fill = biome))
-
-# "Biomes ... are defined by The Nature Conservancy's terrestrial ecoregions of the world dataset"
-
-# make a list of cropped biomes cropped to each site:
-site_biomes <- lapply(1:11, function(i) {
-  temp <- st_crop(biomes, ext(lc[[i]]))
-  temp <- temp %>% mutate(site = site_df$site[i])
-  temp
-}) %>% bind_rows()
-
-st_write(site_biomes, dsn = paste0(p_derived, "site_biomes.shp"))
-
-
-site_biome_names <- site_biomes %>% 
-  st_drop_geometry() %>% select(biome) %>% 
-  arrange(biome) %>% unique() %>% .$biome
-
-# all site - but facet_wrap doesn't work with geom_sf with free scales
-ggplot() + theme_classic() + 
-  geom_sf(data = site_biomes, aes(fill = biome)) + 
-  # theme(axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) +
-  facet_wrap(vars(site))
-
-
-biome_pal <- gg_color_hue(9)
-names(biome_pal) <- site_biome_names
-
-site_df
-site_biomes %>% st_drop_geometry() %>% select(biome, site) %>%
-  
-
-
-str_wrap(names(biome_pal), 20)
-
-site_biomes %>% 
-  st_drop_geometry() %>% select(biome, site)
-  
-gg_biomes_all <-
-  ggplot(data = site_biomes, aes(fill = biome)) +
-  theme_classic() + 
-  geom_sf() + 
-  labs(fill = NULL) +
-  theme(legend.position = "bottom",
-        legend.text = element_text(size = 7)) + 
-  guides(fill = guide_legend(ncol = 2)) +
-  scale_fill_manual(values = biome_pal, labels = str_wrap(names(biome_pal), 24)
-                    ) + 
-  facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
-
-  
-biomes_by_site <-
-  lapply(1:11, function(i){
-    ggplot(data = site_biomes %>% filter(site == site_df$site[i]), aes(fill = biome)) +
-      theme_classic() + 
-      geom_sf() + 
-      labs(fill = NULL) +
-      theme(legend.position = "none",
-            axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) + 
-      guides(fill = guide_legend(ncol = 1)) + 
-      scale_fill_manual(values = biome_pal) + 
-      facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
-  })
-
-biome_legend <- ggpubr::get_legend(gg_biomes_all + 
-                                     guides(fill = guide_legend(nrow = 2)) +
-                                     theme(legend.position = "bottom"))
-
-ggsave(plot = 
-         plot_grid(
-           plot_grid(plotlist = biomes_by_site, ncol = 4, nrow = 3),
-           as_ggplot(biome_legend),
-           nrow = 2, rel_heights = c(2, 0.2)),
-       filename = paste0(p_plots, "biomes_by_site.pdf"), 
-    width = 7.5, height = 6.75, units = "in"
-)
-
-
-# ------------------------------------------------------------ #
-# Ecoregions 2017 - biomes
-# ------------------------------------------------------------ #
-
-biome2017_pal <- gg_color_hue(9)
-names(biome2017_pal) <- site_ecoregions2017 %>% 
-  st_drop_geometry() %>% select(BIOME_NAME) %>% 
-  arrange(BIOME_NAME) %>% unique() %>% .$BIOME_NAME
-
-
-gg_biomes2017_by_site <-
-  lapply(1:11, function(i){
-    ggplot(data = site_ecoregions2017 %>% 
-             filter(site == site_df$site[i]), 
-           aes(fill = BIOME_NAME)) +
-      theme_classic() + 
-      geom_sf() + 
-      labs(fill = NULL) +
-      theme(legend.position = "none",
-            axis.text.x = element_text(angle = 320, vjust = 1, hjust = 0)) + 
-      guides(fill = guide_legend(ncol = 1)) + 
-      scale_fill_manual(values = biome2017_pal) + 
-      facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
-  })
-
-gg_biomes2017_all <-
-  ggplot(data = site_ecoregions2017, aes(fill = BIOME_NAME)) +
-  theme_classic() + 
-  geom_sf() + 
-  labs(fill = NULL) +
-  theme(legend.position = "bottom",
-        legend.text = element_text(size = 7)) + 
-  guides(fill = guide_legend(ncol = 2)) +
-  scale_fill_manual(values = biome2017_pal, 
-                    labels = str_wrap(names(biome2017_pal), 24)
-                    ) + 
-  facet_wrap(vars(site), labeller = as_labeller(cap_update_labels))
-
-biome2017_legend <- ggpubr::get_legend(gg_biomes2017_all + 
-                                     guides(fill = guide_legend(nrow = 2)) +
-                                     theme(legend.position = "bottom"))
-
-ggsave(plot = 
-         plot_grid(
-           plot_grid(plotlist = gg_biomes2017_by_site, ncol = 4, nrow = 3),
-           as_ggplot(biome2017_legend),
-           nrow = 2, rel_heights = c(2, 0.2)),
-       filename = paste0(p_plots, "biomes2017_by_site.pdf"), 
-    width = 7.5, height = 6.75, units = "in"
-)
-
-
 ```
