@@ -9,6 +9,11 @@ editor_options:
 This script is part of the **Effects of cropland abandonment on biodiversity** project, developed by Christopher L. Crawford (chris.L.crawford@gmail.com) at Princeton University beginning in Fall 2021.
 See https://github.com/chriscra/biodiversity_abandonment.
 
+This document houses code to load, manipulate, and model Area of Habitat (AOH) data produced on Princeton's High Performance Computing (HPC) Clusters (see "cluster/aoh.R").
+
+Contents:
+1. 
+
 ```{r initialize}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/_util/_util_files.R")
@@ -45,522 +50,16 @@ raster::removeTmpFiles()
 warnings()
 ```
 
-
-# Development
-
-```{r calculate-area-ha}
-ifelse(
-  !dir.exists(paste0(p_derived, "site_area_ha")), 
-  dir.create(paste0(p_derived, "site_area_ha")), 
-  "Directory already exists")
-
-
-site_area_ha <- lapply(1:11, function(i) {
-  terra::cellSize(age_t[[i]]$y2017, unit = "ha", mask = FALSE,
-                  overwrite = TRUE,
-                  names = paste0(site_df$site[i], "_area_ha"),
-                  filename = paste0(p_derived, "site_area_ha/", site_df$site[i], "_area_ha.tif"))
-  }
-)
-
-
-site_area_ha <- lapply(
-  list.files(paste0(p_derived, "site_area_ha"), full.names = TRUE), 
-  function(i) rast(i)
-  )
-names(site_area_ha) <- site_df$site
-```
-
-```{r crop_elevation_map}
-# download SRTM 30 m elevation data from Google Earth Engine (https://developers.google.com/earth-engine/datasets/catalog/USGS_SRTMGL1_003). Multiple variables include: a. Elevation; b. Slope; c. Terrain Ruggedness Index (TRI); d. Topographic Wetness Index
-p_predictors <- "/Volumes/GoogleDrive/My Drive/data/Abandonment/predictors"
-
-elevation_l <- lapply(1:11, function(i) {
-  p_predictors %>% 
-    list.files(full.names = T) %>% 
-    grep("srtm",., value = T) %>%
-    grep(paste0(site_df$label[i], ".tif"), ., value = T) %>%
-    rast()
-})
-names(elevation_l) <- site_df$site
-
-
-elevation_l_crop <- lapply(1:11, function(i) {
-  terra::crop(
-  elevation_l[[i]], 
-  age_t[[i]],
-  filename = paste0(p_derived, "elevation/", site_df$site[i], "_srtm_crop.tif"),
-  overwrite = TRUE
-  )
-})
-
-
-
-terrain_l <- lapply(1:11, function(i) {
-  terra::terrain(elevation_l_crop[[i]]$elevation, 
-          v = c('slope', 'aspect', 'TRI', "TPI", "roughness"), 
-          unit='degrees',
-          filename = paste0(p_derived, "elevation/", site_df$site[i], "_terrain.tif")
-          )
-})
-names(terrain_l) <- site_df$site
-
-
-
-# reload
-
-terrain <- lapply(1:11, function(i) {
-  rast(
-  c(paste0(p_derived, "elevation/", site_df$site[i], "_srtm_crop.tif"),
-    paste0(p_derived, "elevation/", site_df$site[i], "_terrain.tif")
-    ))
-})
-
-names(terrain) <- site_df$site
-
-
-```
-
-## AOH of only Abandoned croplands
-
-```{r species-list-just-2-4}
-species_list %>% filter(grepl("bird|mam", vert_class)) %>% select(binomial) %>% unique() %>% nrow()
-  
-habitat_prefs %>% 
-  filter(suitability != "Suitable")
-
-
-habitat_prefs$binomial %>% unique() %>% length() # 2312
-species_ranges$binomial %>% unique() %>% length() # 2312 in species_ranges
-species_list$binomial %>% unique() %>% length() # 2187 after filtering by IUCN attributes, filtering out species without suitable habitats, elevations
-
-# 2074 species of the 2312 species unfiltered species_range layer with 2 or 4 as suitable habitat
-habitat_prefs %>% 
-  filter(suitability == "Suitable",
-         lc %in% c(2, 4)) %>% 
-  .$binomial %>% unique() %>% length() 
-
-
-# 1159 of unfiltered species have 2 or 4 listed as a habitat of majorImportance
-habitat_prefs %>% 
-  filter(suitability == "Suitable",
-         majorImportance == "Yes",
-         lc %in% c(2, 4)) %>% 
-  .$binomial %>% unique() %>% length() 
-
-
-species_list$binomial %>% unique() %>% length() # 2187 total species in species list
-
-# 2003 species have grassland (2) or forest (4) listed as suitable habitats
-species_list %>%
-  filter(binomial %in% (habitat_prefs %>% 
-                          filter(suitability == "Suitable",
-                                 lc %in% c(2, 4)) %>% 
-                          .$binomial %>% unique())
-         ) %>% 
-  .$binomial %>% unique() %>% length()
-
-
-habitat_prefs$code %>% unique() %>% sort()
-site_habitats %>% print(n = 40)
-
-iucn_crosswalk %>% filter(code == "5.1")
-
-# having added map_code to habitat_prefs for more exact filtering and joining...
-habitat_prefs
-site_habitats
-iucn_crosswalk
-
-
-
-site_habitats
-jung_hab_type_area_df %>% select(habitat_type, code, lc, Coarse_Name, IUCNLevel) %>% unique() %>%
-  arrange(habitat_type)
-
-
-```
-
-
-## Land cover classes in abandoned croplands 
-
-```{r create-abn-age-masks}
-# ------------------------------------------------------------ #
-# create a mask of the abandonment age map, excluding ages < 5
-plot(age_t[[9]][[31]])
-
-tic()
-abn_mask <- lapply(1:11, function(i) {
-  abn_mask_tmp <- 
-    classify(
-      age_t[[i]],
-      rcl = tibble(from = 5,
-                   to = 30,
-                   becomes = 0),
-      othersNA = TRUE,
-      include.lowest = TRUE, right = TRUE,
-      filename = paste0(p_dat_derived, "age_rasters/", run_label, "/",
-                        site_df$site[i], "_abn_5_30_mask", run_label,".tif"),
-      names = paste0("y", 1987:2017),
-      overwrite = TRUE)
-})
-toc()
-
-abn_mask <- lapply(1:11, function(i){
-  rast(paste0(p_dat_derived, "age_rasters/", run_label, "/",
-              site_df$site[i], "_abn_5_30_mask", run_label,".tif"))
-})
-
-names(abn_mask) <- site_df$site
-
-freq(abn_mask[[site_index]][[31]])
-
-plot(abn_mask$shaanxi[[31]])
-plot(lc[[site_index]][[28:31]])
-
-
-# ------------------------------------------------------------ #
-# create a mask of the *potential* abandonment age map, excluding ages < 5
-tic()
-potential_abn_mask <- lapply(1:11, function(i) {
-  potential_abn_mask_tmp <- 
-    classify(
-      potential_age_t[[i]],
-      rcl = tibble(from = 5,
-                   to = 30,
-                   becomes = 0),
-      othersNA = TRUE,
-      include.lowest = TRUE, right = TRUE,
-      filename = paste0(p_dat_derived, "age_rasters/", run_label, "/",
-                        site_df$site[i], "_potential_abn_5_30_mask", run_label,".tif"),
-      names = paste0("y", 1987:2017),
-      overwrite = TRUE)
-})
-toc()
-
-potential_abn_mask <- lapply(1:11, function(i){
-  rast(paste0(p_dat_derived, "age_rasters/", run_label, "/",
-              site_df$site[i], "_potential_abn_5_30_mask", run_label,".tif"))
-})
-
-names(potential_abn_mask) <- site_df$site
-
-
-# ---------------------------------------------------------------- #
-# create mask of just 5-30 max_age
-
-tic()
-max_age_mask <- lapply(1:11, function(i) {
-  max_age_mask_tmp <- 
-    classify(
-      max_age_t[[i]],
-      rcl = tibble(from = 5,
-                   to = 30,
-                   becomes = 0),
-      othersNA = TRUE,
-      include.lowest = TRUE, right = TRUE,
-      filename = 
-        paste0(p_dat_derived, "max_age/", run_label, "/",
-              site_df$site[i], "_max_age_5_30_mask", run_label,".tif"),
-      names = "max_age_5_30_mask",
-      overwrite = TRUE)
-})
-toc()
-
-plot(max_age_mask[[1]])
-
-
-max_age_mask <- lapply(1:11, function(i){
-  rast(paste0(p_dat_derived, "max_age/", run_label, "/",
-              site_df$site[i], "_max_age_5_30_mask", run_label,".tif"))
-})
-names(max_age_mask) <- site_df$site
-
-```
-
-
-```{r land-cover-of-abn-pixels}
-# write code to calculate the land cover in each pixel 5 years and older
-i <- 9
-print(compareGeom(abn_mask[[i]], age_t[[i]]))
-print(compareGeom(abn_mask[[i]], lcc[[i]]))
-
-# Calculate the land cover of abandoned pixels for each year
-
-# redoing this with the cleaned version of lc: lcc
-tic()
-abn_lcc <- lapply(1:11, function(i) {
-  # make sure to restrict lc to only 1987:2017 (Nebraska, Wisconsin)
-  # i <- 9
-  cat("Masking:", site_df$site[i], "...", fill = TRUE)
-  tmp <- abn_mask[[i]] + lcc[[i]][[paste0("y", 1987:2017)]]
-  
-  cat("Writing SpatRaster to file:", site_df$site[i], "...", fill = TRUE)
-  writeRaster(tmp, 
-              filename = paste0(p_derived, "abn_lcc/",
-                        site_df$site[i], "_abn_lcc", run_label, ".tif"), 
-              overwrite = TRUE,
-              names = names(tmp))
-  cat(site_df$site[i], "done!", fill = TRUE)
-
-})
-toc()
-
-
-# reload
-abn_lcc <- lapply(1:11, function(i) {
-  rast(paste0(p_derived, "abn_lcc/",
-              site_df$site[i], "_abn_lcc", run_label, ".tif"))
-  })
-names(abn_lcc) <- site_df$site
-
-
-plot(abn_lcc[[9]][[31]])
-
-
-
-
-# ---------------------------------------------------------------- #
-# calculate lc of all pixels that were ever abandoned
-# ---------------------------------------------------------------- #
-
-max_age_mask
-
-tic()
-max_abn_lcc <- lapply(1:11, function(i) {
-  # make sure to restrict lc to only 1987:2017 (Nebraska, Wisconsin)
-  # i <- 9
-  cat("Masking:", site_df$site[i], "...", fill = TRUE)
-  tmp <- max_age_mask[[i]] + lcc[[i]][[paste0("y", 1987:2017)]]
-  
-  cat("Writing SpatRaster to file:", site_df$site[i], "...", fill = TRUE)
-  writeRaster(tmp, 
-              filename = paste0(p_derived, "abn_lcc/",
-                        site_df$site[i], "_max_abn_lcc", run_label, ".tif"), 
-              overwrite = TRUE,
-              names = paste0("y", 1987:2017))
-  cat(site_df$site[i], "done!", fill = TRUE)
-
-})
-toc()
-
-
-# reload
-max_abn_lcc <- lapply(1:11, function(i) {
-  rast(paste0(p_derived, "abn_lcc/",
-              site_df$site[i], "_max_abn_lcc", run_label, ".tif"))
-  })
-names(max_abn_lcc) <- site_df$site
-
-
-```
-
-```{r freq-abn-lc}
-
-plot(abn_lc$shaanxi[[1:6]])
-abn_lc
-tmp <- freq(abn_lc$shaanxi)
-i <- 9
-
-nlyr(abn_lc[[i]])
-abn_lc[[]]
-
-abn_lc_freq <- lapply(1:11, function(i) {
-  # the first five years (1987:1991) are NA, due to abandonment definition.
-  tmp <- freq(abn_lc[[i]][[paste0("y", 1992:2017)]]) %>% 
-    as_tibble() %>%
-    rename(year = layer, lc = value) %>%
-    mutate(year = year + 1991,
-           site = site_df$site[i]) %>%
-    select(site, year, lc, count)
-  
-  tmp
-}
-) %>% bind_rows
-
-
-abn_lcc_freq <- lapply(9, function(i) {
-  # the first five years (1987:1991) are NA, due to abandonment definition.
-  tmp <- freq(abn_lcc[[paste0("y", 1992:2017)]]) %>% 
-    as_tibble() %>%
-    rename(year = layer, lc = value) %>%
-    mutate(year = year + 1991,
-           site = site_df$site[i]) %>%
-    select(site, year, lc, count)
-  
-  tmp
-}
-) %>% bind_rows
-
-# write to file
-write_csv(abn_lc_freq, file = paste0(p_derived, "abn_lc_freq.csv"))
-
-abn_lc_freq
-
-# convert to percentages and plot
-
-abn_lc_freq %>% 
-  group_by(site, year) %>%
-  summarise(site, year, lc, count,
-            total = sum(count)) %>%
-  ungroup() %>% 
-  mutate(px = count/total * 100) %>%
-  # filter(lc == 3) %>%
-  ggplot(mapping = aes(x = year, y = px, col = as_factor(lc))) + 
-  geom_line() + 
-  labs(x = "Year", y = "Percent of all abandoned pixels", col = "Land cover class") +
-  facet_wrap(vars(site), scales = "free") + theme(legend.position = "bottom")
-
-
-
-
-ggplot(data = abn_lcc_freq, 
-       mapping = aes(x = year, y = area_ha, col = as_factor(lc))) + 
-  geom_line() + 
-  labs(x = "Year", y = "Area (ha)", col = "Land cover class") +
-  # facet_wrap(vars(site), scales = "free") + 
-  theme(legend.position = "bottom")
-
-ggplot(data = abn_lcc_freq, 
-       mapping = aes(x = year, y = count, col = as_factor(lc))) + 
-  geom_line() + 
-  labs(x = "Year", y = "Pixels", col = "Land cover class") +
-  # facet_wrap(vars(site), scales = "free") + 
-  theme(legend.position = "bottom")
-
-```
-
-
-
-## Temporal Filtering: land cover maps
-```{r explore-tmp-filter}
-obj_size(dt)
-
-dt[y1987 > 0, ]
-
-dt <- cc_create_dt()
-dt1 <- cc_create_bin() + 1
-dt2 <- cc_create_bin() + 2
-dt3 <- cc_create_bin() + 3
-
-dt1
-dt2
-dt3
-
-dt <- rbind(dt1, dt2, dt3)
-dt <- dt[, ':='(x = 1:nrow(dt), y = 1:nrow(dt))
-                           ][, c("x", "y", paste0("V", 1:15))]
-
-dt[V1 %in% c(2, 3)]
-
-
-
-5:(ncol(dt) - 2)
-i <- 9
-
-
-# new filter:
-
-dt <- fread(input = paste0(p_dat_derived, "input_data.tables/",
-                           site_df$site[9], ".csv"),
-            # select = c("x", "y", "y2017"),
-            # nrows = 100000
-            )
-
-freq_before <- lapply(1987:2017, function(i){
-      tmp <- dt[, .N, by = c(paste0("y", i))][,"year" := i]
-      names(tmp) <- c("lc", "pixels", "year")
-      tmp
-    }) %>% bind_rows()
-
-# for loop
-tic()
-for(lc_class in 1:4) {
-  for (i in 5:(ncol(dt) - 2)) {
-    dt[get(names(dt)[i-2]) == lc_class &  # subset to 1-1-0-1-1
-         get(names(dt)[i-1]) == lc_class & 
-         get(names(dt)[i]) %in% c(1:4)[1:4 != lc_class] & 
-         get(names(dt)[i+1]) == lc_class & 
-         get(names(dt)[i+2]) == lc_class,
-       names(dt)[i] := lc_class # update value
-    ]
-  }
-}
-toc() # 103.199 seconds for Shaanxi (4.5x to get time for )
-
-
-freq_after <- lapply(1987:2017, function(i){
-      tmp <- dt[, .N, by = c(paste0("y", i))][,"year" := i]
-      names(tmp) <- c("lc", "pixels", "year")
-      tmp
-    }) %>% bind_rows()
-
-bind_rows(
-  freq_before %>% as_tibble() %>% mutate(site = "shaanxi", time = "before"),
-  freq_after %>% as_tibble() %>% mutate(site = "shaanxi", time = "after")) %>%
-  ggplot(mapping = aes(x = year, y = pixels, col = as_factor(lc))) +
-  geom_line() + 
-  facet_wrap(vars(time))
-
-
-
-
-# 8-year moving window
-
-dt <- data.table(x = "x", y = "x", rbind(
-  c(1, 1, 1, 1, 2, 2, 1, 1, 1, 3, 3, 1, 1, 1, 1, 1, 1),
-  c(1, 1, 1, 1, 2, 3, 3, 1, 1, 1, 2, 3, 1, 1, 1, 1, 1),
-  c(2, 3, 3, 2, 2, 2, 3, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1),
-  c(2, 3, 3, 2, 2, 2, 3, 3, 2, 2, 2, 1, 2, 1, 1, 1, 1),
-  c(4, 1, 1, 1, 3, 3, 1, 1, 3, 3, 3, 1, 1, 3, 3, 3, 4),
-  c(4, 1, 1, 1, 4, 3, 1, 1, 1, 3, 3, 1, 1, 1, 1, 1, 1))
-)
-
-dt
-cc_temporal_filter_lc(dt)
-dt
-
-dt[(V1 == 1 & V2 == 1) | (V1 == 4 & V2 == 4), ]
-dt[(V1 == 1 & V2 == 1 | V1 == 4 & V2 == 4), ]
-
-i <- 7
-
-for(lc_class in 1:4) {
-  blip_values <- c(1:4)[1:4 != lc_class]
-  
-  for (i in 6:(ncol(dt) - 4)) {
-  dt[get(names(dt)[i-3]) == lc_class &
-       get(names(dt)[i-2]) == lc_class &
-       get(names(dt)[i-1]) == lc_class &
-       # .e.g., if lc_class is 1, then these are 
-       # (V4 == 2 & V5 == 2) | (V4 == 3 & V5 == 3) | (V4 == 4 & V5 == 4)
-       ((get(names(dt)[i]) == blip_values[1] & get(names(dt)[i+1]) == blip_values[1]) | 
-          (get(names(dt)[i]) == blip_values[2] & get(names(dt)[i+1]) == blip_values[2]) |
-          (get(names(dt)[i]) == blip_values[3] & get(names(dt)[i+1]) == blip_values[3])) &
-       get(names(dt)[i+2]) == lc_class &
-       get(names(dt)[i+3]) == lc_class &
-       get(names(dt)[i+4]) == lc_class, 
-     
-     c(names(dt)[i], 
-       names(dt)[i+1]) := lc_class
-     ]
-  }
-}
-
-
-```
-
 # Load and Process AOH
 
-```{r hab-dt-options}
+```{r set-labels-and-options}
 aoh_type_df # see _util_files.
 aoh_type_df$label
-```
 
-
-```{r load-all-AOH}
 run_label
 aoh_run_date # see _util_main.R
 
+# examine files
 list.files(paste0(p_derived, "aoh"), full.names = FALSE) %>%
   grep(".csv", ., value = TRUE) %>%
   # gsub("_2022_04_01", "", .) %>%
@@ -576,6 +75,7 @@ aoh_type_df
 aoh_types <- aoh_type_df$label[c(4:11)]
 aoh_type_ <- aoh_type_df$label[9]
 
+# cluster run dates
 aoh_dates <-
   tibble(aoh_types,
          date = c("_2022_04_01", "_2022_04_01", "_2022_04_08", 
@@ -592,8 +92,11 @@ list.files(paste0(p_derived, "aoh"), full.names = TRUE) %>%
   grep(paste0("_c", i, ".csv"), ., value = TRUE) %>%
     print()
 }
+```
 
-filter(aoh_dates, aoh_types == aoh_type_)$date
+
+```{r load-all-AOH}
+# load all raw aoh results: ("aoh_l")
 
 aoh_l <- lapply(aoh_types, 
   function(aoh_type_) {
@@ -642,14 +145,14 @@ aoh_l <- lapply(aoh_types,
          # adj_IUCN_aoh_ha, adj_area_ha,
          everything())
 
-
+# save aoh_l
 write_parquet(aoh_l, paste0(p_derived, "aoh_l.parquet"))
 
-
+# load back in
 aoh_l <- read_parquet(paste0(p_derived, "aoh_l.parquet"))
 
-
-
+# -------------------------------------- #
+# filter to species
 aoh_species_list <- 
   aoh_l %>% 
   select(#aoh_type,
@@ -669,6 +172,7 @@ Restricting by:
 2. only those map_codes (habitats) that are marked as majorImportance for the species.
 
 3. mature_forest_obl, so that only non-mature forest obligates are included.
+
 4. Abandonment only vs. the entire landscape
 
 ```{r filter-AOH-suitability-by-season}
@@ -677,6 +181,7 @@ Restricting by:
 # Note that some species have been directly updated in the creation of "habitat_prefs" [Glaucidium brodiei (collared owlet) and Mustela sibirica (siberian weasel)].
 # For species with *only* NA season codes, I'll leave these in, and treat them as suitable in all seasons.
 
+# number of species per class per seasonality code
 habitat_prefs %>%
   filter(binomial %in% unique(species_list$binomial), 
          !is.na(map_code), suitability == "Suitable") %>%
@@ -744,9 +249,10 @@ write_parquet(aoh_filter, paste0(p_derived, "aoh_filter.parquet"))
 aoh_filter <- read_parquet(paste0(p_derived, "aoh_filter.parquet"))
 ```
 
-```{r calc-aoh}
+```{r **calculate-aoh}
 # calculate AOH for multiple conditions: across all habitats and seasons, and excluding passage areas:
-aoh_filter
+# this code simply adds the area in specific habitats for each species after filtering.
+aoh_filter # load in previous chunk
 
 aoh <- lapply(c("include_passage", "exclude_passage"), function(i) {
   
@@ -764,7 +270,7 @@ aoh <- lapply(c("include_passage", "exclude_passage"), function(i) {
 }) %>% bind_rows() %>% ungroup()
 
 # ------------ #
-# combine with relevant columns from aoh_l
+# combine with relevant species attribute columns from aoh_l
 aoh <- 
   aoh %>% 
   left_join(
@@ -841,8 +347,9 @@ aoh <- read_parquet(paste0(p_derived, "aoh.parquet"))
 run_indices <- read_parquet(paste0(p_derived, "aoh_run_indices.parquet"))
 ```
 
-## Explore AOH results
-```{r taking-stock}
+## Exploratory AOH Analysis
+
+```{r explore-aoh-l}
 # -------------------------------------------------------- #
 
 # taking stock:
@@ -850,7 +357,6 @@ run_indices <- read_parquet(paste0(p_derived, "aoh_run_indices.parquet"))
 aoh_l %>% select(aoh_type, site, binomial) %>% unique() # 10,739
 aoh %>% select(aoh_type, site, binomial) %>% unique() # 8642 * 2
 aoh %>% select(aoh_type, site, binomial, passage_type) %>% unique() # 17,266
-
 
 aoh %>% group_by(aoh_type, site, binomial, vert_class) %>% 
   summarise(n_yr = length(year)) %>%
@@ -863,39 +369,8 @@ aoh_l %>%
   unique() %>% nrow()
 
 
-aoh$year0 %>% min()
+# -------------------------------------------------------- #
 
-aoh$year %>% summary()
-aoh %>% group_by(aoh_type) %>% summarise(min_year = min(year), max_year = max(year))
-
-# ------ extras ------- #
-
-# test
-aoh %>% 
-  pivot_wider(id_cols = c(aoh_type:year), values_from = aoh, 
-              names_from = passage_type, names_prefix = "aoh_") %>%
-  mutate(test = include_passage - exclude_passage) %>%
-  filter(test < -0.000000001)
-
-
-# if you want to add it back to aoh_l, you can do this: but don't think this is necessary
-aoh_l %>%
-  left_join(
-    aoh %>% 
-      pivot_wider(id_cols = c(aoh_type:year), values_from = aoh, 
-                  names_from = passage_type, names_prefix = "aoh_")
-    ) %>% 
-  select(aoh_type:area, starts_with("aoh"), everything()) %>%
-  mutate(aoh_exclude_passage = case_when(
-    season == 4 ~ NA_real_,
-    TRUE ~ aoh_exclude_passage
-  ))
-```
-
-
-
-
-```{r expl-aoh-l}
 # number of species, records, etc.
 aoh_l %>%
   group_by(aoh_type, vert_class) %>%
@@ -911,100 +386,9 @@ aoh_l %>%
 
 # number of species in each model run
 aoh_l %>% group_by(aoh_type) %>% summarise(n_sp = length(unique(binomial))) # there are different numbers of species due to variance in the habitats that show up in different parts of sites. 
-
-# the lc runs have more, because they are not restricted to the habitats only in abandoned pixels. The proportional adjustment is based on the habitats that are present in any part of the site, not just the abn.
-
-aoh_l %>% group_by(aoh_type, site) %>% 
-  summarise(n_sp = length(unique(binomial))) %>%
-  ungroup() %>% group_by(aoh_type) %>% summarise(n_runs = sum(n_sp))
-
-i <- 9
-
-missing_sp_aoh <- lapply(1:11, function(i){
-  sp_run <- aoh_l %>% 
-    filter(site == site_df$site[i]) %>%
-    select(aoh_type:year, aoh) %>% 
-    unique() %>%
-    select(site, vert_class, binomial) %>% unique()
-  
-  sp_not_run <- species_list %>% filter(site == site_df$site[i]) %>%
-    filter(!binomial %in% sp_run$binomial)
-  sp_not_run
-}) %>% bind_rows()
-
-missing_sp_aoh
-
-plot(site_sf[3,]$geometry)
-species_ranges %>% 
-  filter(binomial == "Cettia major") %>%
-  st_geometry() %>%
-  plot(add = T, border = "red")
-
-aoh_l %>% 
-  filter(binomial == "Cettia major")
-habitat_prefs  %>% filter(binomial == "Cettia major") %>%
-  .$code
-
-iucn_crosswalk %>% 
-  filter(code %in% filter(habitat_prefs, binomial == "Cettia major")$code)
-
-jung_hab_type_area_df %>%
-  filter(site == "chongqing")
-
 ```
 
-```{r species-attributes}
-aoh %>% 
-  filter(
-    # aoh_type %in% aoh_types[c(1, 3, 6, 7)],
-         aoh > 0,
-         vert_class != "amp",
-         passage_type == "exclude_passage"
-         ) %>%
-  # select(aoh_type, vert_class, binomial, passage_type) %>%
-  group_by(
-    aoh_type,
-           vert_class, passage_type) %>%
-  summarise(n_sp = length(unique(binomial))) %>% # 1688
-  ungroup() %>% group_by(aoh_type, passage_type) %>%
-  mutate(total_mammals_and_birds = sum(n_sp)) %>%
-  ungroup() %>% group_by(aoh_type) %>% mutate(N = sum(n_sp))
-
-species_list
-
-
-names(aoh_l)
-
-
-# caution - slow.
-species_attributes1 <- aoh_l %>% 
-  select(vert_class, binomial, mature_forest_obl, 
-         redlistCategory, total_range_area, range_size_quantile) %>% 
-  unique()
-
-species_attributes <-
-  aoh %>% select(vert_class, binomial, mature_forest_obl, redlistCategory) %>% unique() %>%
-  left_join(species_ranges %>% 
-              st_drop_geometry() %>% as_tibble() %>%
-              select(vert_class, binomial, total_range_area, range_size_quantile) %>% 
-              unique())
-
-```
-
-```{r pivot-aoh}
-aoh %>%
-  filter(site == site_df$site[1], binomial == sp_name) %>% #print(n = 124)
-  pivot_wider(
-    id_cols = c("vert_class", "site", "binomial", 
-                "redlistCategory", "year", "mature_forest_obl", "passage_type"),
-    names_from = aoh_type, values_from = aoh, names_pref = "aoh_") %>%
-  mutate(diff_obs = aoh_full_iucn - aoh_max_abn_iucn, 
-         diff_pot = aoh_full_iucn - aoh_max_potential_abn_iucn) %>%
-  pivot_longer(cols = c("aoh_full_iucn", "aoh_max_abn_iucn", 
-                        "aoh_max_potential_abn_iucn", 
-                        "diff_obs", "diff_pot"),
-               names_to = "type", values_to = "aoh")
-```
+### Counting & Exploring Species 
 
 ```{r how-many-species?}
 
@@ -1068,9 +452,10 @@ habitat_prefs %>% filter(binomial == "Phoenicurus erythrogastrus") %>%
   select(binomial, season, IUCNLevel, map_code)
 jung_hab_type_area_df %>% filter(site == "shaanxi", habitat_type %in% c(306, 404, 600))
 
+site_sf %>% filter(site == "shaanxi") %>% st_geometry() %>% plot()
+
 species_ranges %>% filter(binomial == "Phoenicurus erythrogastrus") %>% st_geometry() %>%
   plot(border = "red", add = TRUE)
-site_sf %>% filter(site == "shaanxi") %>% st_geometry() %>% plot()
 
 # ------------
 # mature forest obligates
@@ -1210,10 +595,12 @@ final_species_list <-
            redlistCategory, obligate_type, range_size_quantile, common_names) #%>%
   # filter(obligate_type == "not_obligate")
 
-write_csv(final_species_list, file = paste0(p_proj, "zenodo/final_species_list.csv"))
+write_csv(final_species_list, file = paste0(p_derived, "/final_species_list.csv"))
 
 
 
+# ------------------ #
+# Number of species in each calculation
 
 aoh_feols_trends_by_sp %>% # one trend per species
   filter(passage_type == "exclude_passage",
@@ -1234,30 +621,6 @@ aoh_feols_trends_by_sp %>% # one trend per species
   group_by(aoh_type) %>% mutate(N = sum(n_sp)) %>% ungroup() %>%
   arrange(mature_forest_obl, aoh_type, vert_class)
 ```
-
-
-```{r small-area-species}
-
-aoh %>% 
-  filter(# binomial == "Myotis evotis", year %in% 1990:1999, 
-         str_detect(passage_type, "exc"),
-         # aoh_type == "crop_abn_iucn"
-         vert_class %in% c("mam", "bird"),
-    # binomial == "Myotis septentrionalis"
-    binomial == "Rhinolophus marshalli"
-         ) %>%
-  select(aoh_type:aoh,common_names, run_index) %>%
-  group_by(run_index) %>%
-  mutate(max_aoh = max(aoh)) %>%
-  select(-c(aoh, year)) %>% unique() %>%
-  filter(
-    # max_aoh < 10,
-         )
-
-
-
-```
-
 
 ```{r weird-species}
 aoh %>% filter(binomial == "Inia geoffrensis")
@@ -1458,27 +821,7 @@ ggsave(plot = gg_aoh_example2,
        filename = paste0(p_output, "plots/aoh/", "aoh_example_species2", aoh_run_date, ".pdf"),
      width = 8, height = 6, units = "in")
 
-
-  
-
-# What proportion of the change in habitat resulted from abandonment?
-
-
 ```
-
-```{r remove-ag-conversion-signal}
-# I need to figure out some way to extract just the signal of cropland -> abandonment
-# This means that I need to find an intermediary between
-# non-crop > cropland > abandonment
-
-# the current max_abn layers have the full time series for each pixel
-# this means that habitat loss at the start, before cropland abandonment is picked up.
-
-# Probably best to do this using data.table. 
-# look back at the step in cc_calc_age function to see 
-
-```
-
 
 # Models
 
