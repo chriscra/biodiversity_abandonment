@@ -18,8 +18,7 @@ Following [Crawford et al. 2022](https://doi.org/10.1126/sciadv.abm8999), we als
 The annual land cover maps (1987-2017, 30-meter resolution) that underlie our analysis were developed on Google Earth Engine using publicly available Landsat satellite imagery ([Yin et al. 2020, *Remote Sensing of Environment*](https://doi.org/10.1016/j.rse.2020.111873)).
 These data are archived and publicly available at Zenodo ([DOI: 10.5281/zenodo.5348287](https://doi.org/10.5281/zenodo.5348287)), along with other data produced for [Crawford et al. 2022](https://doi.org/10.1126/sciadv.abm8999).
 
-The derived and supporting data for this project are archived on Zenodo at [DOI: 10.5281/zenodo.13766321](https://doi.org/10.5281/zenodo.13766321)
-).
+The derived and supporting data for this project are archived on Zenodo at [DOI: 10.5281/zenodo.13766321](https://doi.org/10.5281/zenodo.13766321).
 
 This is a living repository.
 See the public release and Zenodo archive for the code used at time of publication. 
@@ -32,7 +31,7 @@ The "scripts" directory contains the primary working scripts for the project and
 The working R scripts and Rmarkdown files are listed below based on the general order in which parts of the analysis were conducted. 
 Note that the `.Rmd` scripts are intended to be run interactively chunk by chunk (sometimes line by line), not knit together all at once. 
 They also include code for data visualization and exploratory data analysis; not all code is strictly required. 
-Some chunks produce and save data files, which other chunks often reload and use for further analysis or visualization (see "util/_util_files.R".
+Some chunks produce and save data files, which other chunks often reload and use for further analysis or visualization (see "util/_util_files.R").
 
 These files include:
 
@@ -85,5 +84,5 @@ The "util" folder contains scripts that include custom analysis functions and pa
 
 - **_util_main.R** includes user-specific switches (e.g., "run_label") and pathnames for managing the project, which are used throughout the rest of the analysis scripts. This script also loads "**_util_functions.R**" and "**_util_misc.R**." Note, however, that **cluster** scripts make use of alternative pathnames (specific to the Princeton high-performance computing clusters used for the analysis), as specified in each script.
 - **_util_files.R** is a convenience script that loads many of the relevant input and derived data that are used throughout the project (some of which are required for the manuscript .Rmd file). The primary required data files for reproducing this work are archived in Zenodo (https://doi.org/10.5281/zenodo.13766321). This script also includes information about where certain files can be accessed (if external) or created throughout the various .R and .Rmd files in this repository.
-- **_util_functions.R** contains custom functions written by Christopher Crawford, which underlie the bulk of these analyses and are used throughout the scripts above. These functions accomplish a variety of tasks, including: cleaning, filtering, and organizing data; calculating Area of Habitat (AOH), using both {terra} and {data.table}; saving plots and tables; and helping with miscellaneous tasks.
+- **_util_functions.R** contains custom functions written by Christopher L. Crawford (@chriscra), which underlie the bulk of these analyses and are used throughout the scripts above. These functions accomplish a variety of tasks, including: cleaning, filtering, and organizing data; calculating Area of Habitat (AOH), using both {terra} and {data.table}; saving plots and tables; and helping with miscellaneous tasks.
 - **_util_misc.R** contains miscellaneous things like labels and color palettes for figures. 
