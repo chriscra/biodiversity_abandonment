@@ -5,7 +5,6 @@ derived/
 output/
 presentations/
 resources/
-scripts/dev/
 scripts/cluster/old/
 scripts/cluster/unused/
 scripts/cluster/slurm_out/
