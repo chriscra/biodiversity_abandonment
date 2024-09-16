@@ -9,10 +9,9 @@ editor_options:
 This script is part of the **Effects of cropland abandonment on biodiversity** project, developed by Christopher L. Crawford (chris.L.crawford@gmail.com) at Princeton University beginning in Fall 2021.
 See https://github.com/chriscra/biodiversity_abandonment.
 
-This document houses code to load, manipulate, and model Area of Habitat (AOH) data produced on Princeton's High Performance Computing (HPC) Clusters (see "cluster/aoh.R").
-
-Contents:
-1. 
+This document houses code to:
+1. Load, manipulate, and model Area of Habitat (AOH) data produced on Princeton's High Performance Computing (HPC) Clusters (see "cluster/aoh.R")
+2. Model AOH as a function of time while accounting for temporal autocorrelation (after testing multiple approaches), and extract AOH trends and effect sizes.
 
 ```{r initialize}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
@@ -50,7 +49,7 @@ raster::removeTmpFiles()
 warnings()
 ```
 
-# Load and Process AOH
+# 1. Load and Process AOH
 
 ```{r set-labels-and-options}
 aoh_type_df # see _util_files.
@@ -95,7 +94,7 @@ list.files(paste0(p_derived, "aoh"), full.names = TRUE) %>%
 ```
 
 
-```{r load-all-AOH}
+```{r load-all-aoh}
 # load all raw aoh results: ("aoh_l")
 
 aoh_l <- lapply(aoh_types, 
@@ -175,7 +174,7 @@ Restricting by:
 
 4. Abandonment only vs. the entire landscape
 
-```{r filter-AOH-suitability-by-season}
+```{r filter-aoh-suitability-by-season}
 # Extract a list of species with some habitat suitabilities with season marked as NA, and some with a code.
 # In these contexts, the NA season should be filtered out.
 # Note that some species have been directly updated in the creation of "habitat_prefs" [Glaucidium brodiei (collared owlet) and Mustela sibirica (siberian weasel)].
@@ -306,8 +305,6 @@ aoh <-
   #   grepl("^abn_|^potential", aoh_type) ~ year - 1991
   # ))
 
-aoh %>%
-  filter(binomial == "Boana albopunctata")
 
 
 # --------------------------------------------------- #
@@ -823,9 +820,298 @@ ggsave(plot = gg_aoh_example2,
 
 ```
 
-# Models
+# 2. Model AOH Trends
 
-## Develop Temporal Autocorrelation Approach
+## Preliminary Models
+
+Start with a very basic OLS regression of AOH as a function of time.
+
+```{r lm-dev}
+# aoh_lm
+# aoh_distill %>% filter(run_index == 212)
+
+df_sp_subset <- aoh %>%
+  filter(binomial == sp_to_plot, site == "belarus",
+         aoh_type %in% aoh_type_df$label[6])
+
+
+# prelim model
+# note that year0 is created in chunk {r **calculate-aoh} above, and represents the first year with aoh data for that species in that calculation.
+
+tmp_lm <- lm(aoh ~ year0, data = df_sp_subset)
+tidy(tmp_lm)
+tmp_lm %>% tidy(., conf.int = TRUE, conf.level = 0.95)
+glance(tmp_lm)
+augment(tmp_lm)
+plot(tmp_lm, 1)
+hist(tmp_lm$residuals, main = "Residual Histogram")
+
+ggplot(data = df_sp_subset, 
+       mapping = aes(x = year0, y = aoh)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = 0.95) + 
+  labs(x = "Year", y = "AOH (ha)", title = sp_to_plot) + 
+  # geom_function(fun = function(x) { (x-4) ^ (mean(coef(lm_log2_l[[9]]), na.rm = TRUE))},
+  #               mapping = aes(linetype = "Mean Decay Rate"),
+  #               color = "blue", size = 1, #linetype = "dashed", 
+  #               inherit.aes = FALSE) 
+  geom_line(data = augment(tmp_lm), mapping = aes(x = year0, y = .fitted), col = "green", alpha = 0.2)
+
+
+```
+
+
+```{r calc-lm-OLS}
+# -------------------
+# run simple regression on each species' and extract AOH trend over time.
+# -------------------
+
+# ------------------------------------------------------ #
+# calculate linear regression for each aoh_type, across all indices for each aoh_type
+# ------------------------------------------------------ #
+aoh$aoh_type %>% unique()
+
+tic()
+lapply(aoh_types, 
+       function(aoh_type_) {
+         aoh_tmp <- aoh %>% filter(aoh_type == aoh_type_)
+         
+         # run across aoh_type, site, binomial, passage_type combinations
+         
+         aoh_lm_tmp <- lapply(
+           unique(aoh_tmp$run_index),
+           function(i) {
+             aoh_tmp %>% 
+               filter(run_index == i) %>%
+               lm(aoh ~ year0, data = .) %>%
+               tidy(., conf.int = TRUE, conf.level = 0.95) %>% 
+               mutate(aoh_type = aoh_type_,
+                      run_index = i)
+             }) %>% bind_rows()
+         
+         write_parquet(aoh_lm_tmp, paste0(p_derived, "aoh_lm_", aoh_type_,".parquet"))
+         
+         cat("wrote aoh_lm_tmp for:", aoh_type_, fill = TRUE)
+         })
+toc()
+
+# ------------------------------------------------------ #
+# load back in:
+# ------------------------------------------------------ #
+aoh_lm <- 
+  lapply(aoh_types, 
+  function(aoh_type_) {read_parquet(paste0(p_derived, "aoh_lm_", aoh_type_,".parquet"))
+}) %>% bind_rows()
+
+run_indices
+aoh_lm$aoh_type %>% unique()
+warnings()
+
+write_parquet(aoh_lm, paste0(p_derived, "aoh_lm.parquet"))
+
+aoh_lm <- read_parquet(paste0(p_derived, "aoh_lm.parquet"))
+
+```
+
+```{r aoh-ols-trends}
+# ------------------------------------------------------ #
+# distill trends
+# ------------------------------------------------------ #
+
+# determine the direction of trend for each species-site combination
+aoh_trends <- 
+  aoh_lm %>% 
+  left_join(run_indices) %>%
+  filter(term == "year0") %>%
+
+  mutate(trend = case_when(
+    estimate > 0 & p.value < 0.05 ~ "gain", # Statistically significant gain of AOH
+    estimate < 0 & p.value < 0.05 ~ "loss", # Statistically significant loss of AOH
+    p.value > 0.05 ~ "no trend" # no significant trend
+    )) %>%
+  # mutate(trend0 = if_else(estimate > 0, "gain", "loss")) %>%
+  # mutate(trend_from_ci = case_when(
+  #   sign(conf.low) + sign(conf.high) == -2 ~ "loss",
+  #   sign(conf.low) + sign(conf.high) == 2 ~ "gain",
+  #   sign(conf.low) + sign(conf.high) < 2 & 
+  #     sign(conf.low) + sign(conf.high) > -2 ~ "no trend")
+  #   ) %>% 
+  # mutate(test = trend == trend_from_ci) %>%
+  # select(term, estimate, p.value, conf.low, conf.high, run_index:binomial, contains("trend"), everything()) %>%
+  # filter(
+  #   p.value > 0.05,
+  #   is.na(test)
+  #   ) %>% .$trend %>% unique()
+  
+  select(term:binomial, trend, everything()) %>%
+  mutate(aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 7, 3, 5, 1, 2, 4)]),
+         obligate_type = case_when(
+           mature_forest_obl > 0.5 ~ "mature_forest_obligate",
+           mature_forest_obl < 0.5 ~ "not_obligate"))
+
+
+write_parquet(aoh_trends, paste0(p_derived, "aoh_trends.parquet"))
+aoh_trends <- read_parquet(paste0(p_derived, "aoh_trends.parquet"))
+
+
+
+# ------------------------------------------------------ #
+# ------- trends by species ------- #
+# ------------------------------------------------------ #
+
+# Create data.frame with a single row for each species in each aoh type, with the number of trends and the specific trend types they experience (overall_trend).
+# Extract the number of species with multiple trends per aoh_type:
+
+# Add a column for overall_trend:
+# 1. Always winners
+# 2. Always losers
+# 3. Context dependent
+
+aoh_trends_by_sp <-
+  aoh_trends %>%
+  filter(
+    #passage_type == "exclude_passage"#, mature_forest_obl < 0.5
+    !is.na(trend)) %>%
+  select(aoh_type, vert_class, binomial, trend, passage_type) %>% 
+  unique() %>% arrange(aoh_type, binomial, trend) %>%
+  group_by(aoh_type, vert_class, binomial, passage_type) %>% 
+  summarise(n_trends = n(), 
+            trend_types = str_c(unique(trend), collapse = "; ")) %>% 
+  # arrange(desc(n_trends)) %>%
+  ungroup() %>%
+  mutate(overall_trend = case_when(
+    n_trends == 1 ~ trend_types,
+    n_trends == 2 & trend_types == "gain; no trend" ~ "weak gain",
+    n_trends == 2 & trend_types == "loss; no trend" ~ "weak loss",
+    n_trends == 2 & trend_types == "gain; loss" | n_trends == 3 ~ "context dependent"
+  )) %>%
+  left_join(aoh_species_list) %>%
+  
+  # update factor levels
+  mutate(
+    trend_direction = case_when(
+      grepl("gain", overall_trend) ~ "gain",
+      grepl("loss", overall_trend) ~ "loss",
+      grepl("context", overall_trend) ~ "context dependent",
+      grepl("no trend", overall_trend) ~ "no trend"
+      ) %>% fct_relevel(c("gain", "loss", "no trend", "context dependent")),
+    trend_consistency = case_when(
+      n_trends == 1 ~ "consistent",
+      grepl("weak", overall_trend) ~ "weak",
+      grepl("context", overall_trend) ~ "opposite"
+      ) %>% #as_factor() %>% 
+      fct_relevel(rev(c("consistent", "weak", "opposite"))),
+    
+    
+    aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 7, 3, 5, 1, 2, 4)]),
+    redlistCategory = fct_relevel(redlistCategory, c("Least Concern", "Near Threatened", "Vulnerable", 
+                                                     "Endangered", "Critically Endangered", "Data Deficient"))
+    )
+
+write_parquet(aoh_trends_by_sp, paste0(p_derived, "aoh_trends_by_sp.parquet"))
+aoh_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_trends_by_sp.parquet"))
+
+
+
+# ------------------------------------------------------ #
+# ------- trends changes ------- #
+# ------------------------------------------------------ #
+
+# ----------------------------------------- #
+# Q. How many species have no trend or a negative trend at the landscape scale,
+# but a positive trend in abandonment?
+# ----------------------------------------- #
+aoh_trends_by_sp
+
+
+
+# ----------------------------------------- #
+# Q. How many species have no trend or a negative trend for observed abandonment,
+# but a positive trend in potential abandonment?
+# ----------------------------------------- #
+trend_changes <- 
+  aoh_feols_trends %>%
+  filter(vert_class != "amp",
+         str_detect(aoh_type, "crop"),
+         passage_type == "exclude_passage",
+         mature_forest_obl < 0.5
+         ) %>%
+  pivot_wider(id_cols = c(vert_class, site, binomial),
+              values_from = trend,
+              names_from = aoh_type) %>%
+  # select(contains("crop")) %>% unique()
+  mutate(overall_change = case_when(
+    crop_abn_iucn == "gain" & crop_abn_potential_iucn == "gain" ~ "no change (gain)",
+    crop_abn_iucn == "loss" & crop_abn_potential_iucn == "loss" ~ "no change (loss)",
+    crop_abn_iucn == "gain" & crop_abn_potential_iucn == "loss" ~ "gain to loss",
+    crop_abn_iucn == "loss" & crop_abn_potential_iucn == "gain" ~ "loss to gain",
+    crop_abn_iucn == "loss" & crop_abn_potential_iucn == "no trend" ~ "loss to no trend",
+    crop_abn_iucn == "gain" & crop_abn_potential_iucn == "no trend" ~ "gain to no trend",
+    crop_abn_iucn == "no trend" & crop_abn_potential_iucn == "no trend" ~ "no change (no trend)",
+    crop_abn_iucn == "no trend" & crop_abn_potential_iucn == "loss" ~ "no trend to loss",
+    crop_abn_iucn == "no trend" & crop_abn_potential_iucn == "gain" ~ "no trend to gain"
+  ) %>% fct_relevel(),
+  change_direction = case_when(
+    grepl("^no change", overall_change) ~ "no change",
+    grepl("to loss$", overall_change) ~ "loss",
+    grepl("to gain$", overall_change) ~ "gain",
+    grepl("no trend", overall_change) ~ "indeterminate"
+  ) %>% fct_relevel("gain", "no change", "indeterminate", "loss")) %>%
+  group_by(vert_class, site, 
+           # overall_change, 
+           change_direction
+           ) %>%
+  summarise(n_sp = n()) %>% 
+  arrange(vert_class, change_direction)
+  # .$overall_change %>% as_factor() %>% levels()
+
+
+trend_changes %>%
+  ggplot(mapping = aes(
+         x = change_direction,
+         y = n_sp,
+         fill = vert_class,
+         group = vert_class
+         )) +
+  geom_col(position = position_dodge(preserve = "total"),
+           color = "black", size = .25) +
+  theme_classic() + 
+  labs(x = "Trend Change Direction", y = "Number of Species") +
+  # scale_fill_manual(name = "", labels = palette_labels, values = palette_du_jour) + 
+  theme(legend.position = "right",
+        axis.text.x = element_text(angle = 340, vjust = 1, hjust = 0)) +
+  facet_wrap(vars(site), scales = "free_y", labeller = as_labeller(fancy_labels))
+
+
+
+trend_changes %>%
+  ggplot(mapping = aes(
+         y = change_direction,
+         x = n_sp,
+         fill = vert_class,
+         group = vert_class
+         )) +
+  geom_col(position = position_dodge(preserve = "total"),
+           color = "black", size = .25) +
+  theme_classic() + 
+  # labs(x = "Trend Change Direction", y = "Number of Species") +
+  # scale_fill_manual(name = "", labels = palette_labels, values = palette_du_jour) + 
+  theme(legend.position = "right") +
+    theme(strip.text.y.right = element_text(angle = 0)) +
+  facet_grid(rows = vars(site), scales = "free")#, labeller = as_labeller(fancy_labels))
+
+```
+
+## Temporal Autocorrelation: test and account for it 
+
+After examining residuals, it is clear that our trends show signs of temporal autocorrelation (this is not surprising!).
+Our final approach to deal with temporal autocorrelation was to use the Newey-West estimator for standard errors, which accounts for temporal autocorrelation.
+
+We also tested a few other approaches for accounting for temporal autocorrelation:
+
+Alt. Approach 1: including term for AOH in the prior year (this is often called a "first order auto-regression (AR1)" approach).
+Alt. Approach 2: subsample the data to only include every 3 years (or every 5 years, etc.)
+
 
 ```{r examine-residuals}
 aoh_tmp <- aoh %>% filter(aoh_type == "crop_abn_iucn")
@@ -856,85 +1142,11 @@ for(i in 1:10) {
   }
 plot(aoh_lm_resid_tmp[[mod_indx]], 1)
 hist(aoh_lm_resid_tmp[[mod_indx]]$residuals, main = "Residual Histogram")
-
-
 ```
 
-
-```{r temp-autocorr-dev}
-# in order to account for temporal autocorrelation, test two approaches:
-
-# ------- approach 1 ------- #
-# including term for AOH in the prior year
-# -------------------------- #
-
-# prep ----
-aoh
-aoh_type_
-
-aoh_tmp <- aoh %>% filter(aoh_type == aoh_type_)
-aoh_tmp
-
-df_sp_subset <- aoh %>%
-  filter(binomial == sp_to_plot, 
-         site == "shaanxi",
-         aoh_type %in% aoh_type_df$label[9],
-         passage_type == "exclude_passage"
-         )
-
-df_sp_subset <- aoh %>% filter(run_index == 4253)
-aoh_trends %>% filter(run_index == 4253)
-aoh_lag_trends %>% filter(run_index == 4253)
-aoh_lm_lag %>% filter(run_index == 4253)
-
-tst <- 
-  df_sp_subset %>% 
-  select(binomial, aoh, contains("year"), 
-         passage_type, run_index) %>% #print(n  = 100)
-  group_by(run_index) %>%
-  mutate(aoh_lag = lag(aoh)) %>% #na.omit() %>% 
-  filter(!is.na(aoh_lag)) %>%
-  head()
-  # filter(year < 1994) %>%
-  # print(n = 100)
-
-
-
-# prelim model
-tmp_lm <- lm(aoh ~ year0, data = df_sp_subset)
-tmp_lm_lag <- lm(aoh ~ year0 + aoh_lag, 
-                 data = df_sp_subset %>% 
-                   group_by(run_index) %>% 
-                   mutate(aoh_lag = lag(aoh)) %>% filter(!is.na(aoh_lag)))
-tidy(tmp_lm)
-tidy(tmp_lm_lag, conf.int = TRUE, conf.level = 0.95)
-summary(tmp_lm)
-summary(tmp_lm_lag)
-glance(tmp_lm_lag)
-
-AIC(tmp_lm, tmp_lm_lag)
-
-tmp_lm %>% tidy(., conf.int = TRUE, conf.level = 0.95)
-tmp_lm_lag %>% tidy(., conf.int = TRUE, conf.level = 0.95)
-glance(tmp_lm)
-glance(tmp_lm_lag)
-
-ggplot(data = df_sp_subset, 
-       mapping = aes(x = year0, y = aoh)) +
-  geom_point() + 
-  # geom_smooth(method = "lm", se = 0.95) +
-  labs(x = "Year", y = "AOH (ha)") +# , title = sp_to_plot) + 
-  geom_line(data = augment(tmp_lm), mapping = aes(x = year0, y = .fitted), col = "red", alpha = 1) +
-  geom_line(data = augment(tmp_lm_lag), mapping = aes(x = year0, y = .fitted), col = "blue", alpha = 1) #+ 
-  # geom_function(fun = function(x) { (x-4) ^ (mean(coef(lm_log2_l[[9]]), na.rm = TRUE))},
-  #               mapping = aes(linetype = "Mean Decay Rate"),
-  #               color = "blue", size = 1, #linetype = "dashed",
-  #               inherit.aes = FALSE)
-
-```
-
-```{r dw-test}
+```{r durbin-watson-test}
 # Durbin Watson test:
+# install.packages("car")
 library(car)
 
 durbinWatsonTest(tmp_lm)
@@ -1018,10 +1230,291 @@ ggsave(
   filename = paste0(p_output, "plots/aoh/", "dw_stat_crop_abn_iucn", aoh_run_date, ".pdf"),
   width = 3.5, height = 3.5, units = "in")
 
+```
 
+### Newey-West standard errors (Final Approach)
+
+Newey-West standard errors, which account for autocorrelation, are generally approved of by the time-series econometrics universe (Newey & West, 1987, https://www.jstor.org/stable/1913610)
+We implement this approach using the feols() function in the {fixest} package, as follows:
+feols(aoh ~ year0, data = df, vcov = vcov_NW(time = ~year0))
+
+```{r feols-expl}
+set.seed(1)
+library(fixest) # this package includes the function below feols() which allows for the use of Newey-West 
+library(tidyverse)
+library(broom)
+
+
+# Generate some data from a totally arbitrary Data Generating Process, just as a random example
+TT <- 30
+eps  <- rnorm(TT, 1:TT, sd = 5)
+df <- tibble(species = 1, t = 1:TT, eps = eps, x = 0) 
+for(tt in 2:TT) df$x[tt] <- 0.8*df$x[tt-1] + tt + eps[tt]
+
+# IID standard errors (should be the same as what you get from lm)
+feols(x ~ t, data = df) %>% tidy(., conf.int = TRUE, conf.level = 0.95)
+lm(x ~ t, data = df) %>% tidy(., conf.int = TRUE, conf.level = 0.95)
+
+# Newey-West standard errors, which account for autocorrelations, and are generally approved of by the time series economics people. 
+feols(x ~ t, data = df, vcov = vcov_NW(time = ~t)) %>% tidy(., conf.int = TRUE, conf.level = 0.95)
+
+
+
+# ---------------------------------------------------------------------- #
+# test with my data
+aoh %>%
+  filter(aoh_type == "crop_abn_iucn",
+         site == "wisconsin",
+         passage_type == "exclude_passage",
+         str_detect(binomial, "Dryobates|Sturnella magna")
+         )
+tmp_df <- 
+  aoh %>% filter(aoh_type == "crop_abn_iucn",
+                         site == "wisconsin",
+                         passage_type == "exclude_passage",
+                         str_detect(binomial, "Dryobates"))
+
+# prelim model
+tmp_lm <- lm(
+  aoh ~ year0, 
+  data = tmp_df
+  )
+
+tmp_lm_AR1 <- lm(
+  aoh ~ year0 + aoh_lag, 
+  data = tmp_df %>%
+    group_by(run_index) %>% 
+           mutate(aoh_lag = lag(aoh)) %>% 
+           filter(!is.na(aoh_lag))
+  )
+
+
+tmp_lm_vcov <- feols(
+  aoh ~ year0, 
+  data = tmp_df,
+  vcov = vcov_NW(time = ~year0)
+  )
+
+tidy(tmp_lm, conf.int = TRUE, conf.level = 0.95)
+tidy(tmp_lm_AR1, conf.int = TRUE, conf.level = 0.95)
+tidy(tmp_lm_vcov, conf.int = TRUE, conf.level = 0.95)
+
+tmp_lm %>% tidy(., conf.int = TRUE, conf.level = 0.95)
+tmp_lm_AR1 %>% tidy(., conf.int = TRUE, conf.level = 0.95)
+tmp_lm_vcov %>% tidy(., conf.int = TRUE, conf.level = 0.95)
+feols(aoh ~ year0, data = tmp_df, vcov = vcov_NW(time = ~year0)) %>% 
+  tidy(., conf.int = TRUE, conf.level = 0.95)
+
+feols(aoh ~ year0, data = tmp_df) %>% summary
+feols(aoh ~ year0, data = tmp_df) %>% summary(vcov = vcov_NW(time = ~year0))
+
+feols(aoh ~ year0, data = tmp_df) %>% tidy()
+feols(aoh ~ year0, data = tmp_df) %>% tidy(vcov = vcov_NW(time = ~year0))
+tidy(tmp_lm_vcov)
+
+
+glance(tmp_lm)
+augment(tmp_lm)
+plot(tmp_lm, 1)
+hist(tmp_lm$residuals, main = "Residual Histogram")
+
+tmp_lm_vcov
+
+coefplot(tmp_lm_vcov)
+coef(tmp_lm_vcov)
+confint(tmp_lm_vcov)
+tmp_lm_vcov %>% tidy(., conf.int = TRUE, conf.level = 0.95)
+hist(tmp_lm$residuals, main = "Residual Histogram")
+hist(tmp_lm_vcov$residuals, main = "Residual Histogram")
+etable(tmp_lm_vcov)
+fitted(tmp_lm_vcov)
+
+
+dd1 <- 
+  tmp_lm_vcov %>%
+  predict(se.fit = TRUE, interval = "confidence", vcov = vcov_NW(time = ~year0)) %>%
+  mutate(year0 = 1:30)
+
+
+# plot with confidence intervals:
+ggplot() +
+  geom_point(data = tmp_df, mapping = aes(x = year0, y = aoh)) + 
+  geom_smooth(data = tmp_df, mapping = aes(x = year0, y = aoh), method = "lm", se = 0.95) +
+  labs(x = "Year", y = "AOH (ha)") + 
+  geom_line(data = dd1,
+            mapping = aes(x = year0, y = fit),
+            col = "red",# alpha = 0.2
+            ) + 
+  geom_ribbon(data = dd1,
+              mapping = aes(x = year0,
+                            ymin = ci_low, ymax = ci_high
+                            ), alpha = 0.2, fill = "green"
+              )
 
 ```
 
+```{r **feols}
+# calculate an OLS regression using the Newey-West estimator to calculate standard errors, using the package {fixest}
+
+##### -------------------------------- #
+# calculate feols
+{
+tic()
+lapply(
+  aoh_types,
+       function(aoh_type_) {
+         aoh_tmp <- aoh %>% 
+           filter(aoh_type == aoh_type_,
+                  n_unique_obs > 1
+                  )
+           
+           # group_by(run_index) %>% # no longer necessary - see above, "{r **calculate-aoh}"
+           # mutate(n_obs = n()) %>% 
+           # ungroup()
+           
+         # run across aoh_type, site, binomial, passage_type combinations
+         aoh_feols_tmp <- lapply(
+           unique(aoh_tmp$run_index),
+
+           function(i) {
+             aoh_tmp %>% 
+               filter(run_index == i) %>%
+               feols(aoh ~ year0, data = ., vcov = vcov_NW(time = ~year0)) %>%
+               tidy(., conf.int = TRUE, conf.level = 0.95) %>%
+               mutate(aoh_type = aoh_type_, run_index = i)
+             }) %>% 
+           bind_rows() %>%
+           
+           # join 
+           left_join(aoh_tmp %>% select(aoh_type:binomial, run_index, n_obs, n_unique_obs, redlistCategory:end_year, passage_type) %>% unique())
+         
+         write_parquet(aoh_feols_tmp, paste0(p_derived, "aoh_feols_", aoh_type_,".parquet"))
+         
+         cat("wrote aoh_feols_tmp for:", aoh_type_, fill = TRUE)
+         })
+toc()
+}
+
+
+# ------------------------------------------------------ #
+# load back in:
+# ------------------------------------------------------ #
+aoh_feols <- 
+  lapply(aoh_types, 
+  function(aoh_type_) {read_parquet(paste0(p_derived, "aoh_feols_", aoh_type_,".parquet"))
+}) %>% bind_rows()
+
+aoh_feols %>% filter(aoh_type == "crop_abn_iucn")
+
+run_indices
+aoh_feols$aoh_type %>% unique()
+warnings()
+
+write_parquet(aoh_feols, paste0(p_derived, "aoh_feols.parquet"))
+
+aoh_feols <- read_parquet(paste0(p_derived, "aoh_feols.parquet"))
+```
+
+```{r **feols-trends}
+# mature_forest_obl < 0.5,
+#          # !(vert_class == "bird" & mature_forest_obl > 0.5),
+# ------------------------------------------------------ #
+# distill trends
+# ------------------------------------------------------ #
+aoh_feols_trends <-
+  aoh_feols %>%
+  # left_join(run_indices) %>%
+  filter(!if_any(!c(mature_forest_obl, common_names), is.na)) %>% # filter out NAs:
+  left_join(run_indices) %>%
+  filter(term == "year0") %>%
+  mutate(trend = case_when(
+    estimate > 0 & p.value < 0.05 ~ "gain", # Statistically significant gain of AOH
+    estimate < 0 & p.value < 0.05 ~ "loss", # Statistically significant loss of AOH
+    p.value >= 0.05 ~ "no trend" # no significant trend
+    )) %>%
+  select(term:binomial, trend, everything()) %>%
+  
+  # add species with 0 slope (n_unique_obs == 1):
+  bind_rows(
+    aoh %>% 
+      filter(n_unique_obs == 1) %>%
+      select(-c(year, year0, aoh)) %>% unique() %>%
+      mutate(term = "year0", estimate = 0, trend = "no trend")
+    ) %>%
+
+  mutate(
+    aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 7, 3, 5, 1, 2, 4)]),
+    obligate_type = case_when(
+      mature_forest_obl > 0.5 ~ "mature_forest_obligate",
+      mature_forest_obl < 0.5 ~ "not_obligate"))
+
+write_parquet(aoh_feols_trends, paste0(p_derived, "aoh_feols_trends.parquet"))
+
+aoh_feols_trends <- read_parquet(paste0(p_derived, "aoh_feols_trends.parquet"))
+
+
+# ------------------------------------------------------ #
+# ------- trends by species ------- #
+# ------------------------------------------------------ #
+
+aoh_feols_trends_by_sp <- 
+  aoh_feols_trends %>%
+  filter(
+    #passage_type == "exclude_passage"#, mature_forest_obl < 0.5
+    !is.na(trend)) %>%
+  select(aoh_type, vert_class, binomial, trend, passage_type) %>% 
+  unique() %>% arrange(aoh_type, binomial, trend) %>%
+  group_by(aoh_type, vert_class, binomial, passage_type) %>% 
+  summarise(n_trends = n(), 
+            trend_types = str_c(unique(trend), collapse = "; ")) %>% 
+  # arrange(desc(n_trends)) %>%
+  ungroup() %>%
+  mutate(overall_trend = case_when(
+    n_trends == 1 ~ trend_types,
+    n_trends == 2 & trend_types == "gain; no trend" ~ "weak gain",
+    n_trends == 2 & trend_types == "loss; no trend" ~ "weak loss",
+    n_trends == 2 & trend_types == "gain; loss" | n_trends == 3 ~ "context dependent"
+  )) %>%
+  left_join(aoh_species_list) %>%
+  
+  # update factor levels
+  mutate(
+    trend_direction = case_when(
+      grepl("gain", overall_trend) ~ "gain",
+      grepl("loss", overall_trend) ~ "loss",
+      grepl("context", overall_trend) ~ "context dependent",
+      grepl("no trend", overall_trend) ~ "no trend"
+      ) %>% fct_relevel(c("gain", "loss", "no trend", "context dependent")),
+    trend_consistency = case_when(
+      n_trends == 1 ~ "consistent",
+      grepl("weak", overall_trend) ~ "weak",
+      grepl("context", overall_trend) ~ "opposite"
+      ) %>% #as_factor() %>% 
+      fct_relevel(rev(c("consistent", "weak", "opposite"))),
+    
+    
+    aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 7, 3, 5, 1, 2, 4)]),
+    redlistCategory = fct_relevel(redlistCategory, c("Least Concern", "Near Threatened", "Vulnerable", 
+                                                     "Endangered", "Critically Endangered", "Data Deficient"))
+    )
+
+write_parquet(aoh_feols_trends_by_sp, paste0(p_derived, "aoh_feols_trends_by_sp.parquet"))
+
+aoh_feols_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_feols_trends_by_sp.parquet"))
+
+# ------------------------------------------------------ #
+# load relevant files
+# ------------------------------------------------------ #
+aoh_feols <- read_parquet(paste0(p_derived, "aoh_feols.parquet"))
+aoh_feols_trends <- read_parquet(paste0(p_derived, "aoh_feols_trends.parquet"))
+aoh_feols_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_feols_trends_by_sp.parquet"))
+
+```
+
+
+### Alternative Approaches for handling Temporal Autocorrelation
+
+#### Approach 1: Auto-regressive (AR1), including term for AOH in the prior year
 
 ```{r AR1-full}
 # implement linear regression:
@@ -1253,6 +1746,7 @@ ggplotly(
 
 
 
+#### Approach 2: subsample to every 3 or 5 years
 
 ```{r dev-floating-start-for-subset}
 subset_gap <- 3
@@ -1293,7 +1787,7 @@ tt$run_index %>% unique() %>% length()
 ```
 
 
-```{r subsample-3-5}
+```{r subsample-every-3-5-yrs}
 aoh %>% filter(aoh_type == aoh_type_) %>% .$run_index %>% unique() %>% sort() %>% tail
 
 # implement linear regression:
@@ -1523,7 +2017,7 @@ aoh_lm_subset5_trends_by_sp <-
     )
 ```
 
-```{r subset3-5-plots}
+```{r subset-3-5-plots}
 # 3 year gap
 # plot:
 lapply(
@@ -1720,6 +2214,9 @@ lapply(
 ```
 
 
+
+#### Compare approaches
+
 ```{r compare-approaches-w-summary-stats}
 # aoh_trends_by_sp %>%
 # aoh_lag_trends_by_sp %>%
@@ -1799,9 +2296,6 @@ gt_tauto <- comparing_tmp_auto_stats_df %>%
 
 gtsave(gt_tauto, filename = paste0(p_derived, "comparing_stats_tauto_table_arranged.pdf"))
 gtsave(gt_tauto, filename = paste0(p_derived, "comparing_stats_tauto_table_arranged.png"))
-
-
-
 
 
 # ----------------------------------------------------------- #
@@ -1943,8 +2437,6 @@ aoh_trends %>%
 
 
 # Dryobates pubescens
-
-
 df_sp_subset <- aoh %>%
   filter(binomial == sp_to_plot, site == "belarus",
          aoh_type %in% aoh_type_df$label[6])
@@ -2036,7 +2528,7 @@ lm(aoh ~ year0 + aoh_lag,
 
 lm(aoh ~ year0, 
    data = aoh %>% filter(binomial == "Dryobates pubescens", site == "wisconsin", 
-                         aoh_type == "crop_abn_iucn",passage_type == "exclude_passage")
+                         aoh_type == "crop_abn_iucn", passage_type == "exclude_passage")
    ) %>%
   tidy(conf.int = TRUE, conf.level = 0.95)
 
@@ -2051,814 +2543,6 @@ lm(aoh ~ year0 + aoh_lag,
 ```
 
 
-## Model trends
-
-```{r lm-dev}
-# aoh_lm
-# aoh_distill %>% filter(run_index == 212)
-
-df_sp_subset <- aoh %>%
-  filter(binomial == sp_to_plot, site == "belarus",
-         aoh_type %in% aoh_type_df$label[6])
-
-
-# prelim model
-tmp_lm <- lm(aoh ~ year0, data = df_sp_subset)
-tidy(tmp_lm)
-tmp_lm %>% tidy(., conf.int = TRUE, conf.level = 0.95)
-glance(tmp_lm)
-augment(tmp_lm)
-plot(tmp_lm, 1)
-hist(tmp_lm$residuals, main = "Residual Histogram")
-
-ggplot(data = df_sp_subset, 
-       mapping = aes(x = year0, y = aoh)) +
-  geom_point() + 
-  geom_smooth(method = "lm", se = 0.95) + 
-  labs(x = "Year", y = "AOH (ha)", title = sp_to_plot) + 
-  # geom_function(fun = function(x) { (x-4) ^ (mean(coef(lm_log2_l[[9]]), na.rm = TRUE))},
-  #               mapping = aes(linetype = "Mean Decay Rate"),
-  #               color = "blue", size = 1, #linetype = "dashed", 
-  #               inherit.aes = FALSE) 
-  geom_line(data = augment(tmp_lm), mapping = aes(x = year0, y = .fitted), col = "green", alpha = 0.2)
-
-
-```
-
-
-```{r calc-lm-OLS}
-# -------------------
-# run simple regression on each species' and extract AOH trend over time.
-# -------------------
-
-# ------------------------------------------------------ #
-# calculate linear regression for each aoh_type, across all indices for each aoh_type
-# ------------------------------------------------------ #
-aoh$aoh_type %>% unique()
-
-tic()
-lapply(aoh_types, 
-       function(aoh_type_) {
-         aoh_tmp <- aoh %>% filter(aoh_type == aoh_type_)
-         
-         # run across aoh_type, site, binomial, passage_type combinations
-         
-         aoh_lm_tmp <- lapply(
-           unique(aoh_tmp$run_index),
-           function(i) {
-             aoh_tmp %>% 
-               filter(run_index == i) %>%
-               lm(aoh ~ year0, data = .) %>%
-               tidy(., conf.int = TRUE, conf.level = 0.95) %>% 
-               mutate(aoh_type = aoh_type_,
-                      run_index = i)
-             }) %>% bind_rows()
-         
-         write_parquet(aoh_lm_tmp, paste0(p_derived, "aoh_lm_", aoh_type_,".parquet"))
-         
-         cat("wrote aoh_lm_tmp for:", aoh_type_, fill = TRUE)
-         })
-toc()
-warnings()
-
-# ------------------------------------------------------ #
-# load back in:
-# ------------------------------------------------------ #
-aoh_lm <- 
-  lapply(aoh_types, 
-  function(aoh_type_) {read_parquet(paste0(p_derived, "aoh_lm_", aoh_type_,".parquet"))
-}) %>% bind_rows()
-
-run_indices
-aoh_lm$aoh_type %>% unique()
-warnings()
-
-write_parquet(aoh_lm, paste0(p_derived, "aoh_lm.parquet"))
-
-aoh_lm <- read_parquet(paste0(p_derived, "aoh_lm.parquet"))
-
-```
-
-Having looked at the simplest model, using just `lm()` and assuming independent observations, I now aim to test for trends in three sequential steps, or tests:
-1. Estimate y = \beta year + eps, with a variance estimator for \beta that allows for autocorrelations
-
-2. Show that this gives you (roughly) the same result as when you compare the mean values at the start and the end of the time series.
-
-3. Take the growth rate g_t = (y_t - y_{t-1}) , and then regress that on a constant, and check if the coefficient is positive (again using the variance estimator that accounts for residual autocorrelation)
-
-I do not intend to use the model that includes an autoregressive term. 
-As Tom says, "intuitively it seems to me that controlling for the lag actually ends up controlling for some of the variation that you are interested in."
-
-
-
-```{r feols-expl}
-
-set.seed(1)
-library(fixest)
-library(tidyverse)
-library(broom)
-
-
-# Generate some data from a totally arbitrary Data Generating Process, just as a random example
-TT <- 30
-eps  <- rnorm(TT, 1:TT, sd = 5)
-df <- tibble(species = 1, t = 1:TT, eps = eps, x = 0) 
-for(tt in 2:TT) df$x[tt] <- 0.8*df$x[tt-1] + tt + eps[tt]
-
-# IID standard errors (should be the same as what you get from lm)
-feols(x ~ t, data = df) %>% tidy(., conf.int = TRUE, conf.level = 0.95)
-lm(x ~ t, data = df) %>% tidy(., conf.int = TRUE, conf.level = 0.95)
-
-# Newey-West standard errors, which account for autocorrelations, and are generally approved of by the time series economics people. 
-feols(x ~ t, data = df, vcov = vcov_NW(time = ~t)) %>% tidy(., conf.int = TRUE, conf.level = 0.95)
-
-
-
-# ---------------------------------------------------------------------- #
-# test with my data
-aoh %>%
-  filter(aoh_type == "crop_abn_iucn",
-         site == "wisconsin",
-         passage_type == "exclude_passage",
-         str_detect(binomial, "Dryobates|Sturnella magna")
-         )
-tmp_df <- 
-  aoh %>% filter(aoh_type == "crop_abn_iucn",
-                         site == "wisconsin",
-                         passage_type == "exclude_passage",
-                         str_detect(binomial, "Dryobates"))
-
-# prelim model
-tmp_lm <- lm(
-  aoh ~ year0, 
-  data = tmp_df
-  )
-
-tmp_lm_AR1 <- lm(
-  aoh ~ year0 + aoh_lag, 
-  data = tmp_df %>%
-    group_by(run_index) %>% 
-           mutate(aoh_lag = lag(aoh)) %>% 
-           filter(!is.na(aoh_lag))
-  )
-
-
-tmp_lm_vcov <- feols(
-  aoh ~ year0, 
-  data = tmp_df,
-  vcov = vcov_NW(time = ~year0)
-  )
-
-tidy(tmp_lm, conf.int = TRUE, conf.level = 0.95)
-tidy(tmp_lm_AR1, conf.int = TRUE, conf.level = 0.95)
-tidy(tmp_lm_vcov, conf.int = TRUE, conf.level = 0.95)
-
-tmp_lm %>% tidy(., conf.int = TRUE, conf.level = 0.95)
-tmp_lm_AR1 %>% tidy(., conf.int = TRUE, conf.level = 0.95)
-tmp_lm_vcov %>% tidy(., conf.int = TRUE, conf.level = 0.95)
-feols(aoh ~ year0, data = tmp_df, vcov = vcov_NW(time = ~year0)) %>% 
-  tidy(., conf.int = TRUE, conf.level = 0.95)
-
-feols(aoh ~ year0, data = tmp_df) %>% summary
-feols(aoh ~ year0, data = tmp_df) %>% summary(vcov = vcov_NW(time = ~year0))
-
-feols(aoh ~ year0, data = tmp_df) %>% tidy()
-feols(aoh ~ year0, data = tmp_df) %>% tidy(vcov = vcov_NW(time = ~year0))
-tidy(tmp_lm_vcov)
-
-
-glance(tmp_lm)
-augment(tmp_lm)
-plot(tmp_lm, 1)
-hist(tmp_lm$residuals, main = "Residual Histogram")
-
-tmp_lm_vcov
-
-coefplot(tmp_lm_vcov)
-coef(tmp_lm_vcov)
-confint(tmp_lm_vcov)
-tmp_lm_vcov %>% tidy(., conf.int = TRUE, conf.level = 0.95)
-hist(tmp_lm$residuals, main = "Residual Histogram")
-hist(tmp_lm_vcov$residuals, main = "Residual Histogram")
-etable(tmp_lm_vcov)
-
-fitted(tmp_lm_vcov)
-dd1 <- 
-  tmp_lm_vcov %>%
-  predict(se.fit = TRUE, interval = "confidence", vcov = vcov_NW(time = ~year0)) %>%
-  mutate(year0 = 1:30)
-
-dd
-dd1
-
-head(dd)
-head(dd1)
-
-r2(tmp_lm_vcov)
-class(tmp_lm_vcov)
-
-augment(tmp_lm)
-
-fitted(tmp_lm_vcov)
-augment.fixest(tmp_lm_vcov)
-tmp_df$year0
-
-# plot with confidence intervals:
-ggplot() +
-  geom_point(data = tmp_df, mapping = aes(x = year0, y = aoh)) + 
-  geom_smooth(data = tmp_df, mapping = aes(x = year0, y = aoh), method = "lm", se = 0.95) +
-  labs(x = "Year", y = "AOH (ha)") + 
-  geom_line(data = dd1,
-            mapping = aes(x = year0, y = fit),
-            col = "red",# alpha = 0.2
-            ) + 
-  geom_ribbon(data = dd1,
-              mapping = aes(x = year0,
-                            ymin = ci_low, ymax = ci_high
-                            ), alpha = 0.2, fill = "green"
-              )
-
-```
-
-```{r feols}
-# calculate an OLS regression using the Newey-West estimator to calculate standard errors, using the packaged {fixest}
-
-aoh %>% 
-  filter(aoh_type == "crop_abn_iucn", n_unique_obs <= 10) %>% 
-  select(run_index, n_unique_obs) %>% unique() %>%
-  .$n_unique_obs %>%
-  
-  hist(breaks = 10)
-
-# view the species with constant AOH.
-aoh %>% filter(n_unique_obs == 1) %>% select(aoh_type:binomial, run_index, n_obs, n_unique_obs) %>% unique() %>% arrange(binomial) %>% print(n = 90)
-
-
-##### -------------------------------- #
-# calculate feols
-{
-tic()
-lapply(
-  aoh_types,
-       function(aoh_type_) {
-         aoh_tmp <- aoh %>% 
-           filter(aoh_type == aoh_type_,
-                  n_unique_obs > 1
-                  )
-           
-           # group_by(run_index) %>% # no longer necessary - see above, "{r calc-aoh}"
-           # mutate(n_obs = n()) %>% 
-           # ungroup()
-           
-         # run across aoh_type, site, binomial, passage_type combinations
-         aoh_feols_tmp <- lapply(
-           unique(aoh_tmp$run_index),
-
-           function(i) {
-             aoh_tmp %>% 
-               filter(run_index == i) %>%
-               feols(aoh ~ year0, data = ., vcov = vcov_NW(time = ~year0)) %>%
-               tidy(., conf.int = TRUE, conf.level = 0.95) %>%
-               mutate(aoh_type = aoh_type_, run_index = i)
-             }) %>% 
-           bind_rows() %>%
-           
-           # join 
-           left_join(aoh_tmp %>% select(aoh_type:binomial, run_index, n_obs, n_unique_obs, redlistCategory:end_year, passage_type) %>% unique())
-         
-         write_parquet(aoh_feols_tmp, paste0(p_derived, "aoh_feols_", aoh_type_,".parquet"))
-         
-         cat("wrote aoh_feols_tmp for:", aoh_type_, fill = TRUE)
-         })
-toc()
-}
-
-
-# ------------------------------------------------------ #
-# load back in:
-# ------------------------------------------------------ #
-aoh_feols <- 
-  lapply(aoh_types, 
-  function(aoh_type_) {read_parquet(paste0(p_derived, "aoh_feols_", aoh_type_,".parquet"))
-}) %>% bind_rows()
-
-aoh_feols %>% filter(aoh_type == "crop_abn_iucn")
-
-run_indices
-aoh_feols$aoh_type %>% unique()
-warnings()
-
-write_parquet(aoh_feols, paste0(p_derived, "aoh_feols.parquet"))
-
-aoh_feols <- read_parquet(paste0(p_derived, "aoh_feols.parquet"))
-```
-
-```{r weird-sp-missing-aoh-type}
-crop_abn_iucn_sp <- 
-  aoh_feols_trends_by_sp %>%
-  filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage",
-         vert_class != "amp", mature_forest_obl < 0.5) %>%
-  pull(binomial) %>% unique()
-
-
-species_list
-
-max_sp1 <- 
-  aoh_feols_trends_by_sp %>%
-  filter(aoh_type == "max_abn_iucn", passage_type == "exclude_passage",
-         vert_class != "amp", mature_forest_obl < 0.5) %>%
-  pull(binomial) %>% unique()
-
-full_sp1 <- 
-  aoh_feols_trends_by_sp %>%
-  filter(aoh_type == "full_iucn", 
-         passage_type == "exclude_passage", vert_class != "amp", mature_forest_obl < 0.5) %>%
-  pull(binomial) %>% unique()
-
-crop_sp1
-setdiff(sort(crop_sp1), sort(max_sp1))
-setdiff(sort(max_sp1), sort(crop_sp1))
-d1 <- sort(setdiff(full_sp1, max_sp1)) # species in full_sp1 that are not in max_sp1
-sort(setdiff(max_sp1, full_sp1)) # species in max_sp1 that are not in full_sp1
-
-aoh_feols_trends %>%
-  filter(
-    aoh_type == "max_abn_iucn",
-    passage_type == "exclude_passage",
-    vert_class != "amp", 
-    mature_forest_obl < 0.5, 
-    !(binomial %in% crop_sp1)) %>%
-  select(vert_class, binomial) %>%
-  left_join(common_names)
-
-aoh_feols_trends_by_sp %>%
-  filter(
-    aoh_type == "max_abn_iucn",
-    passage_type == "exclude_passage",
-    vert_class != "amp", 
-    mature_forest_obl < 0.5, 
-    !(binomial %in% crop_sp1)) %>%
-  select(vert_class, binomial) %>%
-  left_join(common_names)
-
-
-aoh_feols_trends_by_sp %>%
-  filter(
-    aoh_type == "crop_abn_iucn",
-    passage_type == "exclude_passage",
-    vert_class != "amp", 
-    mature_forest_obl < 0.5, 
-    !(binomial %in% max_sp1)) %>%
-  select(vert_class, binomial) %>% pull(binomial) # %>%
-  left_join(common_names)
-
-
-  
-aoh_feols_trends %>% #_by_sp %>%
-  filter(
-    # aoh_type == "crop_abn_iucn",
-    passage_type == "exclude_passage",
-    vert_class != "amp", 
-    mature_forest_obl < 0.5) %>%
-  group_by(aoh_type, vert_class) %>% 
-  summarise(n = n(), 
-            nn = length(unique(binomial))) %>%
-  arrange(vert_class, aoh_type)
-
-# plot weird species:
-aoh %>%
-  filter(binomial %in% c(
-    # "Sus scrofa"
-    "Phoenicurus erythrogastrus"
-    # "Proechimys goeldii" # in max_abn, not crop_abn
-    # "Pyrrhula pyrrhula" # in crop_abn, not max_abn
-    # "Odocoileus hemionus" # in crop_abn, not max_abn
-    # "Plecotus austriacus" # in crop_abn, not max_abn
-    ),
-    passage_type == "exclude_passage",
-    # aoh_type == "max_abn_iucn", 
-    ) %>%
-  ggplot(aes(y = aoh, x = year, col = site)) +
-  geom_line() +
-  facet_wrap(vars(aoh_type), scales = "free")
-
-# These species were removed from the different aoh types because they had zero change over the course of the time series.
-# They only had one unique observation and were therefore removed from the datasest prior to having their trend calculated. I think this is because the FEOLS call throws an error in this case.
-aoh %>% 
-  # filter(binomial == "Proechimys goeldii", aoh_type == "crop_abn_iucn", passage_type == "exclude_passage") %>% pull(run_index) %>% unique() %>%
-  
-  filter(run_index == 
-           5054
-         ) %>%
-  feols(aoh ~ year0, data = ., vcov = vcov_NW(time = ~year0)) %>%
-  tidy(., conf.int = TRUE, conf.level = 0.95)
-
-
-aoh %>% 
-  filter(n_unique_obs == 1) %>%
-  select(
-    aoh_type,
-    vert_class,
-    # site,
-    binomial,
-    aoh) %>% 
-  unique() %>%
-  arrange(vert_class, binomial, aoh_type) %>%
-  print(n = 50)
-
-
-aoh %>%
-  filter(binomial == "Sus scrofa") %>%
-  select(aoh_type:binomial, run_index) %>% unique()
-
-
-aoh_feols
-
-aoh_lm
-
-setdiff(sort(unique(aoh_lm$run_index)),
-        sort(unique(aoh_feols_trends$run_index))
-        ) %>%
-  length()
-
-
-aoh %>% 
-  filter(n_unique_obs == 1) %>%
-  select(aoh_type, vert_class, binomial, aoh, passage_type) %>% 
-  unique() %>%
-  arrange(vert_class, binomial, aoh_type) %>%
-  nrow()
-
-
-aoh %>% 
-  filter(n_unique_obs == 1) %>%
-  select(
-    aoh_type,
-    vert_class,
-    site,
-    binomial,
-    aoh) %>% 
-  unique() %>%
-  arrange(vert_class, binomial, aoh_type) %>%
-  print(n = 50)
-
-aoh_feols %>% 
-  filter(binomial == "Sus scrofa", 
-         aoh_type == "max_abn_iucn",
-         passage_type == "exclude_passage")
-
-# ------------------------------------------------------ #
-# add species with 0 slope:
-# ------------------------------------------------------ #
-aoh %>% 
-  filter(n_unique_obs == 1) %>%
-  select(-c(year, year0, aoh)) %>% unique() 
-  # select(aoh_type, vert_class, binomial, aoh, passage_type) %>% 
-  # unique() %>%
-  # arrange(vert_class, binomial, aoh_type) %>%
-  # nrow()
-
-aoh %>% 
-  filter(n_unique_obs == 1) %>%
-  select(-c(year, year0, aoh)) %>% unique() %>%
-  mutate(term = "year0", estimate = 0, trend = "no trend")
-
-names(aoh)
-names(aoh_feols_trends)
-
-head(aoh_feols_trends) %>%
-  bind_rows(
-    aoh %>% 
-      filter(n_unique_obs == 1) %>%
-      select(-c(year, year0, aoh)) %>% unique() %>%
-      head() %>%
-      mutate(term = "year0", estimate = 0, trend = "no trend")
-    ) %>%
-  select(trend:obligate_type)
-
-
-aoh_trends
-aoh_feols_trends
-nrow(aoh_trends) - nrow(aoh_feols_trends)
-nrow(aoh_trends_by_sp) - nrow(aoh_feols_trends_by_sp)
-
-aoh_trends_by_sp %>%
-  select(aoh_type:passage_type) %>%
-  mutate(model_type == "lm")
-
-aoh_feols_trends_by_sp %>%
-  select(aoh_type:passage_type)
-
-aoh_feols_trends_by_sp %>%
-  select(aoh_type:passage_type) %>%
-  mutate(model2 = "feols") %>%
-  unique() %>% nrow()
-
-aoh_trends_by_sp %>%
-  select(aoh_type:passage_type) %>%
-  mutate(model1 = "lm") %>%
-  unique() %>% nrow()
-
-
-left_join(
-  aoh_feols_trends_by_sp %>%
-    select(aoh_type:passage_type) %>%
-    mutate(model2 = "feols"),
-  aoh_trends_by_sp %>%
-    select(aoh_type:passage_type) %>%
-    mutate(model1 = "lm"),
-  by = c("aoh_type", "vert_class", "binomial", "passage_type")
-  ) %>% 
-  filter(is.na(model1))
-
-
-```
-
-```{r feols-trends}
-# mature_forest_obl < 0.5,
-#          # !(vert_class == "bird" & mature_forest_obl > 0.5),
-# ------------------------------------------------------ #
-# distill trends
-# ------------------------------------------------------ #
-aoh_feols_trends <-
-  aoh_feols %>%
-  # left_join(run_indices) %>%
-  filter(!if_any(!c(mature_forest_obl, common_names), is.na)) %>% # filter out NAs:
-  left_join(run_indices) %>%
-  filter(term == "year0") %>%
-  mutate(trend = case_when(
-    estimate > 0 & p.value < 0.05 ~ "gain", # Statistically significant gain of AOH
-    estimate < 0 & p.value < 0.05 ~ "loss", # Statistically significant loss of AOH
-    p.value >= 0.05 ~ "no trend" # no significant trend
-    )) %>%
-  select(term:binomial, trend, everything()) %>%
-  
-  # add species with 0 slope (n_unique_obs == 1):
-  bind_rows(
-    aoh %>% 
-      filter(n_unique_obs == 1) %>%
-      select(-c(year, year0, aoh)) %>% unique() %>%
-      mutate(term = "year0", estimate = 0, trend = "no trend")
-    ) %>%
-
-  mutate(
-    aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 7, 3, 5, 1, 2, 4)]),
-    obligate_type = case_when(
-      mature_forest_obl > 0.5 ~ "mature_forest_obligate",
-      mature_forest_obl < 0.5 ~ "not_obligate"))
-
-write_parquet(aoh_feols_trends, paste0(p_derived, "aoh_feols_trends.parquet"))
-
-aoh_feols_trends <- read_parquet(paste0(p_derived, "aoh_feols_trends.parquet"))
-
-
-# ------------------------------------------------------ #
-# ------- trends by species ------- #
-# ------------------------------------------------------ #
-
-aoh_feols_trends_by_sp <- 
-  aoh_feols_trends %>%
-  filter(
-    #passage_type == "exclude_passage"#, mature_forest_obl < 0.5
-    !is.na(trend)) %>%
-  select(aoh_type, vert_class, binomial, trend, passage_type) %>% 
-  unique() %>% arrange(aoh_type, binomial, trend) %>%
-  group_by(aoh_type, vert_class, binomial, passage_type) %>% 
-  summarise(n_trends = n(), 
-            trend_types = str_c(unique(trend), collapse = "; ")) %>% 
-  # arrange(desc(n_trends)) %>%
-  ungroup() %>%
-  mutate(overall_trend = case_when(
-    n_trends == 1 ~ trend_types,
-    n_trends == 2 & trend_types == "gain; no trend" ~ "weak gain",
-    n_trends == 2 & trend_types == "loss; no trend" ~ "weak loss",
-    n_trends == 2 & trend_types == "gain; loss" | n_trends == 3 ~ "context dependent"
-  )) %>%
-  left_join(aoh_species_list) %>%
-  
-  # update factor levels
-  mutate(
-    trend_direction = case_when(
-      grepl("gain", overall_trend) ~ "gain",
-      grepl("loss", overall_trend) ~ "loss",
-      grepl("context", overall_trend) ~ "context dependent",
-      grepl("no trend", overall_trend) ~ "no trend"
-      ) %>% fct_relevel(c("gain", "loss", "no trend", "context dependent")),
-    trend_consistency = case_when(
-      n_trends == 1 ~ "consistent",
-      grepl("weak", overall_trend) ~ "weak",
-      grepl("context", overall_trend) ~ "opposite"
-      ) %>% #as_factor() %>% 
-      fct_relevel(rev(c("consistent", "weak", "opposite"))),
-    
-    
-    aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 7, 3, 5, 1, 2, 4)]),
-    redlistCategory = fct_relevel(redlistCategory, c("Least Concern", "Near Threatened", "Vulnerable", 
-                                                     "Endangered", "Critically Endangered", "Data Deficient"))
-    )
-
-write_parquet(aoh_feols_trends_by_sp, paste0(p_derived, "aoh_feols_trends_by_sp.parquet"))
-
-aoh_feols_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_feols_trends_by_sp.parquet"))
-
-# ------------------------------------------------------ #
-# load relevant files
-# ------------------------------------------------------ #
-aoh_feols <- read_parquet(paste0(p_derived, "aoh_feols.parquet"))
-aoh_feols_trends <- read_parquet(paste0(p_derived, "aoh_feols_trends.parquet"))
-aoh_feols_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_feols_trends_by_sp.parquet"))
-
-```
-
-```{r aoh-ols-trends}
-# ------------------------------------------------------ #
-# distill trends
-# ------------------------------------------------------ #
-
-# determine the direction of trend for each species-site combination
-aoh_trends <- 
-  aoh_lm %>% 
-  left_join(run_indices) %>%
-  filter(term == "year0") %>%
-
-  mutate(trend = case_when(
-    estimate > 0 & p.value < 0.05 ~ "gain", # Statistically significant gain of AOH
-    estimate < 0 & p.value < 0.05 ~ "loss", # Statistically significant loss of AOH
-    p.value > 0.05 ~ "no trend" # no significant trend
-    )) %>%
-  # mutate(trend0 = if_else(estimate > 0, "gain", "loss")) %>%
-  # mutate(trend_from_ci = case_when(
-  #   sign(conf.low) + sign(conf.high) == -2 ~ "loss",
-  #   sign(conf.low) + sign(conf.high) == 2 ~ "gain",
-  #   sign(conf.low) + sign(conf.high) < 2 & 
-  #     sign(conf.low) + sign(conf.high) > -2 ~ "no trend")
-  #   ) %>% 
-  # mutate(test = trend == trend_from_ci) %>%
-  # select(term, estimate, p.value, conf.low, conf.high, run_index:binomial, contains("trend"), everything()) %>%
-  # filter(
-  #   p.value > 0.05,
-  #   is.na(test)
-  #   ) %>% .$trend %>% unique()
-  
-  select(term:binomial, trend, everything()) %>%
-  mutate(aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 7, 3, 5, 1, 2, 4)]),
-         obligate_type = case_when(
-           mature_forest_obl > 0.5 ~ "mature_forest_obligate",
-           mature_forest_obl < 0.5 ~ "not_obligate"))
-
-
-write_parquet(aoh_trends, paste0(p_derived, "aoh_trends.parquet"))
-aoh_trends <- read_parquet(paste0(p_derived, "aoh_trends.parquet"))
-
-
-
-# ------------------------------------------------------ #
-# ------- trends by species ------- #
-# ------------------------------------------------------ #
-
-# Create data.frame with a single row for each species in each aoh type, with the number of trends and the specific trend types they experience (overall_trend).
-# Extract the number of species with multiple trends per aoh_type:
-
-# Add a column for overall_trend:
-# 1. Always winners
-# 2. Always losers
-# 3. Context dependent
-
-aoh_trends_by_sp <-
-  aoh_trends %>%
-  filter(
-    #passage_type == "exclude_passage"#, mature_forest_obl < 0.5
-    !is.na(trend)) %>%
-  select(aoh_type, vert_class, binomial, trend, passage_type) %>% 
-  unique() %>% arrange(aoh_type, binomial, trend) %>%
-  group_by(aoh_type, vert_class, binomial, passage_type) %>% 
-  summarise(n_trends = n(), 
-            trend_types = str_c(unique(trend), collapse = "; ")) %>% 
-  # arrange(desc(n_trends)) %>%
-  ungroup() %>%
-  mutate(overall_trend = case_when(
-    n_trends == 1 ~ trend_types,
-    n_trends == 2 & trend_types == "gain; no trend" ~ "weak gain",
-    n_trends == 2 & trend_types == "loss; no trend" ~ "weak loss",
-    n_trends == 2 & trend_types == "gain; loss" | n_trends == 3 ~ "context dependent"
-  )) %>%
-  left_join(aoh_species_list) %>%
-  
-  # update factor levels
-  mutate(
-    trend_direction = case_when(
-      grepl("gain", overall_trend) ~ "gain",
-      grepl("loss", overall_trend) ~ "loss",
-      grepl("context", overall_trend) ~ "context dependent",
-      grepl("no trend", overall_trend) ~ "no trend"
-      ) %>% fct_relevel(c("gain", "loss", "no trend", "context dependent")),
-    trend_consistency = case_when(
-      n_trends == 1 ~ "consistent",
-      grepl("weak", overall_trend) ~ "weak",
-      grepl("context", overall_trend) ~ "opposite"
-      ) %>% #as_factor() %>% 
-      fct_relevel(rev(c("consistent", "weak", "opposite"))),
-    
-    
-    aoh_type = fct_relevel(aoh_type, aoh_types[c(6, 7, 3, 5, 1, 2, 4)]),
-    redlistCategory = fct_relevel(redlistCategory, c("Least Concern", "Near Threatened", "Vulnerable", 
-                                                     "Endangered", "Critically Endangered", "Data Deficient"))
-    )
-
-write_parquet(aoh_trends_by_sp, paste0(p_derived, "aoh_trends_by_sp.parquet"))
-aoh_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_trends_by_sp.parquet"))
-
-
-
-# ------------------------------------------------------ #
-# ------- trends changes ------- #
-# ------------------------------------------------------ #
-
-# ----------------------------------------- #
-# Q. How many species have no trend or a negative trend at the landscape scale,
-# but a positive trend in abandonment?
-# ----------------------------------------- #
-aoh_trends_by_sp
-
-
-
-# ----------------------------------------- #
-# Q. How many species have no trend or a negative trend for observed abandonment,
-# but a positive trend in potential abandonment?
-# ----------------------------------------- #
-trend_changes <- 
-  aoh_feols_trends %>%
-  filter(vert_class != "amp",
-         str_detect(aoh_type, "crop"),
-         passage_type == "exclude_passage",
-         mature_forest_obl < 0.5
-         ) %>%
-  pivot_wider(id_cols = c(vert_class, site, binomial),
-              values_from = trend,
-              names_from = aoh_type) %>%
-  # select(contains("crop")) %>% unique()
-  mutate(overall_change = case_when(
-    crop_abn_iucn == "gain" & crop_abn_potential_iucn == "gain" ~ "no change (gain)",
-    crop_abn_iucn == "loss" & crop_abn_potential_iucn == "loss" ~ "no change (loss)",
-    crop_abn_iucn == "gain" & crop_abn_potential_iucn == "loss" ~ "gain to loss",
-    crop_abn_iucn == "loss" & crop_abn_potential_iucn == "gain" ~ "loss to gain",
-    crop_abn_iucn == "loss" & crop_abn_potential_iucn == "no trend" ~ "loss to no trend",
-    crop_abn_iucn == "gain" & crop_abn_potential_iucn == "no trend" ~ "gain to no trend",
-    crop_abn_iucn == "no trend" & crop_abn_potential_iucn == "no trend" ~ "no change (no trend)",
-    crop_abn_iucn == "no trend" & crop_abn_potential_iucn == "loss" ~ "no trend to loss",
-    crop_abn_iucn == "no trend" & crop_abn_potential_iucn == "gain" ~ "no trend to gain"
-  ) %>% fct_relevel(),
-  change_direction = case_when(
-    grepl("^no change", overall_change) ~ "no change",
-    grepl("to loss$", overall_change) ~ "loss",
-    grepl("to gain$", overall_change) ~ "gain",
-    grepl("no trend", overall_change) ~ "indeterminate"
-  ) %>% fct_relevel("gain", "no change", "indeterminate", "loss")) %>%
-  group_by(vert_class, site, 
-           # overall_change, 
-           change_direction
-           ) %>%
-  summarise(n_sp = n()) %>% 
-  arrange(vert_class, change_direction)
-  # .$overall_change %>% as_factor() %>% levels()
-
-
-trend_changes %>%
-  ggplot(mapping = aes(
-         x = change_direction,
-         y = n_sp,
-         fill = vert_class,
-         group = vert_class
-         )) +
-  geom_col(position = position_dodge(preserve = "total"),
-           color = "black", size = .25) +
-  theme_classic() + 
-  labs(x = "Trend Change Direction", y = "Number of Species") +
-  # scale_fill_manual(name = "", labels = palette_labels, values = palette_du_jour) + 
-  theme(legend.position = "right",
-        axis.text.x = element_text(angle = 340, vjust = 1, hjust = 0)) +
-  facet_wrap(vars(site), scales = "free_y", labeller = as_labeller(fancy_labels))
-
-
-
-trend_changes %>%
-  ggplot(mapping = aes(
-         y = change_direction,
-         x = n_sp,
-         fill = vert_class,
-         group = vert_class
-         )) +
-  geom_col(position = position_dodge(preserve = "total"),
-           color = "black", size = .25) +
-  theme_classic() + 
-  # labs(x = "Trend Change Direction", y = "Number of Species") +
-  # scale_fill_manual(name = "", labels = palette_labels, values = palette_du_jour) + 
-  theme(legend.position = "right") +
-    theme(strip.text.y.right = element_text(angle = 0)) +
-  facet_grid(rows = vars(site), scales = "free")#, labeller = as_labeller(fancy_labels))
-
-```
-
 ## Effect sizes
 
 Three ways to report this:
@@ -2869,84 +2553,12 @@ c. proportional gain
 Why plot the observed change in AOH instead of the estimated change in AOH, derived from model results?
 Some of the modeled trends produce negative estimates of the starting AOH, which produces truly wonky results for ratios and proportions.
 Essentially, this makes it so that ratios for winner species that start from a negative are consequently negative.
-These observed values are calculated
 
-```{r estimated-changes-aoh-change-df}
-# ------------------
-# determine the relative trend (percent change in AOH start to end)
-# based on the model trends
-# ------------------
-aoh_lm <- read_parquet(paste0(p_derived, "aoh_lm.parquet"))
-aoh_feols <- read_parquet(paste0(p_derived, "aoh_feols.parquet"))
+Observed effect sizes are used in all models except models on model slope values.
 
-# calculate percent changes
-
-aoh_change_df <-
-  # aoh_lm %>%
-  aoh_feols %>% 
-  select(run_index, 
-         term, estimate,
-         conf.low, conf.high) %>%
-  mutate(term = ifelse(term == "(Intercept)", "intercept", "slope")) %>%
-  pivot_longer(cols = c(estimate, contains("conf")), names_to = "est_type") %>%
-  pivot_wider(id_cols = c(run_index, est_type), 
-              values_from = value,#c(estimate, conf.low, conf.high),
-              names_from = term, #names_prefix = "",
-              ) %>%
-  
-  # add species with 0 slopes, i.e., n_unique_obs == 1
-  bind_rows(
-    aoh %>%
-      filter(n_unique_obs == 1) %>%
-      select(-c(year, year0)) %>% unique() %>%
-      select(run_index, intercept = aoh) %>%
-      mutate(est_type = "estimate", slope = 0)
-    ) %>%
-  
-  left_join(aoh_start_end_l %>% select(run_index, contains("year")) %>% unique(), by = "run_index") %>%
-  left_join(run_indices) %>%
-  select(run_index, est_type, vert_class, site, contains("year"), slope, intercept, 
-         aoh_type, passage_type, vert_class, binomial, mature_forest_obl) %>%
-  left_join(select(area_summary_df, site, total_site_area_ha_2017, area_ever_abn_ha), by = "site") %>% 
-  left_join(aoh_feols_trends %>% select(run_index, trend), by = "run_index") %>%
-  left_join(aoh_feols_trends_by_sp %>% select(aoh_type:overall_trend, trend_direction, trend_consistency), by = c("aoh_type", "vert_class", "binomial", "passage_type")) %>%
-  mutate(time_range = end_year - start_year,
-         aoh_start_est = slope*1 + intercept,
-         aoh_end_est = slope*(time_range) + intercept,
-         abs_change = aoh_end_est - aoh_start_est,
-         abs_change_per_yr = abs_change / time_range,
-         abs_change_as_prop_site_area = abs_change / total_site_area_ha_2017,
-         ratio_change = aoh_end_est / aoh_start_est,
-         prop_change = abs_change / aoh_start_est, 
-         factor_change = case_when(prop_change < 0 ~ 1/prop_change, TRUE ~ prop_change),
-         percent_change = paste0(prettyNum(round(100 * prop_change, digits = 2), nsmall = 2), "%")) # %>%
-    
-    # select(abs_change:percent_change) %>%
-    # print(n = 100)
-
-
-# save file
-write_parquet(aoh_change_df, paste0(p_derived, "aoh_change_df.parquet"))
-
-names(aoh_change_df)
-
-# minor exploration
-
-aoh_change_df %>%
-  filter(est_type == "estimate", aoh_type == "crop_abn_iucn", str_detect(passage_type, "excl"),
-         vert_class != "amp", mature_forest_obl < 0.5)
-
-
-# estimated (^) vs. the observed change directly from aoh_start_end_l
-aoh_start_end_l %>% 
-  filter(window_size == 1,
-         aoh_type == "crop_abn_iucn", str_detect(passage_type, "excl"),
-         vert_class != "amp", mature_forest_obl < 0.5)
-```
-
-```{r observed-change-in-AOH-by-window-size}
-
-tmp_df
+```{r observed-change-in-aoh-by-window-size}
+# Calculate observed change in AOH by comparing the mean AOH in the last X years with the mean AOH in the first X years of the time series. 
+# We compare for a variety of window lengths (1, 5, 10, and 15 years) for calculating the initial and final AOH values. 
 
 # ------------------------------------------------------- #
 # calculate average aoh at start and end of time period
@@ -2996,19 +2608,6 @@ names(aoh_start_end_l)
 
 write_parquet(aoh_start_end_l, paste0(p_derived, "aoh_start_end_l.parquet"))
 
-# add species with 0 slopes, i.e., n_unique_obs == 1
-aoh %>%
-  filter(n_unique_obs == 1) %>%
-  select(-c(year, year0)) %>% unique() %>%
-  select(run_index, intercept = aoh) %>%
-  mutate(est_type = "estimate", slope = 0)
-
-aoh_start_end_trends_l %>% 
-  filter(run_index == 24712)
-
-aoh_start_end_trends_l %>%
-  filter(run_index %in% unique(pull(filter(aoh, n_unique_obs == 1), run_index))) %>%
-  select(site:trend_threshold) %>% pull(trend) %>% length()
 
 aoh_start_end_l %>%
   filter(!(start_year == 1987 & end_year == 2017)) %>%
@@ -3097,6 +2696,78 @@ ggsave(gg_aoh_start_end_trends_l,
        )
 ```
 
+```{r estimated-changes-aoh-change-df}
+# ------------------
+# determine the relative trend (percent change in AOH start to end)
+# based on the model trends
+# ------------------
+aoh_lm <- read_parquet(paste0(p_derived, "aoh_lm.parquet"))
+aoh_feols <- read_parquet(paste0(p_derived, "aoh_feols.parquet"))
+
+# calculate percent changes
+
+aoh_change_df <-
+  # aoh_lm %>%
+  aoh_feols %>% 
+  select(run_index, 
+         term, estimate,
+         conf.low, conf.high) %>%
+  mutate(term = ifelse(term == "(Intercept)", "intercept", "slope")) %>%
+  pivot_longer(cols = c(estimate, contains("conf")), names_to = "est_type") %>%
+  pivot_wider(id_cols = c(run_index, est_type), 
+              values_from = value,#c(estimate, conf.low, conf.high),
+              names_from = term, #names_prefix = "",
+              ) %>%
+  
+  # add species with 0 slopes, i.e., n_unique_obs == 1
+  bind_rows(
+    aoh %>%
+      filter(n_unique_obs == 1) %>%
+      select(-c(year, year0)) %>% unique() %>%
+      select(run_index, intercept = aoh) %>%
+      mutate(est_type = "estimate", slope = 0)
+    ) %>%
+  
+  left_join(aoh_start_end_l %>% select(run_index, contains("year")) %>% unique(), by = "run_index") %>%
+  left_join(run_indices) %>%
+  select(run_index, est_type, vert_class, site, contains("year"), slope, intercept, 
+         aoh_type, passage_type, vert_class, binomial, mature_forest_obl) %>%
+  left_join(select(area_summary_df, site, total_site_area_ha_2017, area_ever_abn_ha), by = "site") %>% 
+  left_join(aoh_feols_trends %>% select(run_index, trend), by = "run_index") %>%
+  left_join(aoh_feols_trends_by_sp %>% select(aoh_type:overall_trend, trend_direction, trend_consistency), by = c("aoh_type", "vert_class", "binomial", "passage_type")) %>%
+  mutate(time_range = end_year - start_year,
+         aoh_start_est = slope*1 + intercept,
+         aoh_end_est = slope*(time_range) + intercept,
+         abs_change = aoh_end_est - aoh_start_est,
+         # abs_change_per_yr = abs_change / time_range, # dropped Sep. 2024, doesn't add any value and is duplicative of slope.
+         abs_change_as_prop_site_area = abs_change / total_site_area_ha_2017,
+         ratio_change = aoh_end_est / aoh_start_est,
+         prop_change = abs_change / aoh_start_est, 
+         factor_change = case_when(prop_change < 0 ~ 1/prop_change, TRUE ~ prop_change),
+         percent_change = paste0(prettyNum(round(100 * prop_change, digits = 2), nsmall = 2), "%")) # %>%
+    
+    # select(abs_change:percent_change) %>%
+    # print(n = 100)
+
+
+# save file
+write_parquet(aoh_change_df, paste0(p_derived, "aoh_change_df.parquet"))
+
+names(aoh_change_df)
+
+# minor exploration
+
+aoh_change_df %>%
+  filter(est_type == "estimate", aoh_type == "crop_abn_iucn", str_detect(passage_type, "excl"),
+         vert_class != "amp", mature_forest_obl < 0.5)
+
+
+# estimated (^) vs. the observed change directly from aoh_start_end_l
+aoh_start_end_l %>% 
+  filter(window_size == 1,
+         aoh_type == "crop_abn_iucn", str_detect(passage_type, "excl"),
+         vert_class != "amp", mature_forest_obl < 0.5)
+```
 
 ```{r compare-obs-change-to-mod-trends-feols}
 # ---------------------------------------------------------------------- #
@@ -3194,11 +2865,11 @@ df_agree %>%
   filter(trend_threshold < 0.26) %>%
   arrange(window_size) %>% print(n = 30)
 
-# When using a threshold of 10-20% to indicate inscreases or decreases, trends match for about 95% of species.
+# When using a threshold of 10-20% to indicate increases or decreases, trends match for about 95% of species.
 
 ```
 
-```{r eff-size-stats}
+```{r effect-size-stats}
 # ----------------------------------------------------------------- #
 # a. mean absolute change, by trend, by taxonomic group
 # b. mean absolute change, by trend, by taxonomic group, by site
@@ -3326,9 +2997,9 @@ aoh_start_end_l_tmp_plots %>%
 
 # Extras
 
-
-
 ```{r seff}
+# Assessing the efficiency of various job lengths and memory allocations on the computing cluster.
+
 # extract run codes:
 list.files("scripts/cluster/slurm_out") %>% 
   grep("aoh_hab*", ., value = TRUE) %>% grep("aoh_hab11_*", ., value = TRUE) %>%
@@ -3435,408 +3106,6 @@ seff %>%
 seff %>%
   select(id) %>% unique()
 
-```
-
-
-```{r AOH-suitability-by-season}
-# Do species have seasonal suitabilities?
-habitat_prefs$binomial %>% unique() %>% length() # 2312
-habitat_prefs %>%
-  filter(binomial %in% unique(species_list$binomial), 
-         !is.na(map_code), suitability == "Suitable") %>%
-  left_join(select(species_list, vert_class, binomial) %>% unique()) %>%
-  # filter(!(vert_class == "bird" & is.na(season))) %>%
-  group_by(season_code, vert_class) %>%
-  summarise(n_sp = n()) %>%
-  print(n = 30)
-
-# ok, once I filter this to just suitable habitats, the unknown seasonality and na birds disappear
-# 4 season == NA bird entries
-# 20 seasonal unknown entries (17 mammals, 3 birds), totaling 6 species.
-# unk_sp <-
-  habitat_prefs %>%
-  filter(binomial %in% unique(species_list$binomial), 
-         !is.na(map_code), suitability == "Suitable") %>%
-  left_join(select(species_list, vert_class, binomial) %>% unique()) %>%
-  left_join(habitat_age_req_coded %>% select(binomial, common_names)) %>%
-  filter(
-    #!(vert_class == "bird" & is.na(season)),
-    is.na(season)
-    # grepl("unknown", season, ignore.case = TRUE)
-    ) %>%
-  select(vert_class, binomial, common_names, name, map_code, season_code) #%>%
-  # .$binomial %>% unique()
-
-habitat_prefs %>% 
-  filter(binomial %in% unk_sp, !is.na(map_code)) %>% 
-  left_join(habitat_age_req_coded %>% select(binomial, common_names)) %>%
-
-  select(binomial, common_names, name, map_code, season) %>%
-  print(n = 100)
-
-# what are their habitat descriptions?
-habitat_age_req_coded %>% filter(binomial %in% unk_sp) %>%
-  select(vert_class, binomial, common_names, habitat)
-  
-
-habitat_prefs %>%
-  filter(binomial %in% unique(species_list$binomial), !is.na(map_code)) %>%
-  left_join(select(species_list, vert_class, binomial) %>% unique()) %>% nrow()
-  filter(!(vert_class == "bird" & is.na(season)))
-
-habitat_prefs %>%
-  filter(binomial %in% c("Recurvirostra americana", "Glaucidium brodiei"),
-         !is.na(map_code))
-
-species_ranges %>% st_drop_geometry() %>% as_tibble() %>%
-  filter(binomial %in% c("Recurvirostra americana", "Glaucidium brodiei"))
-
-species_ranges %>% filter(binomial == "Glaucidium brodiei") %>% select(seasonal) %>% plot()
-
-jung_hab_type_area_df %>%
-  filter(site == "nebraska") %>%
-  arrange(habitat_type)
-
-jung_hab_type_area_df %>%
-  filter(site == "chongqing") %>%
-  arrange(habitat_type)
-
-
-species_list %>% nrow() # 4001 (old: 4038)
-species_list$binomial %>% unique %>% length # 2187 # number of unique species (after filtering by habitat, elevation)
-
-
-# number of species in each class at each site
-species_list %>% 
-  group_by(site, vert_class) %>% 
-  summarise(num_sp = n()) 
-
-
-# If they don't have suitabilities, should I drop them?
-
-
-
-# Drop passage areas
-
-species_ranges %>% 
-  # st_drop_geometry() %>% 
-  filter(binomial %in% unique(species_list$binomial),
-         vert_class == "bird",
-         binomial == "Catharus swainsoni", 
-         site == site_df$site[11]) %>%
-  # as_tibble() %>%
-  select(
-    # site, binomial,
-         seasonal) %>%
-  plot()
-
-
-species_list %>% filter(str_detect(binomial, "Catharus swainsoni"))
-
-
-
-# testing with the Swainson's Thrush
-habitat_prefs %>% 
-  filter(str_detect(binomial, "Catharus swainsoni")) %>%
-  select(binomial, majorImportance:season, map_code, IUCNLevel) %>%
-  arrange(season)
-
-
-
-species_ranges$seasonal %>% unique() %>% sort()
-habitat_prefs$season %>% unique() %>% sort()
-habitat_prefs %>%
-  filter(
-    # season %in% c("Seasonal Occurrence Unknown","unknown")
-    is.na(season), vert_class == "bird"
-    )
-  
-
-habitat_prefs %>%
-  select(binomial, majorImportance:season, map_code, IUCNLevel) %>%
-  
-  # update season_code:
-  # --- Codes are: "Resident" (1), "Breeding" (2), "Non-breeding Season" (3), Passage (4), and Seasonal Occurrence Uncertain (5).
-  mutate(season_code = case_when(
-    grepl("resident", season, ignore.case = TRUE) ~ 1,
-    season %in% c("breeding", "Breeding Season") ~ 2,
-    season %in% c("non-breeding", "Non-Breeding Season") ~ 3,
-    grepl("passage", season, ignore.case = TRUE) ~ 4,
-    grepl("unknown", season, ignore.case = TRUE) ~ 5
-    )) %>%
-  # filter(season_code == 1) %>%
-  select(season_code,season) %>% arrange(season_code) %>% unique()
-
-
-habitat_prefs
-
-habitat_prefs %>%
-  left_join(unique(select(species_list, binomial, vert_class)), by = "binomial") %>%
-  filter(vert_class == "bird") %>%
-  select(season, suitability) %>% unique() %>% arrange(suitability)
-
-habitat
-
-
-species_ranges %>%
-  filter(vert_class == "bird", binomial == sp_name2)
-```
-
-
-```{r inner-join-suitability-by-season}
-aoh_l$aoh_type %>% unique()
-
-tmp_aoh <- aoh_l %>% 
-  filter(aoh_type == "max_abn_iucn", #binomial == sp_name, 
-         # site == site_df$site[site_index],
-         year %in% 2011:2015) %>% 
-  select(binomial, year, map_code, season, area) #%>% print(n=200)
-
-# filter to just the combinations of map_code and season_code that are suitable
-habitat_combos <- z1 %>% select(binomial, season_code, map_code, IUCNLevel) %>% arrange(season_code, map_code)
-habitat_prefs %>% # extract the habitat classifications for the species in question
-  filter(suitability == "Suitable", !is.na(map_code)) %>%
-  select(binomial, season_code, map_code, IUCNLevel)
-  
-
-tmp_aoh %>%
-  rename(season_code = season) %>%
-  inner_join(z1 %>% select(binomial, season_code, map_code, IUCNLevel))
-
-
-# ok, now I need to figure out how to get the combo of NA seasons to not drop those AOH areas.
-
-# here's a way to update the NA season_codes to 99
-habitat_prefs %>% # extract the habitat classifications for the species in question
-  filter(suitability == "Suitable", !is.na(map_code),
-         binomial == "Acris crepitans") %>%
-  select(binomial, season_code, map_code, IUCNLevel) %>%
-  mutate(season_code = case_when(
-    is.na(season_code) ~ 99,
-    TRUE ~ season_code
-  ))
-
-# create a new column showing whether the species has NA season suitabilities
-habitat_prefs %>% # extract the habitat classifications for the species in question
-  filter(suitability == "Suitable", !is.na(map_code),
-         binomial == "Acris crepitans") %>%
-  select(binomial, season_code, map_code, IUCNLevel) %>%
-  mutate(season_na = is.na(season_code))
-```
-
-
-```{r deal-w-multiple-season-NA}
-tmp1 <- habitat_prefs %>% # extract the habitat classifications for the species in question
-  filter(suitability == "Suitable", !is.na(map_code),
-         binomial == "Acris crepitans")
-
-tmp1 <- rbind(tmp1, tmp1[4,])
-tmp1[5, "season_code"] <- 1
-
-sp_w_na_suitabilities <- habitat_prefs %>%
-  filter(is.na(season_code)) %>%
-  # select(binomial, season_code) %>% unique() %>%
-  .$binomial %>% unique()
-
-sp_w_na_suitabilities_gt_1 <- habitat_prefs %>%
-  filter(binomial %in% sp_w_na_suitabilities, suitability == "Suitable", !is.na(map_code)) %>%
-  select(binomial, season_code) %>% unique() %>%
-  group_by(binomial) %>% summarise(n_sp = n()) %>% arrange(desc(n_sp)) %>%
-  filter(n_sp > 1) %>%
-  left_join(habitat_age_req_coded %>% select(binomial, common_names, vert_class)) %>%
-  .$binomial
-
-sp_w_na_suitabilities_gt_1
-# "Arctonyx albogularis" # hog badger, exclude NA season (grassland)
-# "Canis latrans" # coyote - exclude NA season (urban areas - these are probably suitable, but not large enough to matter for abandonment context)
-# "Glaucidium brodiei" # These were shrubland high altitude, but this should be updated to 1
-# "Monodelphis americana" # Northern Three-striped Opossum, removed from species_list for lack of habitat in Goias.
-# "Mustela sibirica" # Siberian weasel, NA seas is 109 forest, but this should be updated to 1
-# "Myotis daubentonii" # Daubenton's Myotis (bat) - this just has two different seasons. No update necessary
-habitat_prefs %>% 
-  filter(binomial %in% sp_w_na_suitabilities_gt_1, suitability == "Suitable", !is.na(map_code)) %>%
-  select(binomial, season_code, map_code, IUCNLevel) %>%
-  arrange(binomial, season_code) %>%
-  print(n = 40)
-
-habitat_age_req_coded %>% filter(binomial == "Monodelphis americana") # not in the habitat_coded
-species_ranges %>% filter(binomial == "Monodelphis americana") %>%
-  select(seasonal) %>% plot()
-habitat_prefs %>% filter(binomial == "Monodelphis americana")
-species_list %>% filter(binomial == "Monodelphis americana") # not in the species list - removed for lack of habitat at Goias
-jung_hab_type_area_df %>%
-  filter(site == "goias") 
-elevation_prefs %>% filter(binomial == "Monodelphis americana")
-
-# five species have habitat preferences that include NA and other codes.
-
-
-# for these species, I'll fix these codes so that they are changed if they should be included (Glaucidium brodiei (collared owlet) and Mustela sibirica (siberian weasel)) or left alone if they should be excluded with NA season codes.
-```
-
-
-```{r dev-inner-join}
-# for these species, I'll fix these codes so that they are changed if they should be included (Glaucidium brodiei (collared owlet) and Mustela sibirica (siberian weasel)) or left alone if they should be excluded with NA season codes.
-
-# Extract list of species with some habitat suitabilities with season marked as NA, and some with a code.
-# In these contexts, the NA season should be filtered out.
-# Note that some species have been directly updated in the creation of "habitat_prefs" [Glaucidium brodiei (collared owlet) and Mustela sibirica (siberian weasel)].
-# For species with *only* NA season codes, I'll leave these in, and treat them as suitable in all seasons.
-
-habitat_prefs %>%
-  filter(binomial %in% unique(species_list$binomial), 
-         !is.na(map_code), suitability == "Suitable") %>%
-  left_join(select(species_list, vert_class, binomial) %>% unique()) %>%
-  # filter(!(vert_class == "bird" & is.na(season))) %>%
-  group_by(season_code, vert_class) %>%
-  summarise(n_sp = n()) %>%
-  print(n = 30)
-
-# ---------- #
-# extract list of species with NA season suitabilities:
-sp_w_na_suitabilities <- habitat_prefs %>%
-  filter(is.na(season_code)) %>%
-  # select(binomial, season_code) %>% unique() %>%
-  .$binomial %>% unique()
-
-# ---------- #
-# Extract list of species with some habitat suitabilities with season marked as NA, and some with a code.
-# i.e., with more than one habitat suitability season code, one of which is NA
-# In these contexts, the NA season should be filtered out.
-
-sp_w_na_suit_and_more <- habitat_prefs %>%
-  filter(binomial %in% sp_w_na_suitabilities, suitability == "Suitable", !is.na(map_code)) %>%
-  select(binomial, season_code) %>% unique() %>%
-  group_by(binomial) %>% summarise(n_sp = n()) %>% arrange(desc(n_sp)) %>%
-  filter(n_sp > 1) %>%
-  left_join(habitat_age_req_coded %>% select(binomial, common_names, vert_class)) %>%
-  .$binomial
-
-
-# ------------------------------------ #
-# now, filter the NA season habitats out for these species.
-# exclude na seasons for just these species:
-
-habitat_prefs %>%
-  filter(
-    !(binomial %in% sp_w_na_suit_and_more & is.na(season_code))) %>% # filter out NA season_codes for species with multiple season codes, one being NA
-
-  filter(binomial %in% unique(species_list$binomial),
-         !is.na(map_code), suitability == "Suitable"
-         ) %>%
-  left_join(select(species_list, vert_class, binomial) %>% unique()) %>%
-  # filter(!(vert_class == "bird" & is.na(season))) %>%
-  group_by(season_code, vert_class) %>%
-  summarise(n_sp = n()) %>%
-  print(n = 30)
-
-# above is the number of habitat entries (multiple per species) - below is the number of species with each season_code
-habitat_prefs %>%
-  filter(
-    !(binomial %in% sp_w_na_suit_and_more & is.na(season_code))) %>% # filter out NA season_codes for species with multiple season codes, one being NA
-  
-  filter(binomial %in% unique(species_list$binomial),
-         !is.na(map_code), suitability == "Suitable"
-         ) %>%
-  left_join(select(species_list, vert_class, binomial) %>% unique()) %>%
-  select(binomial, vert_class, season_code) %>% unique() %>%
-  # filter(!(vert_class == "bird" & is.na(season))) %>%
-  group_by(season_code, vert_class) %>%
-  summarise(n_sp = n()) %>%
-  print(n = 30)
-
-# ------------------------------------- #
-# extract a list of species with NA season_codes, so that I can make sure to treat them separately.
-sp_na_season <- 
-  habitat_prefs %>%
-  filter(
-    !(binomial %in% sp_w_na_suit_and_more & is.na(season_code)), # filter out NA season_codes for species with multiple season codes, one being NA 
-    binomial %in% unique(species_list$binomial),
-    !is.na(map_code), suitability == "Suitable",
-    
-    # select those species with na season codes
-    is.na(season_code)
-    ) %>%
-  .$binomial %>% unique()
-# 607 species
-
-# check that these species *only* have NA season codes
-habitat_prefs %>% filter(binomial %in% sp_na_season) %>% select(season_code) %>% unique() # check
-
-
-
-# ------------------------- #
-# Default approach is to use a simple inner_join, then bind to it a filtered aoh file with just the above species (with NA season codes)
-
-tmp_aoh %>% filter(binomial %in% sp_na_season) # to bind back to the inner_joined df
-
-aoh_l$binomial %>% unique() %>% length() # 2181 species:
-aoh_l %>% group_by(aoh_type) %>% summarise(n_sp = length(unique(binomial))) # there are different numbers of species due to variance in the habitats that show up in different parts of sites. 
-# the lc runs have more, because they are not restricted to the habitats only in abandoned pixels. The proportional adjustment is based on the habitats that are present in any part of the site, not just the abn.
-
-aoh_l %>% filter(aoh_type == "max_abn_lc") %>% 
-  filter(!binomial %in% unique(filter(aoh_l, aoh_type == "max_abn_iucn")$binomial)) %>%
-  select(aoh_type:binomial) %>% unique()
-  #1939 species:
-
-species_ranges %>%
-  filter(binomial == "Acrocephalus scirpaceus", site == "belarus") %>%
-  select(seasonal) %>% plot()
-
-
-
-tmp_aoh$binomial %>% unique() %>% length() # 1933 species:
-tmp_aoh_filter$binomial %>% unique() %>% length() # 1664 species:
-aoh_l %>%
-  filter(aoh_type == "max_abn_lc")
-
-aoh_filter %>% 
-  select(aoh_type) %>%
-unique()
-
-aoh_filter <- 
-  aoh_l %>%
-  # rename(season_code = season) %>% # must update so that season_code matches
-  inner_join(
-    habitat_prefs %>% # extract the habitat classifications for the species in question
-      filter(suitability == "Suitable", !is.na(map_code)) %>%
-      select(binomial, season_code, map_code) %>%
-      mutate(season = season_code) # add a new column to 1) match season in aoh, and 2) to retain season_code
-    ) #%>%
-  bind_rows(aoh_l %>% 
-              filter(binomial %in% sp_na_season) %>% # to bind back to the inner_joined df
-              mutate(season_code = NA)
-            )
-
-tmp_aoh_filter$binomial %>% unique() %>% length()
-
-
-
-# ******* 
-
-# ok - next steps: 
-# add this as a filtering step right after loading the aoh_l layers
-# build from this aoh_filter df going forward
-# only load in the specific aoh types I'm actually going to use (i.e., IUCN ones)
-```
-
-
-```{r unresolved-hab-during-passage}
-# one option is to have habitats for breeding or non-breeding count as suitable during passage
-# assuming that passage habitat requirements are the most permissive
-
-# how does this apply to shorebirds?
-habitat_age_req_coded %>% filter(water_obl > 0.5, grepl("wisc", site_presence))
-habitat_prefs %>% filter(str_detect(binomial, "Actitis macularius"))
-
-habitat_prefs %>% filter(season_code == 4) %>%
-  left_join(habitat_age_req_coded %>% select(binomial, water_obl, common_names, site_presence)) %>%
-  filter(water_obl > 0.5) %>%
-  # select(binomial, common_names, site_presence) %>% unique()
-  filter(binomial == "Xenus cinereus") %>%
-  select(season_code, map_code, IUCNLevel) %>% arrange(season_code, map_code)
-
-# Not sure.. might be more complicated, but at least it won't apply for now, since I'm excluding passage areas.
 ```
 
 

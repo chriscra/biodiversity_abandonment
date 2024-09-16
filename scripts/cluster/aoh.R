@@ -4,6 +4,8 @@
 # 
 # Christopher Crawford, Princeton University, updated April 16st, 2022
 # ------------------------------------------------------------ #
+# Note: this script requires access to habitat SpatRasters that have been converted to data.tables and saved as .parquet files. See cluster/save_spatraster_as_dt.R and cluster/save_parquet.R and descriptions in README.md.
+
 # load libraries
 cluster_packages <- c("data.table", "tictoc", "raster", "terra",
                       #"landscapemetrics", "landscapetools", "sp",
@@ -75,11 +77,12 @@ iucn_crosswalk <- read_csv(paste0(p_derived, "iucn_lc_crosswalk.csv")) %>%
 habitat_prefs <- read_csv(file = paste0(p_derived, "iucn_habitat_prefs_subset.csv"))
 elevation_prefs <- read_csv(file = paste0(p_derived, "iucn_elevation_prefs_subset.csv"))
 
-# distribution of habitat types at each site, for adjusting area of habitat estimates
+# distribution of habitat types at each site, for adjusting area of habitat estimates (if running AOH function on land cover codes directly [i.e., class_type == "lc"], not iucn habitat types...this is unnecessary the aoh calculations used in the final manuscript)
+# see "habitats.Rmd" chunk {r calc-area-per-habitat-type}
 jung_hab_type_area_df <- read_csv(file = paste0(p_derived, "jung_hab_type_area_df.csv"))
 
 
-# load area and elevation rasters
+# load area and elevation rasters (see "habitats.Rmd," Section 1)
 elevation_map <- lapply(1:11, function(i) {
   rast(paste0(p_dat, "elevation/", site_df$site[i], "_srtm_crop.tif"))
   })

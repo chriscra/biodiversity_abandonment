@@ -1,7 +1,6 @@
 ---
 title: "Traits"
 author: "Christopher L. Crawford"
-date: "2022-11-30"
 output: html_document
 editor_options: 
   chunk_output_type: console
@@ -10,20 +9,164 @@ editor_options:
 This script is part of the **Effects of cropland abandonment on biodiversity** project, developed by Christopher L. Crawford (chris.L.crawford@gmail.com) at Princeton University beginning in Fall 2021.
 See https://github.com/chriscra/biodiversity_abandonment.
 
+This document contains the primary R scripts for our traits analysis. 
+The key code chunk is labeled "*many-models," which is where our three primary regression models are run (along with a few additional model specifications for exploration).
+This chunk also then combines and saves the model results as a tibble, iterates through producing {gt} model coefficient tables, and saves model diagnostic plots.
+All data files required for these models are included in the accompanying Zenodo data repository.
+
+Script Contents:
+
+0. Outline of Analyses, including the three primary models we report in our manuscript.
+1. Model development, including exploring various species traits as predictor variables and developing and exploring various specifications of linear models.
+2. Running the final linear model specifications, exploring model diagnostic plots and coefficient tables.
+
+
+
+Relevant data:  
+
+- aoh_est_change_tmp_all.csv
+- aoh_obs_change_tmp_all.csv
+These two files contain data for the linear models involved in our traits analysis exploring how species' responses to cropland abandonment are affected by habitat suitabilities and other traits. This contains many variables, but key ones include the response variables for our models ("binary_gain_v_loss", "abs_change_percent_site", and "log(ratio)") and predictor variables c("forest_occ", "savanna_occ", "shrubland_occ", "grassland_occ", "wetlands_occ", "rocky_occ", "caves_occ", "desert_occ", "urban_occ", "arable_occ", "n_suitable_habitats_lvl2", "vert_class", "threatened", "Trophic_level", "log10(Body_mass_g)", "log10(total_range_area)", "abs(centroid_latitude)", and "max_abn_ext_percent_site"). Further details are contained in "traits.Rmd"
+
+- final_species_list.csv
+The final list of bird and mammal species included in our analysis, along with the overall response to cropland abandonment (overall_trend), the sites where that species had AOH affected by cropland abandonment (sites), the IUCN Red List Category, the obligate_type (i.e., whether a species is a mature forest obligate, or not), the the range size quantile (ranking species by global geographic range size), and common names. Note that mature forest obligates were excluded from our final results.
+
+- site_df.csv
+A list of site names and related information describing our study sites.
+
+- trait_mod_df_modx1.rds
+This R data file contains the results of our regression models run in the code chunk "many-models" in the "traits.Rmd" script. This consists of a tibble (i.e., a modified data frame in tidyverse parlance) containing the input data, resulting models, model coefficients, regression tables, and diagnostic statistics for our many model runs.
+
 ```{r initialize}
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/0_start.R")
 source("/Users/christophercrawford/work/projects/biodiversity_abn/scripts/_util/_util_files.R")
 
 # aoh_feols_trends_by_sp
+# ^^ see "AOH.Rmd" code chunk {r **feols-trends}
 ```
 
-```{r load-files}
+# 0. Outline of Analyses
+
+Below, I explore the following models:
+
+1. Binary trend in AOH: 
+- for winners, losers, and no trend species separately, 
+- first with one observation per species (*binary_mod_gain*, *binary_mod_loss*, *binary_mod_no_trend*), 
+- then for one observation per species per site (*binary_mod_gain_sp_site*, *binary_mod_loss_sp_site*, *binary_mod_no_trend_sp_site*)
+
+2. Absolute change in AOH:
+- first the magnitude of the change in AOH from start to end of time series, for both model estimates (*abs_change_aoh_est_lm*) and observed values (*abs_change_aoh_obs_lm*),
+- then the change in AOH as a proportion of the site area, for both model estimates (*abs_change_est_aoh_div_site_area_lm*) and observed values (*abs_change_obs_aoh_div_site_area_lm*) 
+
+3. Various ratios of AOH at the end to the start of the time series, based on observed AOH (model estimates yield negative values, given that some trends have a negative intercept)
+- the ratio of ending AOH to starting AOH (*ratio_change_aoh_lm*)
+- the proportional change of ending AOH to starting AOH (*prop_change_aoh_lm*)
+- the factor change in AOH (where losses in AOH are expressed as "declined by a factor of X", *factor_change_aoh_lm*)
+
+Ultimately, we decided to focus on only three models:
+
+1. Binary, proportion of winners (1) to non-winners (0), with one observation per species per site.
+2. Change in AOH as a proportion of site area (Change in AOH / site area), with one observation for each species at each site.
+3. Ratio of AOH at end of time series to AOH at start ($AOH_end / AOH_start$), log transformed.
+
+
+```{r explore-tmp-files}
+# ---------------------------------------------- #
+# explore the following temporary input files: (created in "_util_files.R")
+aoh_mod_tmp_trends_by_sp # categorical trends by species (one trend per species)
+aoh_est_change_tmp_all # estimated change in AOH based on ols regression with NW estimator
+aoh_obs_change_tmp_all # observed change in AOH based on mean values for start and end of time series (for various window sizes)
+# ---------------------------------------------- #
+
+# exploring:
+
+aoh_mod_tmp_trends_by_sp %>%
+  select(#binomial, 
+         overall_trend, trend_categorical, binary_trend_gain, binary_trend_loss) %>%
+  unique()
+
+aoh_mod_tmp_trends_by_sp %>%
+  mutate(nr = 1:n()) %>%
+  select(nr, everything()) %>%
+  # join the effect size results
+  left_join(aoh_est_change_tmp %>% select(site, aoh_type, passage_type, binomial, abs_change)) %>%
+  select(nr:passage_type, site, overall_trend, abs_change)
+  # select(binomial) %>% unique()
+
+
+aoh_est_change_tmp_all
+aoh_est_change_tmp # subset these based on aoh_type
+aoh_est_change_potential_tmp 
+
+aoh_est_change_tmp %>% 
+  select(site, aoh_type, passage_type, binomial, abs_change, trend, overall_trend)
+
+
+
+aoh_obs_change_tmp_all
+
+aoh_obs_change_tmp
+aoh_obs_change_potential_tmp
+```
+
+```{r three-response-variables}
+# see {r explore-tmp-files} and "_util_files.R" for files
+
+# ---------- #
+# 1. Binary winner or non-winner (i.e., proportion of winners):
+# ---------- #
+# note this is overall
+aoh_mod_tmp_trends_by_sp %>%
+  filter(aoh_type == "crop_abn_iucn") %>% 
+  group_by(Trophic_level, aoh_type) %>%
+  summarise(p_gain = mean(overall_trend == "gain"), n_sp = n()) %>%
+  ungroup() %>%
+  ggplot(aes(x = Trophic_level, y = p_gain, label = n_sp, fill = Trophic_level)) +
+  theme_classic() +
+  geom_col() + 
+  geom_text(size = 3.5, nudge_y = -0.05) +
+  facet_wrap(vars(aoh_type))
+
+
+# ---------- #
+# 2. change in AOH as a proportion of site area:
+# ---------- #
+# note: these are estimated changes in AOH based on OLS regression with NW estimator.
+# response variable: abs_change_as_prop_site_area
+
+aoh_est_change_tmp %>%
+  ggplot(aes(x = abs_change/10^3)) +
+  geom_histogram()
+
+aoh_est_change_tmp %>%
+  ggplot(aes(x = abs_change_as_prop_site_area)) +
+  geom_histogram()
+
+
+# ---------- #
+# 3. Ratio of AOH, log-transformed
+# ---------- #
+# Ratio of AOH at end of time series to AOH at start ($AOH_end / AOH_start$), log-transformed.
+
+# response variable: log(ratio)
+aoh_obs_change_tmp %>%
+  ggplot(aes(x = log(ratio))) +
+  geom_histogram()
+```
+
+
+# 1. Model Development
+
+
+```{r load-traits-data}
 
 # ------------------------------------------------------------------ #
 # traits databases
 # ------------------------------------------------------------------ #
 
-# 1. Etard et al. 2020 GEB - Global gaps in trait data for terrestrial vertebrates
+# 1. Etard, A., Morrill, S. & Newbold, T. Global gaps in trait data for terrestrial vertebrates. Global Ecology and Biogeography 29, 2143–2158 (2020).
+# see: https://doi.org/10.1111/geb.13184
+
 etard_mammals <- read_csv(paste0(p_dat, "bd/traits/Etard_2020_GEB/Mammals.csv")) %>%
   mutate(vert_class = "mam")
 etard_birds <- read_csv(paste0(p_dat, "bd/traits/Etard_2020_GEB/Birds.csv")) %>%
@@ -40,38 +183,8 @@ etard <- bind_rows(etard_birds, etard_mammals) %>%
 
 glimpse(etard)
 
+# note, we also considered using data from "EltonTraits" (Hamish Wilman, Jonathan Belmaker, Jennifer Simpson, Carolina de la Rosa, Marcelo M. Rivadeneira, and Walter Jetz. 2014. EltonTraits 1.0: Species-level foraging attributes of the world's birds and mammals. Ecology 95:2027. http://dx.doi.org/10.1890/13-1917.1) but decided against it.
 
-# 2. EltonTraits: 
-# Hamish Wilman, Jonathan Belmaker, Jennifer Simpson, Carolina de la Rosa, Marcelo M. Rivadeneira, and Walter Jetz. 2014. EltonTraits 1.0: Species-level foraging attributes of the world's birds and mammals. Ecology 95:2027. http://dx.doi.org/10.1890/13-1917.1
-
-elton_mammals <- read_delim(paste0(p_dat, "bd/traits/EltonTraits/MamFuncDat.txt"), name_repair = "universal")
-elton_birds <- read_delim(paste0(p_dat, "bd/traits/EltonTraits/BirdFuncDat.txt"), name_repair = "universal")
-problems_df <- problems() 
-problem_rows <- problems_df %>% pull(row)
-problems_df$col
-names(elton_birds)[40] # problematic column
-
-# update column names:
-elton_mammals %>%
-  rename(ID = MSW3_ID, 
-         family = MSWFamilyLatin,
-         )
-
-elton_mammals
-elton_birds
-names(elton_mammals)
-names(elton_birds)
-elton_mammals %>%
-  select(contains("ForStrat"))
-
-sapply(1:26, function(i) {str_detect(names(elton_birds), names(elton_mammals)[i]) %>% sum()})
-
-# join eltons
-elton <- bind_rows(elton_birds, elton_mammals)
-
-
-elton_birds[problem_rows, 40] %>% pull
-elton_birds[problem_rows, ]
 
 # ------------------------------------------------------------------ #
 # Phylogenetic
@@ -91,7 +204,7 @@ iucn_taxonomy <- lapply(c("LC", "nonLC"), function(i) {
 
 iucn_taxonomy %>% select(orderName) %>% unique() %>% print(n = 100)
 
-# taxonomic common names, derived from HBW (birds) and Wikipedia (mammals)
+# taxonomic common names, derived from HBW (birds) and Wikipedia (mammals), collected by hand.
 taxonomy_common <- read_csv(paste0(p_dat, "bd/phylogenies/taxonomic_common_names.csv"))
 
 taxonomy_df <-
@@ -116,8 +229,8 @@ write_parquet(taxonomy_df, paste0(p_derived, "taxonomy_df.parquet"))
 
 ```
 
-```{r update-based-on-binomial-match}
-# test for matching binomial names:
+```{r update-etard}
+# update etard by matching bionomial names with IUCN
 
 # Species with AOH that do not have matching binomial names in the Etard trait database
 iucn_etard_mismatches_df <-
@@ -242,7 +355,7 @@ missing # missing Inia geoffrensis (Amazon river dolphin), but that's ok, becaus
 # -------- #
 # extract habitat specialities:
 habitat_occurrence_df <- 
-  habitat_age_req_coded %>%
+  habitat_age_req_coded %>% # see "IUCN.Rmd," Section 4
       mutate(
         forest_occ =     str_detect(suitable_habitats, regex("forest", ignore_case = TRUE)),
         forest_plantations =     str_detect(suitable_habitats, regex("forest|plantations", ignore_case = TRUE)),
@@ -284,229 +397,20 @@ habitat_occurrence_df <-
 # --------- save file:
 write_parquet(habitat_occurrence_df, paste0(p_derived, "habitat_occurrence_df.parquet"))
 
-
-# ------------------------------------------------------------- #
-# testing / exploration
-habitat_age_req_coded %>%
-  mutate(forest_occ =     str_detect(suitable_habitats, regex("forest|plantations", ignore_case = TRUE)),
-         shrubland_occ =      str_detect(suitable_habitats, regex("shrubland", ignore_case = TRUE)),
-         savanna_occ =      str_detect(suitable_habitats, regex("savanna", ignore_case = TRUE)),
-         grass_occ =      str_detect(suitable_habitats, regex("grassland|pasture", ignore_case = TRUE)),
-         wetlands_occ =   str_detect(suitable_habitats, regex("wet", ignore_case = TRUE)),
-         # note, that pasture shows up twice, in both grass_occ, and farmland_occ. Therefore, grass_occ and farmland_occ will overlap in some cases
-         farmland_occ =   str_detect(suitable_habitats, regex("arable|pasture|garden", ignore_case = TRUE)),
-         urban_occ =      str_detect(suitable_habitats, regex("urban", ignore_case = TRUE)),
-         rocky_occ =      str_detect(suitable_habitats, regex("rocky", ignore_case = TRUE)),
-         desert_occ =     str_detect(suitable_habitats, regex("desert", ignore_case = TRUE)),
-         artificial_occ =     str_detect(suitable_habitats, regex("artificial", ignore_case = TRUE)),
-         
-         grasslands_plus =    str_detect(suitable_habitats, regex("shrubland|savanna|grassland|pasture", ignore_case = TRUE)),
-         n_hab_occ = rowSums(across(contains("occ"))),
-         specialty = case_when(
-           n_hab_occ == 1 & forest_occ ~ "forest",
-           n_hab_occ == 1 & shrubland_occ ~ "shrubland",
-           n_hab_occ == 1 & savanna_occ ~ "savanna",
-           n_hab_occ == 1 & grass_occ ~ "grass",
-           n_hab_occ == 1 & wetlands_occ ~ "wetlands",
-           n_hab_occ == 1 & farmland_occ ~ "farmland",
-           n_hab_occ == 1 & urban_occ ~ "urban",
-           n_hab_occ == 1 & rocky_occ ~ "rocky",
-           n_hab_occ == 1 & desert_occ ~ "desert",
-           n_hab_occ > 1 & n_hab_occ < 5 & forest_occ & grasslands_plus ~ "for_grass_combo",
-           n_hab_occ > 1 & n_hab_occ < 4 & (grass_occ | savanna_occ | shrubland_occ | farmland_occ) ~ "grass_plus",
-           n_hab_occ == 3 & forest_occ & grass_occ & wetlands_occ ~ "for_grass_wet",
-           n_hab_occ >= 5 ~ "generalist",
-           TRUE ~ "NA")
-         ) %>% 
-  # group_by(n_hab_occ) %>% summarise(n = n())
-  group_by(specialty) %>% summarise(n = n())
-
-
-
-habitat_age_req_coded %>%
-  filter(binomial %in% unique(aoh_ms_tmp_trends_by_sp$binomial)) %>%
-  select(vert_class, binomial, common_names, suitable_habitats) %>%
-  mutate(intro = str_detect(suitable_habitats, regex("Introduced", ignore_case = TRUE))) %>%
-  filter(intro)
-
-habitat_age_req_coded %>%
-  filter(binomial %in% unique(aoh_ms_tmp_trends_by_sp$binomial)) %>%
-  select(vert_class, binomial, common_names, suitable_habitats) %>%
-  mutate(degraded_forest_occ = str_detect(suitable_habitats, regex("plantations|degraded", ignore_case = TRUE))) %>%
-  filter(degraded_forest_occ)
-
-
 ```
 
 
 
-```{r set-up-tmp-files}
-# ---------------------------------------------- #
-# set up the following files: (see "_util_files.R")
-aoh_mod_tmp_trends_by_sp # categorical trends by species (one trend per species)
-aoh_est_change_tmp_all # estimated change in AOH based on ols regression with NW estimator
-aoh_obs_change_tmp_all # observed change in AOH based on mean values for start and end of time series (for various window sizes)
-# ---------------------------------------------- #
+## Exploring Traits as Predictor Variables
 
-# exploring:
-
-aoh_mod_tmp_trends_by_sp %>%
-  select(#binomial, 
-         overall_trend, trend_categorical, binary_trend_gain, binary_trend_loss) %>%
-  unique()
-
-aoh_mod_tmp_trends_by_sp %>%
-  mutate(nr = 1:n()) %>%
-  select(nr, everything()) %>%
-  # join the effect size results
-  left_join(aoh_est_change_tmp %>% select(site, aoh_type, passage_type, binomial, abs_change)) %>%
-  select(nr:passage_type, site, overall_trend, abs_change)
-  # select(binomial) %>% unique()
-
-
-aoh_est_change_tmp_all
-aoh_est_change_tmp # subset these based on aoh_type
-aoh_est_change_potential_tmp 
-
-aoh_est_change_tmp %>% 
-  select(site, aoh_type, passage_type, binomial, abs_change, trend, overall_trend)
-
-
-
-aoh_obs_change_tmp_all
-
-aoh_obs_change_tmp
-aoh_obs_change_potential_tmp
-```
-
-```{r hbm-temp}
-
-hbm_tmp <- read_csv(file = paste0(p_derived, "habitat_age_req/", "habitat_age_req_partial_2022_12_06.csv"))
-
-hbm_tmp %>%
-  filter(str_detect(mature_forest_obl, "NA") | is.na(mature_forest_obl)) %>%
-  left_join(iucn_taxonomy %>% select(binomial, order = orderName, family = familyName)) %>%
-  select(vert_class, order, family, binomial, mature_forest_obl
-         ) %>%
-  unique() %>%
-  arrange(vert_class, order, family, binomial
-          ) %>%
-  print(n = 30) #%>%
-  write_csv(paste0(p_derived, "habitat_age_req/", "hab_age_progress_tmp.csv"))
-
-hbm_tmp %>%
-  left_join(iucn_taxonomy %>% select(binomial, order = orderName, family = familyName)) %>%
-  group_by(
-    vert_class,
-    requires_mature_forest = case_when(
-      mature_forest_obl > 0.5 ~ 1, 
-      mature_forest_obl < 0.5 ~ 0
-      )) %>%
-  summarise(n = n())
-  
-
-aoh_feols_trends_by_sp %>%
-  filter(str_detect(binomial, "Rhinolophus")) %>%
-  select(aoh_type, 
-         # site, trend,
-         binomial,
-         overall_trend) %>%
-  select(binomial) %>% unique()
-
-aoh_feols_trends %>%
-  filter(str_detect(binomial, "Barbastella")) %>%
-    select(binomial) %>% unique()
-
-aoh_mod_tmp_trends_by_sp %>%
-  select(binomial, order_common, mature_forest_obl) %>%
-  filter(is.na(mature_forest_obl) | str_detect(mature_forest_obl, "NA"))
-
-```
-
-# Outline of Analyses
-
-As of Jan 2023, these models will all be: 
-
-1. run on observed data (not model estimates), averaged across a 5-year window;  
-2. run on observations for each species at each site (i.e., not collated across sites)
-
-Below, I explore the following models:
-
-1. Binary trend in AOH: 
-- for winners, losers, and no trend species separately, 
-- first with one observation per species (*binary_mod_gain*, *binary_mod_loss*, *binary_mod_no_trend*), 
-- then for one observation per species per site (*binary_mod_gain_sp_site*, *binary_mod_loss_sp_site*, *binary_mod_no_trend_sp_site*)
-
-2. Absolute change in AOH,
-- first the magnitude of the change in AOH from start to end of time series, for both model estimates (*abs_change_aoh_est_lm*) and observed values (*abs_change_aoh_obs_lm*),
-- then the change in AOH as a proportion of the site area, for both model estimates (*abs_change_est_aoh_div_site_area_lm*) and observed values (*abs_change_obs_aoh_div_site_area_lm*) 
-
-3. Various ratios of AOH at the end to the start of the time series, based on observed AOH (model estimates yield negative values, given that some trends have a negative intercept)
-- the ratio of ending AOH to starting AOH (*ratio_change_aoh_lm*)
-- the proportional change of ending AOH to starting AOH (*prop_change_aoh_lm*)
-- the factor change in AOH (where losses in AOH are expressed as "declined by a factor of X", *factor_change_aoh_lm*)
-
-Ultimately, we decided to focus on only three models:
-
-1. Binary, proportion of winners to non-winners, with one observation per species per site.
-2. Change in AOH as a proportion of site area (Change in AOH / site area) - one observation for each species at each site
-3. Ratio of AOH at end to AOH at start ($AOH_end / AOH_start$), log transformed.
-
-```{r three-response-variables}
-
-# ---------- #
-# 1. Binary winner or not (i.e., proportion of winners):
-# ---------- #
-# note this is overall
-aoh_mod_tmp_trends_by_sp %>%
-  filter(aoh_type == "crop_abn_iucn") %>% 
-  group_by(Trophic_level, aoh_type) %>%
-  summarise(p_gain = mean(overall_trend == "gain"), n_sp = n()) %>%
-  ungroup() %>%
-  ggplot(aes(x = Trophic_level, y = p_gain, label = n_sp, fill = Trophic_level)) +
-  theme_classic() +
-  geom_col() + 
-  geom_text(size = 3.5, nudge_y = -0.05) +
-  facet_wrap(vars(aoh_type))
-
-
-# ---------- #
-# 2. absolute increase in AOH:
-# ---------- #
-# response variable: abs_change/10^3
-aoh_est_change_tmp %>%
-  ggplot(aes(x = abs_change/10^3)) +
-  geom_histogram()
-
-
-# ---------- #
-# 3. factor increase in AOH:
-# ---------- #
-# response variable: abs(ratio_mod)
-aoh_obs_change_tmp %>% 
-  filter(window_size == 5,
-         abs(ratio_mod) < 15,
-         !is.na(trend))
-
-
-```
-
-
-How do the proportion of winner species compare across the following
-
-Phylogenies:
-- order
-- family
-
-Traits:
+How do the proportion of winner species compare across the following traits:
 - trophic level (Trophic_level)
-- diel activity (Diel_activity)
 - body mass (Body_mass_g)
-- habitat breadth
 - range area
+- range latitude ("tropicality")
+- habitat breadth (number of suitable habitats)
 - habitat preferences
 
-# Traits
 
 ```{r by-trophic-level}
 
@@ -1417,7 +1321,7 @@ exp(1) ^ 0.12
 
 ```
 
-```{r proportion-ag-users}
+```{r plot-proportion-ag-users}
 # --------------------------------------------------------------------------------- #
 aoh_mod_tmp_trends_by_sp %>% names() %>% str_subset("occ")
 
@@ -1649,6 +1553,8 @@ aoh_est_change_tmp_all_incl_mature %>%
              labeller = as_labeller(c("Birds" = "Birds", "Mammals" = "Mammals",
                  "TRUE" = "Mature Forest Obligates", 
                  "FALSE" = "Non-Mature Forest Obligates")))
+
+
 # -------------------------------------------------------- #
 # Latitude v. Arable suitability
 ggsave(
@@ -1688,150 +1594,16 @@ aoh_est_change_tmp_all_incl_mature %>%
 
 ```{r range-centroid}
 
-sf_use_s2(FALSE)
-
-
-load(paste0(p_dat, "bd/IUCN/ranges_2022_01_04/bird_sf_validated_2022_03_23.RData"), verbose = TRUE)
-
-taxonomy_df %>%
-  # select(vert_class, binomial) %>%
-  group_by(vert_class) %>%
-  summarise(n = n())
-
-
-1174 # birds
-513 # mammals
-
-bird_sf_validated %>% st_drop_geometry() %>% tibble()
-
-bird_tmp <- bird_sf_validated %>% 
-  filter(sci_name %in% taxonomy_df$binomial,
-         presence == 1,
-         origin %in% c(1, 2), 
-         seasonal %in% c(1, 2, 3)
-         )
-
-bird_tmp %>% st_drop_geometry() %>% tibble()
-
-# rm(bird_sf_validated)
-
-# union by sci_name
-tic()
-bird_tmp_union <- 
-  bird_tmp %>%
-  group_by(sci_name) %>%
-  summarise(geometry = st_union(geometry))
-toc()
-
-bird_tmp_union %>% st_drop_geometry()
-
-save(bird_tmp_union, file = paste0(p_derived, "sf/bird_tmp_union.RData"))
-st_write(bird_tmp_union, dsn = paste0(p_derived, "sf/bird_tmp_union.shp"))
-
-
-sf_use_s2(FALSE)
-sf_use_s2()
-tic()
-bird_tmp_centroid <- 
-  bird_tmp_union %>%
-  st_centroid()
-toc()
-
-save(bird_tmp_centroid, file = paste0(p_derived, "sf/bird_tmp_centroid_s2_false.RData"))
-
-
-
-# mammals:
-load(paste0(p_dat, "bd/IUCN/ranges_2022_01_04/mam_sf_validated_2022_03_23.RData"), verbose = TRUE)
-mam_sf_validated %>% st_drop_geometry() %>% tibble()
-
-mam_tmp <- mam_sf_validated %>% 
-  filter(binomial %in% taxonomy_df$binomial,
-         presence == 1,
-         origin %in% c(1, 2), 
-         seasonal %in% c(1, 2, 3)
-         )
-
-mam_tmp %>% st_drop_geometry() %>% tibble()
-
-# union by binomial
-sf_use_s2(FALSE)
-tic()
-mam_tmp_union <- 
-  mam_tmp %>%
-  group_by(binomial) %>%
-  summarise(geometry = st_union(geometry))
-toc()
-
-mam_tmp_union %>% st_drop_geometry()
-
-save(mam_tmp_union, file = paste0(p_derived, "sf/mam_tmp_union.RData"))
-st_write(mam_tmp_union, dsn = paste0(p_derived, "sf/mam_tmp_union.shp"))
-
-
-sf_use_s2(FALSE)
-sf_use_s2()
-tic()
-mam_tmp_centroid_f <- 
-  mam_tmp_union[-c(50, 267, 338, 344, 442, 499, 500, 501), ] %>%
-  st_centroid()
-toc()
-
-mam_subset_valid <- 
-  mam_tmp_union[c(50, 267, 338, 344, 442, 499, 500, 501), ] %>%
-  st_make_valid()
-
-
-# comparing centroids
-sf_use_s2(FALSE)
-c1 <- 
-  mam_tmp_union[1:5, ] %>%
-  st_centroid() %>%
-  mutate(centroid_longitude = st_coordinates(.)[, "X"],
-         centroid_latitude = st_coordinates(.)[, "Y"]) %>%
-  st_drop_geometry()
-
-sf_use_s2(TRUE)
-c2 <- 
-  mam_tmp_union[1:5, ] %>%
-  st_centroid() %>%
-  mutate(centroid_longitude = st_coordinates(.)[, "X"],
-         centroid_latitude = st_coordinates(.)[, "Y"]) %>%
-  st_drop_geometry()
-
-c1
-c2
-c3 <- mammal_centroids [1:5,] %>% mutate(centroid_longitude = st_coordinates(.)[, "X"],
-         centroid_latitude = st_coordinates(.)[, "Y"]) %>%
-  st_drop_geometry()
-
-c1
-c2
-c3
-
-
-sf_use_s2(FALSE)
-sf_use_s2()
-tic()
-mam_tmp_centroid <- 
-  mam_tmp_union %>%
-  st_centroid()
-toc()
-
-save(mam_tmp_centroid, file = paste0(p_derived, "sf/mam_tmp_centroid_s2_false.RData"))
-
-
-
-# load centroids from qgis:
+# load centroids calculated in qgis:
 bird_centroids <- st_read(paste0(p_derived, "sf/bird_centroids.shp"))
 mammal_centroids <- st_read(paste0(p_derived, "sf/mammal_centroids.shp"))
 mammal_centroids
 
 
-# translate centroids into coordinates, extract latitude:
+# translate centroids into coordinates:
 centroids_df <- 
   bind_rows(
-    bird_tmp_centroid %>%
+    bird_centroids %>%
       mutate(centroid_longitude = st_coordinates(.)[, "X"],
              centroid_latitude = st_coordinates(.)[, "Y"]) %>%
       st_drop_geometry() %>%
@@ -1841,7 +1613,8 @@ centroids_df <-
       mutate(centroid_longitude = st_coordinates(.)[, "X"],
              centroid_latitude = st_coordinates(.)[, "Y"]) %>%
       st_drop_geometry()
-    )
+    ) %>% as_tibble()
+
 
 # save data.frame of centroid coordinates
 write_csv(centroids_df, file = paste0(p_derived, "/sf/centroids_df.csv"))
@@ -2033,54 +1806,8 @@ plot(n_hab_range_mod_pois)
 dev.off()
 ```
 
-```{r predictor-relationships}
 
-# abs_change_as_prop_site_area * 100 ~ 
-#        forest_occ + savanna_occ + shrubland_occ + grass_occ + wetlands_occ + artificial_occ + n_hab_occ +
-#        threatened + Trophic_level + 
-#        log(Body_mass_g) + log(total_range_area) + abs(centroid_latitude) + 
-#        max_abn_extent_div_site_area,
-gg_predictor_aoh_percent_base <- 
-  aoh_obs_change_tmp %>%
-  ggplot() +
-  theme_classic() +
-  labs(y = "\U0394 AOH / site area (%)")
-
-gg_predictor_aoh_percent_base +
-  geom_point(aes(x = log(Body_mass_g), y = abs_change_as_prop_site_area * 100), alpha = 0.4)
-
-response_variables
-predictor_variables
-gg_predictor_aoh_percent <- 
-  lapply(predictor_variables, function(i) {
-    aoh_obs_change_tmp %>%
-      ggplot() +
-      theme_classic() +
-      labs(y = "\U0394 AOH / site area (%)") +
-      geom_point(aes(x = !! sym(i), y = abs_change_as_prop_site_area * 100), alpha = 0.4)
-  })
-
-gg_predictor_aoh_percent[[10]]
-plot_grid(gg_predictor_aoh_percent)
-
- aoh_obs_change_tmp %>%
-      ggplot() +
-      theme_classic() +
-      labs(y = "\U0394 AOH / site area (%)") +
-      geom_point(aes(x = !! sym("n_hab_occ"), y = abs_change_as_prop_site_area * 100), alpha = 0.4)
-
-
-```
-
-
-# Simple analyses
-
-```{r}
-# Proportion of species that can use agriculture
-```
-
-
-# Model Development
+## Explore Models
 
 ```{r 1-binary-win-or-not-logistic}
 # ---------- #
@@ -2944,9 +2671,9 @@ plot(aoh_latitude_aoh_percent_lm, 2)
 
 ```
 
-# Final Models
+# 2. Final Models
 
-```{r many-models}
+```{r *many-models}
 # Define response variables, and run models based on the datasets that are required, the glm family, etc.
 
 glm_response_variables <-
@@ -2986,11 +2713,14 @@ mod_label <- "_mod3"
 # ------------------------------------- #
 # Run glm and lm models --------------- #
 # ------------------------------------- #
+
 # This lapply call iterates through three subsets of predictor variables.
 # The first, predictor_variables_all[-c(11)], is the final subset.
 # This lapply call runs the glm models, with glm_response_variables, and stores the models in a tibble.
 # It then runs the lm models, and then combines those models into a single data frame to be saved.
 # It also saves a bunch of gt tables with the model outcomes, and a few diagnostic plots.
+
+# --------------- start lapply() call -------------------------- #
 
 lapply(1, # 1:3, # only for exploration, determining the final predictor variable mix
        function(i) 
@@ -3249,11 +2979,11 @@ lapply(1:10, function(i) {
   })
 dev.off()
 
-
-# END lapply() call
-
 }
 )
+# --------------- end lapply() call -------------------------- #
+
+
 
 # one plot per model
 lapply(
@@ -3360,302 +3090,12 @@ glm_mod_by_sp_df <-
 
 ```
 
-```{r coef-plots}
 
-aoh_obs_change_tmp_all %>%
-  select(latitude)
+## Explore Diagnostic Plots & Coefficient Tables
 
-tibble(latitude = 1:9)
-ggplot() +
-  geom_line()
+Note: model coefficient tables presented in manuscript are produced directly in "biodiv_abn_MS.Rmd"
 
-```
-
-# Site & Species controls
-
-```{r test-site-sp-controls}
-# ---------------------------------------------------------------------------------------------- #
-# 1c.--------------------- binary model where 1 is gain and 0 is loss -------------------------- #
-# ---------------------------------------------------------------------------------------------- #
-names(aoh_obs_change_tmp)
-
-aoh_obs_change_tmp %>%
-  select(trend, contains("binary")) %>%
-  unique()
-
-aoh_obs_change_tmp %>% 
-  select(aoh_type, vert_class, site, binomial) %>%
-  group_by(binomial) %>%
-  summarise(#p_gain = mean(overall_trend == "gain"),
-            n_sp = n()) %>% ungroup() %>%
-  arrange(desc(n_sp))
-
-
-# data:
-aoh_obs_change_tmp # see _util_files.R, this is just for "crop_abn_iucn"
-
-binary_mod_site_sp_id <-
-  glm(binary_gain_v_loss ~
-        site + binomial +
-        forest_occ + savanna_occ + shrubland_occ + grassland_occ + wetlands_occ + 
-        rocky_occ + caves_occ + desert_occ + urban_occ + arable_occ + 
-        n_suitable_habitats_lvl2 + vert_class + 
-        threatened + Trophic_level + 
-        log10(Body_mass_g) + log10(total_range_area) + abs(centroid_latitude) + 
-        max_abn_ext_percent_site,
-      data = aoh_obs_change_tmp,
-      family = "binomial")
-
-
-c("binomialAccipiter nisus", "binomialAccipiter soloensis", "binomialAccipiter virgatus",
-  "binomialAcridotheres cristatellus", "binomialAcrocephalus bistrigiceps") %>%
-  str_extract(., "binomial")
-
-binary_mod_site_sp_id %>%
-  tidy() %>% mutate(id = 1:nrow(.)) %>% arrange(desc(id))
-  print(n = 30) # %>%
-  mutate(site = str_extract(term, "^site[a-z,_]*") %>% gsub("site", "", .),
-         # term = gsub(" ", "_", term),
-         sit = str_detect(term, "^site"),
-         bin = str_detect(term, "^binomial"),
-         binomial = str_replace(term, "binomial", "")) %>%
-  arrange(sit, bin)
-
-
-binary_mod_site_sp_id %>%
-    tidy() %>%
-    mutate(OR = exp(1)^estimate, # exponentiate coefs so that they correspond to Odds Ratios
-           site = str_extract(term, "^site[a-z,_]*") %>% gsub("site", "", .),
-           binomial = str_extract(term, "binomial[a-z]") %>%
-             gsub("binomial", "", .),
-           # common = str_extract(term, ".[0-9]+.[0-9]+.")
-           ) %>% 
-  # arrange(site, binomial) %>%
-  print(n = 50)
-
-
-
-aoh_obs_change_tmp %>% group_by(Trophic_level) %>% summarise(n = n())
-aoh_obs_change_tmp %>% group_by(binary_gain_v_loss) %>% summarise(n = n())
-
-tidy(binary_mod_gain_v_loss, conf.int = TRUE)
-glance(binary_mod_gain_v_loss)
-summary(binary_mod_gain_v_loss)
-
-```
-
-# Phylogenetic Models
-
-```{r}
-install.packages("phylolm")
-install.packages("ape")
-# install.packages("ggtree")
-install.packages("phylobase")
-install.packages("phytools")
-install.packages("phangorn")
-
-library(phylolm)
-library(ape)
-# library(ggtree)
-library(phylobase)
-library(phangorn)
-
-
-# load the phylogenetic trees for use in phyloglm() and phylolm()
-bt <- read.tree("/Users/christophercrawford/Downloads/mnt/data/projects/birdphylo/Tree_sets/Stage2_full_data/CombinedTrees/AllBirdsHackett1.tre")
-
-
-# produce consensus trees from a sample of many trees:
-phangorn::maxCladeCred()
-
-
-```
-
-```{r species-list}
-species_list
-
-aoh_feols_trends_by_sp %>%
-  filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage", vert_class != "amp",
-         mature_forest_obl <= 0.5) %>%
-  group_by(vert_class) %>%
-  summarise(n = n())
-
-aoh_feols_trends_by_sp %>%
-  filter(aoh_type == "crop_abn_iucn", passage_type == "exclude_passage", vert_class != "amp",
-         mature_forest_obl <= 0.5)
-
-taxonomy_df
-
-
-aoh_obs_change_tmp %>%
-  select(aoh_type:mature_forest_obl)
-
-# aoh_obs_change_tmp_all
-phylo_sp <- 
-  aoh_obs_change_tmp %>%
-  select(vert_class, binomial) %>%
-  unique()
-
-phylo_sp %>% 
-  write_csv(file = paste0(p_derived, "phylogeny_species_list.csv"))
-
-vl <- read_csv("/Users/christophercrawford/Downloads/vertlife_taxonomies.csv")
-
-vl %>% select(group) %>% unique
-vl %>% filter(group %in% c("Birds", "Mammals"))
-
-phylo_sp %>%
-  left_join(vl %>% filter(group %in% c("Birds", "Mammals")) %>% mutate(test = 1), # VertLife species list
-            by = c("binomial" = "scientificname")
-            ) %>%
-  filter(is.na(test)) %>%
-  group_by(vert_class) %>% summarise(n = n())
-
-vl %>%
-  filter(str_detect(scientificname, "flammea"))
-
-
-```
-
-
-```{r test-phylolm}
-# ---------------------------------------------------------------------------------------------- #
-# 1c.--------------------- binary model where 1 is gain and 0 is loss -------------------------- #
-# ---------------------------------------------------------------------------------------------- #
-
-# data:
-aoh_obs_change_tmp # see _util_files.R, this is just for "crop_abn_iucn"
-
-# explore the data
-names(aoh_obs_change_tmp)
-
-aoh_obs_change_tmp %>%
-  select(trend, contains("binary")) %>%
-  unique()
-
-# calculate the number of sites each species occurrs in:
-aoh_obs_change_tmp %>% 
-  select(aoh_type, vert_class, site, binomial) %>%
-  group_by(binomial) %>%
-  summarise(#p_gain = mean(overall_trend == "gain"),
-            n_sp = n()) %>% ungroup() %>%
-  arrange(desc(n_sp))
-
-aoh_obs_change_tmp %>% group_by(Trophic_level) %>% summarise(n = n())
-aoh_obs_change_tmp %>% group_by(binary_gain_v_loss) %>% summarise(n = n())
-
-
-
-# run the model
-
-phylo_glm_binary <-
-  glm(binary_gain_v_loss ~
-        # site + binomial +
-        forest_occ + savanna_occ + shrubland_occ + grassland_occ + wetlands_occ + 
-        rocky_occ + caves_occ + desert_occ + urban_occ + arable_occ + 
-        n_suitable_habitats_lvl2 + vert_class + 
-        threatened + Trophic_level + 
-        log10(Body_mass_g) + log10(total_range_area) + abs(centroid_latitude) + 
-        max_abn_ext_percent_site,
-      data = aoh_obs_change_tmp,
-      family = "binomial")
-
-
-phylo_glm_binary %>%
-  tidy() %>%
-  head(15)
-
-
-phylo_glm_binary %>%
-    tidy() %>%
-    mutate(OR = exp(1)^estimate, # exponentiate coefs so that they correspond to Odds Ratios
-           site = str_extract(term, "^site[a-z,_]*") %>% gsub("site", "", .),
-           binomial = str_extract(term, "binomial[a-z]") %>%
-             gsub("binomial", "", .),
-           # common = str_extract(term, ".[0-9]+.[0-9]+.")
-           ) %>% 
-  # arrange(site, binomial) %>%
-  print(n = 50)
-
-
-
-tidy(binary_mod_gain_v_loss, conf.int = TRUE)
-glance(binary_mod_gain_v_loss)
-summary(binary_mod_gain_v_loss)
-```
-
-
-# Tables
-
-```{r gtsummary-exploration}
-
-t4 <- ratio_change_aoh_lm %>%
-  tbl_regression(show_single_row = c(contains("occ"), "threatened"),
-                 add_estimate_to_reference_rows = TRUE) %>%
-  italicize_levels() %>% add_glance_table() %>% bold_p() %>%
-  as_gt() %>%
-  tab_options(heading.align = "left") %>%
-    cols_align(align = "left", columns = everything()) %>%
-    # tab_row_group(label = "Trophic Level", rows = 1:3) %>%
-    # tab_row_group(label = "Habitat occurrence", rows = 6:11) %>%
-    
-    tab_style(
-      style = list(cell_text(color = palette_du_jour[1])),
-      locations = cells_body(columns = c(Beta, p-value), 
-                             rows = Beta > 0 & p-value < 0.05)
-    ) #%>%
-    tab_style(style = list(cell_text(color = "red")),
-              locations = cells_body(columns = c(term, estimate), 
-                                     rows = estimate < 0 & p.value < 0.05)) %>%
-    tab_style(style = list(cell_text(weight = "bolder")),
-              locations = cells_body(columns = c(term, estimate), 
-                                     rows = p.value < 0.05)) %>%
-    tab_style(style = list(cell_text(weight = "normal")),
-              locations = cells_body(columns = c(term, estimate), 
-                                     rows = p.value > 0.05)) %>%
-    tab_style(style = list(cell_text(weight = "bolder")),
-              locations = cells_body(columns = c(p.value), 
-                                     rows = p.value < 0.05)) %>%
-    
-    opt_row_striping()
-
-tbl_regression(ratio_change_aoh_lm,
-               show_single_row = c(contains("occ"), "threatened"),
-               add_estimate_to_reference_rows = TRUE) %>%
-  # add_global_p() %>%
-  italicize_levels() %>%
-  # add_glance_source_note() %>%
-  add_glance_table() %>%
-  # add_significance_stars() %>%
-  bold_p() 
-
-t4 %>%
-  as_gt() %>%
-  gtsave(filename = paste0(p_plots, "aoh/traits/", "Table4_alt_ratio_aoh_lm_obs4.png"))
-
-
-tbl_regression(abs_change_aoh_obs_lm,
-               show_single_row = contains("occ"),
-               add_estimate_to_reference_rows = TRUE) %>%
-  # add_global_p() %>%
-  italicize_levels() %>%
-  add_glance_source_note() %>%
-  # add_glance_table() %>%
-  # add_significance_stars() %>%
-  bold_p()
-
-tbl_regression(binary_mod_gain, exponentiate = TRUE,
-               show_single_row = contains("occ")) %>%
-  bold_p() %>%
-  # add_global_p() %>%
-  italicize_levels() %>%
-  add_glance_source_note()
-  
-
-
-```
-
-```{r mod-diagnostic-plots}
+```{r model-diagnostic-plots}
 mod_list <- list(
   binary_mod_gain, binary_mod_loss, binary_mod_no_trend, 
   binary_mod_gain_sp_site, binary_mod_loss_sp_site, binary_mod_no_trend_sp_site,
@@ -3718,10 +3158,10 @@ dev.off()
 ```
 
 
-```{r combined-model-tables}
+```{r combined-model-coef-tables}
 regression_model_labels # see _util_misc.R
 
-
+# set up gt_list
 gt_list <- 
   lapply(c(
     "binary_mod_gain", "binary_mod_loss", "binary_mod_no_trend", 
@@ -3758,6 +3198,8 @@ names(gt_list) <- c(
 gt_list$binary_mod_gain
 
 
+# ------------------------------------------------ #
+# merge and save model tables into combination tables
 
 names(gt_list)[1:3]
 tbl_merge(tbls = gt_list[1:3],
@@ -3882,187 +3324,9 @@ lapply(c("log_ratio_change_aoh_lm", "log10_ratio_change_aoh_lm"),
     locations = cells_body(),
     fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")})
   
-
-par(mfrow = c(2,2))
-plot(log_ratio_change_aoh_lm, 1)
-plot(log10_ratio_change_aoh_lm, 1)
-plot(log_ratio_change_aoh_lm, 2)
-plot(log10_ratio_change_aoh_lm, 2)
-
-```
-
-```{r final-model-tables-old}
-
-# version 1
-names(gt_list)
-tbl_merge(
-  tbls = lapply(c(
-    "binary_mod_gain_sp_site",
-    "binary_mod_loss_sp_site",
-    # "binary_mod_gain_v_loss",
-    # "binary_mod_gain",
-    # "binary_mod_loss", 
-    # "abs_change_aoh_obs_lm",
-    "abs_change_obs_aoh_div_site_area_lm",
-    # "ratio_change_aoh_lm",
-    "log_ratio_change_aoh_lm"#,
-    # "log_ratio_change_aoh_lm_trim",
-    # "aoh_slope_lm"
-    ),
-    function(mod) {
-      eval(get(mod)) %>%
-        tbl_regression(show_single_row = c(contains("occ"), "threatened"),
-                       label = regression_model_labels,
-                       add_estimate_to_reference_rows = TRUE,
-                       intercept = TRUE,
-                       conf.int = FALSE) %>%
-        italicize_levels() %>% 
-        { if (str_detect(mod, "binary")) 
-          add_glance_table(., include = c(AIC, BIC, contains("df"), nobs)) else 
-            add_glance_table(., include = c(AIC, BIC, p.value,
-                                            r.squared, adj.r.squared,
-                                            df, nobs))} %>%
-        # add_significance_stars() %>%
-        bold_p()
-      }),
-  tab_spanner = c("Binary, gain", "Binary, loss",
-                  # "AOH change", 
-                  "AOH change / site area", "AOH Ratio")) %>%
-  as_gt() %>%
-  text_transform(
-    locations = cells_body(),
-    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
-  gtsave(filename = paste0(p_plots, "aoh/traits/", 
-                           "Table_final_models_v1.png"))
-
-
-
-# final v2
-tbl_merge(
-  tbls = lapply(c(
-    # "binary_mod_gain_sp_site",
-    # "binary_mod_loss_sp_site",
-    # "binary_mod_no_trend_sp_site",
-    "binary_mod_gain_v_loss",
-    "abs_change_aoh_obs_lm",
-    "abs_change_obs_aoh_div_site_area_lm",
-    # "ratio_change_aoh_lm",
-    "log_ratio_change_aoh_lm",
-    # "log_ratio_change_aoh_lm_trim",
-    # "aoh_slope_lm"
-    "aoh_slope_prop_site_lm"
-    ),
-    function(mod) {
-      eval(get(mod)) %>%
-        tbl_regression(
-          show_single_row = c(contains("occ"), "threatened"),
-          label = regression_model_labels,
-          add_estimate_to_reference_rows = TRUE,
-          intercept = TRUE,
-          conf.int = FALSE) %>%
-        italicize_levels() %>% 
-        { if (str_detect(mod, "binary")) 
-          add_glance_table(., include = c(AIC, BIC, contains("df"), nobs)) else 
-            add_glance_table(., include = c(AIC, BIC, p.value,
-                                            r.squared, adj.r.squared,
-                                            df, nobs))} %>%
-        # add_significance_stars() %>%
-        bold_p()
-      }),
-  tab_spanner = c(
-    # "Binary, gain / non-gain",
-    "Binary Trend (gain or loss)",
-    "\U0394 AOH (ha)",
-    "\U0394 AOH / site area (%)",
-    "ln(AOH<sub>end</sub>/AOH<sub>start</sub>)",
-    "Slope / site area (%/100)"
-    )) %>%
-  as_gt() %>%
-  text_transform(
-    locations = cells_body(),
-    fn = function(x) {x %>%
-        str_replace_all(pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
-  gtsave(filename = paste0(p_plots, "aoh/traits/", 
-                           "Table_final_models_v2.png"))
-
-
-
-binary_mod_gain_v_loss %>%
-  tbl_regression(
-    # label = list(forest_occ = "Forest Suitable"),
-    label = regression_model_labels,
-    show_single_row = c(contains("occ"), "threatened"),
-    add_estimate_to_reference_rows = TRUE,
-    intercept = TRUE,
-    conf.int = FALSE) %>%
-  italicize_levels() %>% 
-  bold_p() %>%
-  as_gt() %>%
-  text_transform(
-    locations = cells_body(),
-    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) #%>%
-  # as_gt() #%>%
-  # tab_row_group(label = "", rows = 1:5) %>%
-  # tab_row_group(label = "", rows = 1) %>%
-  # tab_row_group(label = "Habitat Suitability", rows = 8:14) %>%
-  # row_group_order(groups = c("", "Habitat Suitability"))
-
-  # as_gt() %>%
-  # gtsave(filename = paste0(p_plots, "aoh/traits/", 
-  #                          "Table_final_models_v2.png"))
-
-
 ```
 
 
-```{r bonus-gt-tables}
-# bonus things:
-
-# binary, one observation per species:
-glm_mod_by_sp_df %>%
-  filter(aoh_type == "crop_abn_iucn") %>%
-  pull(gt) %>%
-  tbl_merge(tab_spanner = c("Binary Gain", "Binary Gain/Loss", "Binary Loss", "Binary No Trend")) %>%
-  as_gt() %>%
-  text_transform(
-    locations = cells_body(),
-    fn = function(x) {str_replace_all(x, pattern = "km2", replacement = "km<sup>2</sup>")}) %>%
-  gtsave(filename = paste0(p_plots, "aoh/traits/", "Table1a_binary_est", mod_label,".png"))
-
-trait_mod_df %>%
-  select(-c(data, model, gt)) %>%
-  unnest(cols = c(glance)) 
-
-# view one tidy table
-trait_mod_df %>%
-  filter(response == "abs_change_as_prop_site_area", 
-         aoh_type == "crop_abn_iucn") %>% 
-  select(tidy) %>% unnest(c(tidy)) #%>% pull(estimate)
-
-
-# exponentiate log(ratio)
-trait_mod_df[12, ] %>%
-  select(response, aoh_type, tidy) %>%
-  unnest(cols = c(tidy)) %>%
-  mutate(estimate = case_when(p.value < 0.05 ~ estimate),
-         est_exp = exp(1) ^ estimate
-         ) %>%
-  select(term, estimate, est_exp)# %>% pull(est_exp) %>% .[15]
-
-# non-exponentiated
-glm_mod_df %>% 
-  filter(aoh_type == "crop_abn_iucn", 
-         response %in% glm_response_variables) %>%
-  pull(gt2) %>%
-  tbl_merge(tab_spanner = c("Binary Gain", "Binary Gain/Loss", 
-                          "Binary Loss", "Binary No Trend")) %>%
-  as_gt() %>%
-  text_transform(locations = cells_body(),
-                 fn = function(x) {str_replace_all(x, pattern = "km2", 
-                                                   replacement = "km<sup>2</sup>")}) %>%
-  gtsave(filename = paste0(p_plots, "aoh/traits/", "Table1b_binary_obs_non_exp.png"))
-
-```
 
 
 ```{r explore-mod-differences}
@@ -4172,446 +3436,3 @@ trait_mod_df[12, ] %>%
 ```
 
 
-
-
-
-
-
-# Phylogenetic
-
-```{r by-taxonomic-order}
-# -------------------------------------------------------------------------- #
-# plot proportion of species that experience significant gains in habitat, by taxonomy:
-# -------------------------------------------------------------------------- #
-
-aoh_mod_tmp_trends_by_sp %>% filter(order == "PERISSODACTYLA")
-
-
-gg_by_order <-
-  aoh_mod_tmp_trends_by_sp %>%
-  # aoh_mod_tmp_trends %>%
-  left_join(taxonomy_df) %>%
-  mutate(
-    # order_combo = paste0(order, ": ", order_common)
-    order_combo = paste0(order_common, " -- ", order)
-
-    ) %>%
-  group_by(vert_class, order_combo) %>%
-  summarise(p_gain = mean(overall_trend == "gain"),
-            # p_gain_w_weak = mean(str_detect(overall_trend, "gain")), # include weak gains
-            # p_loss = mean(overall_trend == "loss"),
-            n_sp = n()) %>% ungroup() %>%
-  # mutate(vert_class = case_when(vert_class == "bird" ~ "Birds", vert_class == "mam" ~ "Mammals")) %>%
-  
-  droplevels() %>%
-
-  # filter out families with fewer than 5 species in them
-  # filter(n_sp > 5) %>%
-
-  # plot
-  ggplot(aes(x = p_gain, y = fct_reorder(order_combo, n_sp), 
-             fill = vert_class, label = n_sp)) +
-  geom_col() +
-  geom_text(size = 3, nudge_x = 0.04) +
-    theme_classic() +
-  facet_grid(vars(vert_class), scale = "free_y", space = "free_y",
-                          labeller = as_labeller(aoh_type_labels)) +
-  labs(x = "Proportion of species with significant gains in AOH", y = "Taxonomic Order") +
-  geom_vline(xintercept = 0.5) +
-    scale_x_continuous(n.breaks = 6) + 
-    scale_fill_manual(
-    labels = c("bird" = "Birds", "mam" = "Mammals"),
-    values = sp_threat_palette,
-    ) +
-theme(legend.position = "none")
-
-ggsave(gg_by_order,
-       filename = paste0(p_output, "plots/aoh/traits/", 
-                           "taxonomic_order_p_gain", ".pdf"),
-         width = 8, height = 6, units = "in"
-       )
-
-aoh_df %>%
-  left_join(iucn_taxonomy) %>% 
-  filter(orderName == "PTEROCLIFORMES") %>%
-  select(binomial)
-```
-
-
-```{r by-taxonomic-family}
-
-# -------------------------------------------------------------------------- #
-# plot proportion of species that experience significant gains in habitat, by taxonomy:
-# -------------------------------------------------------------------------- #
-aoh_trends_by_taxonomic_family <-
-  aoh_mod_tmp_trends_by_sp %>%
-  left_join(taxonomy_df) %>%
-  mutate(
-    # family_combo = paste0(family, ": ", family_common),
-    family_combo = paste0(family_common, " -- ", family)
-         ) %>%
-  group_by(vert_class, family_combo) %>%
-  summarise(p_gain = mean(overall_trend == "gain"),
-            # p_gain_w_weak = mean(str_detect(overall_trend, "gain")), # include weak gains
-            # p_loss = mean(overall_trend == "loss"),
-            n_sp = n()) %>% ungroup() %>%
-  # mutate(vert_class = case_when(vert_class == "bird" ~ "Birds", vert_class == "mam" ~ "Mammals")) %>%
-  
-  droplevels() 
-
-gg_by_family <- 
-  aoh_trends_by_taxonomic_family %>%
-
-  # filter out families with fewer than 5 species in them
-  filter(n_sp > 4,
-         # vert_class != "bird"
-         ) %>%
-
-  # plot
-  ggplot(aes(x = p_gain, y = fct_reorder(family_combo, n_sp), 
-             fill = vert_class,
-             label = n_sp)) +
-  geom_col() +
-  geom_text(size = 3, nudge_x = 0.025) +
-  theme_classic() +
-  facet_grid(vars(vert_class), scale = "free_y", space = "free_y", 
-             labeller = as_labeller(aoh_type_labels)) +
-  scale_x_continuous(n.breaks = 6) + 
-  labs(x = "Proportion of species with significant gains in AOH", y = "Taxonomic Family",
-       caption = "Results for only families with > 4 species.") +
-  geom_vline(xintercept = 0.5) +
-  scale_fill_manual(
-    labels = c("bird" = "Birds", "mam" = "Mammals"),
-    values = sp_threat_palette,
-    ) +
-  theme(legend.position = "none")
-
-
-ggsave(gg_by_family,
-       filename = paste0(p_output, "plots/aoh/traits/", 
-                         "taxonomic_family_p_gain", 
-                         ".pdf"),
-       width = 9, height = 9, units = "in")
-
-ggsave(gg_by_family %+% filter(aoh_trends_by_taxonomic_family, vert_class == "bird") + labs(caption = NULL),
-       filename = paste0(p_output, "plots/aoh/traits/", "taxonomic_family_p_gain", 
-                         "_bird",
-                         ".pdf"),
-         width = 9, height = 12, units = "in")
-
-ggsave(gg_by_family %+% filter(aoh_trends_by_taxonomic_family, vert_class == "mam") + labs(caption = NULL),
-       filename = paste0(p_output, "plots/aoh/traits/", "taxonomic_family_p_gain",
-                         "_mam",
-                         ".pdf"),
-         width = 9, height = 9, units = "in")
-
-
-# only families with 4 or more species in them
-ggsave(gg_by_family %+% filter(aoh_trends_by_taxonomic_family, vert_class == "bird", n_sp > 4),
-       filename = paste0(p_output, "plots/aoh/traits/", "taxonomic_family_p_gain", 
-                         "_bird_trim", ".pdf"),
-         width = 9, height = 7, units = "in")
-
-ggsave(gg_by_family %+% filter(aoh_trends_by_taxonomic_family, vert_class == "mam", n_sp > 4),
-       filename = paste0(p_output, "plots/aoh/traits/", "taxonomic_family_p_gain",
-                         "_mam_trim", ".pdf"),
-         width = 9, height = 5, units = "in")
-```
-
-
-```{r match-species-old}
-# test for matching binomial names:
-
-# Species with AOH that do not have matching binomial names in the Etard trait database
-iucn_etard_mismatches_df <-
-  taxonomy_df %>%
-  select(vert_class:family) %>%
-  left_join(etard %>% 
-              select(binomial) %>% mutate(test = 1) # trait database
-            ) %>%
-  filter(is.na(test))
-
-iucn_etard_mismatches <- iucn_etard_mismatches_df %>% pull(binomial)
-
-
-
-# Synonyms from IUCN:
-iucn_synonyms <- lapply(c("LC", "nonLC"), function(i) {
-  read_csv(
-    file = paste0(p_dat, "bd/IUCN/redlist_2022_01_04_animalia_", i, "/synonyms.csv")#, n_max = 10
-  ) %>% 
-    select(binomial = scientificName, genusName, speciesName) %>%
-    mutate(synonym = paste0(genusName, " ", speciesName))
-}) %>% 
-  bind_rows()
-
-
-# extract synonyms for species without matches:
-iucn_synonyms_tmp <-
-  iucn_synonyms %>% 
-  filter(
-    synonym %in% iucn_etard_mismatches |
-      binomial %in% iucn_etard_mismatches) %>% 
-  unique()
-
-
-# update etard with species synonyms from IUCN:
-etard_updated1 <-
-  etard %>%
-  # select(order:Body_mass_g) %>%
-  # filter(binomial %in% iucn_synonyms_tmp$synonym | binomial %in% iucn_synonyms_tmp$binomial) %>% # for testing only
-  left_join(select(iucn_synonyms_tmp, new_binomial = binomial, synonym), by = c("binomial" = "synonym")) %>%
-  mutate(binomial = case_when(!is.na(new_binomial) ~ new_binomial, TRUE ~ binomial)) %>%
-  
-  filter(binomial == "Lyroderma lyra") %>%
-  left_join(select(iucn_synonyms_tmp, binomial, synonym), by = "binomial") %>%
-  select(order:binomial, synonym, everything(), -new_binomial)
-  
-   # make new column with etard synonym, which is the binomial accepted and used by etard, but not matching with IUCN
-  # then update binomial to the synonym to match IUCN
-    # mutate(
-    #   synonym = case_when(!is.na(new_binomial) ~ binomial, TRUE ~ "NA"),
-    #   binomial = case_when(!is.na(new_binomial) ~ new_binomial, TRUE ~ binomial),
-    #   )
-  
-
-
-identical(etard_updated1, etard_updated2)
-all.equal(etard_updated1, etard_updated2)
-
-# looks like there are some persistent mismatches
-iucn_etard_mismatches2 <-
-  taxonomy_df %>%
-  select(vert_class:family) %>%
-  left_join(etard_updated %>% 
-              select(binomial) %>% mutate(test = 1) # trait database
-            ) %>%
-  filter(is.na(test)) %>%
-  pull(binomial)
-
-
-
-iucn_etard_mismatches
-iucn_etard_mismatches2
-
-
-# Synonyms from Etard:
-etard_synonyms <- read_csv(paste0(p_dat, "bd/traits/Etard_2020_GEB/2018_Synonyms.csv"))
-
-etard_synonyms %>%
-  select(original = Original, etard = Accepted)
-
-
-# etard_synonyms_long <-
-  etard_synonyms %>%
-  filter(str_detect(Synonyms, "No recorded synonym", negate = TRUE)) %>%
-  select(Original, CorrectedTypos, Accepted, Synonyms) %>%
-  # filter(str_detect(Synonyms, "Penelope")) %>%
-  filter(str_detect(Synonyms, "\\|")) %>%
-    # mutate(new = gsub(" \\| ", "; ", Synonyms)) %>%
-    # mutate(length = str_length(new))
-  # filter(str_detect(Synonyms, "Acanthornis")) %>%
-  
-  
-  # mutate(new = gsub(" \\| ", "; ", Synonyms))
-  separate(Synonyms, into = paste0("s", 1:10), sep = " \\| ", extra = "merge") %>%
-  pivot_longer(cols = paste0("s", 1:10), values_to = "synonym") %>%
-      filter(!is.na(synonym)) %>%
-      # filter(str_detect(synonym, "Acanthornis")) %>%
-
-    # .[-c(7615, 7616, 7921, 8959, 9090, 10359, 10911, 12725, 13030, 13440, 13441, 14818, 15999), ] %>%
-    mutate(synonym = str_trim(synonym))# %>%
-  select(-name)
-
-warnings()
-
-etard_synonyms %>% filter(Original %in% iucn_etard_mismatches)
-etard_synonyms %>% filter(CorrectedTypos %in% iucn_etard_mismatches)
-etard_synonyms %>% filter(Accepted %in% iucn_etard_mismatches)
-etard_synonyms %>% filter(Synonyms %in% iucn_etard_mismatches)
-
-iucn_synonyms
-iucn_synonyms_tmp
-
-etard_synonyms %>%
-  mutate(same = case_when(Original == Accepted ~ 1, TRUE ~ 0)) %>%
-  filter(same == 0) %>%
-  select(Accepted, Original, same) %>%
-  group_by(Accepted) %>% 
-  summarise(n = n()) %>%
-  arrange(desc(n)) %>%
-  filter(n > 1)
-
-
-select(etard_synonyms, binomial = Accepted, synonym = Original) %>%
-  left_join(etard) %>%
-  select(vert_class:binomial, synonym, Body_mass_g, #everything()
-         ) %>%
-  filter(binomial %in% iucn_etard_mismatches | synonym %in% iucn_etard_mismatches)
-
-# extract synonyms for species without matches:
-etard_synonyms_tmp <-
-  etard_synonyms %>%
-  filter(Original %in% iucn_etard_mismatches |
-           CorrectedTypos %in% iucn_etard_mismatches | 
-           Accepted %in% iucn_etard_mismatches | 
-           Synonyms %in% iucn_etard_mismatches) %>%
-  # mutate(same = case_when(Original == Accepted ~ 1, TRUE ~ 0)) %>%
-  # filter(same == 0) %>%
-  # select(Accepted, Original, same)
-  select(Original, CorrectedTypos, Accepted, Synonyms) %>%
-  mutate(Accepted = case_when(Original == "Basileuterus auricapilla" ~ "Basileuterus culcivorus",
-                              TRUE ~ Accepted),
-         Synonyms = case_when(Original == "Basileuterus auricapilla" ~ "Basileuterus auricapilla",
-                              TRUE ~ Synonyms)
-         ) %>%
-  separate(Synonyms, into = paste0("s", 1:6), sep = " \\| ", extra = "merge") %>%
-  pivot_longer(cols = paste0("s", 1:6), values_to = "synonym") %>%
-      filter(!is.na(synonym)) %>% arrange(Accepted, synonym) %>%
-    select(Accepted, synonym) %>%
-    unique()
-
-etard_synonyms_tmp
-iucn_synonyms_tmp
-
-
-iucn_etard_mismatches_df %>% arrange(vert_class, binomial) %>%
-  filter(binomial %in% x1)
-
-# check:
-x1 <- etard %>% 
-  inner_join(select(iucn_synonyms_tmp, binomial, synonym), by = c("binomial" = "binomial")) %>%
-  # select(vert_class:binomial, synonym) %>%
-  mutate(binomial = synonym) %>% select(-synonym)
-iucn_etard_mismatches_df %>% arrange(vert_class, binomial) %>%
-  filter(binomial %in% x1$binomial)
-
-x2 <- etard %>% 
-  inner_join(etard_synonyms_tmp, by = c("binomial" = "Accepted")) %>%
-  select(vert_class:binomial, synonym) %>%
-  mutate(binomial = synonym) %>% select(-synonym)# %>% pull(binomial)
-
-iucn_etard_mismatches_df %>% arrange(vert_class, binomial) %>%
-  filter(binomial %in% x2$binomial)
-
-# no matches here:
-x3 <- etard %>% 
-  inner_join(select(iucn_synonyms_tmp, binomial, synonym), by = c("binomial" = "synonym")) %>%
-  select(vert_class:binomial)
-iucn_etard_mismatches_df %>% arrange(vert_class, binomial) %>%
-  filter(binomial %in% x3$binomial)
-
-x4 <- etard %>% 
-  inner_join(etard_synonyms_tmp, by = c("binomial" = "synonym")) %>%
-  select(vert_class:binomial)
-iucn_etard_mismatches_df %>% arrange(vert_class, binomial) %>%
-  filter(binomial %in% x4$binomial)
-
-# ok, so now I need to filter, change the binomial, and then bind back to the etard data.frame, before then doing another left_join
-etard_updated <- 
-  etard %>%
-  bind_rows(
-    etard %>% 
-      inner_join(select(iucn_synonyms_tmp, binomial, synonym), by = c("binomial" = "binomial")) %>%
-      mutate(binomial = synonym) %>% select(-synonym)
-    ) %>%
-  bind_rows(
-    etard %>% 
-      inner_join(etard_synonyms_tmp, by = c("binomial" = "Accepted")) %>%
-      mutate(binomial = synonym) %>% select(-synonym)
-    )
-
-taxonomy_df %>%
-  select(vert_class:family) %>%
-  left_join(etard_updated %>% select(binomial) %>% mutate(test = 1) # trait database
-            ) %>%
-  filter(is.na(test))
-
-etard %>% 
-  filter(binomial == "Ianthocincla cinereiceps")
-
-iucn_etard_mismatches <- iucn_etard_mismatches_df %>% pull(binomial)
-
-
-
-
-etard %>% 
-  filter(binomial %in% iucn_synonyms_tmp$binomial)
-
-etard %>% 
-  filter(binomial %in% iucn_synonyms_tmp$binomial | 
-           binomial %in% iucn_synonyms_tmp$synonym | 
-           binomial %in% etard_synonyms_tmp$Accepted | 
-           binomial %in% etard_synonyms_tmp$synonym)
-
-iucn_synonyms_tmp %>% filter(synonym %in% iucn_etard_mismatches)
-etard_synonyms_tmp %>% filter(synonym %in% iucn_etard_mismatches)
-etard_synonyms_tmp %>% filter(etard_binomial %in% iucn_etard_mismatches)
-etard %>% filter(str_detect(binomial, "Callosp"))
-etard %>% filter(str_detect(binomial, "Spermophilus lateralis"))
-
-iucn_etard_mismatches_df %>% filter(str_detect(binomial, "Callospermophilus lateralis"))
-
-etard %>% 
-  filter(binomial %in% etard_synonyms_tmp$etard_binomial) %>%
-  select(vert_class:binomial)
-
-etard %>% filter(binomial %in% etard_synonyms_tmp$synonym) %>% select(vert_class:binomial)
-etard %>% filter(binomial %in% iucn_etard_mismatches)
-
-iucn_etard_mismatches_df
-
-taxonomy_df %>%
-  filter(binomial == "Antigone canadensis")
-  
-  
-lapply(iucn_etard_mismatches, function(i) {
-  etard_synonyms %>%
-  filter(str_detect(Original, i))
-}) %>% bind_rows()
-
-
-etard_synonyms %>%
-  filter(Original %in% iucn_etard_mismatches)
-
-
-etard_synonyms %>%
-  filter(str_detect(Original, iucn_etard_mismatches[2]))
-
-str_detect("aecfg", letters)
-
-
-
-# update etard with species synonyms from IUCN:
-etard_updated2 <-
-  etard_updated %>%
-  # select(order:Body_mass_g) %>%
-  # filter(binomial %in% etard_synonyms_tmp$Accepted | binomial %in% etard_synonyms_tmp$Synonyms) %>% # for testing only
-    # join with the etard synonym df
-  left_join(select(etard_synonyms_tmp, new_binomial = Synonyms, synonym = Accepted), by = c("binomial" = "synonym")) %>%
-  
-    # make new column with etard synonym, which is the binomial accepted and used by etard, but not matching with IUCN
-    # then update binomial to the synonym to match IUCN
-    mutate(
-      synonym = case_when(!is.na(new_binomial) ~ binomial, TRUE ~ synonym),
-      binomial = case_when(!is.na(new_binomial) ~ new_binomial, TRUE ~ binomial),
-      ) %>%
-    select(order:binomial, synonym, everything(), -new_binomial) # %>% filter(!is.na(synonym))
-
-
-# looks like there are some persistent mismatches
-# iucn_etard_mismatches2 <-
-  taxonomy_df %>%
-  select(vert_class:family) %>%
-  left_join(etard_updated2 %>% 
-              select(binomial, synonym) %>% mutate(test = 1) # trait database
-            ) %>%
-  filter(is.na(test)) %>%
-  pull(binomial)
-
-
-taxonomy_df %>%
-  filter(str_detect(binomial, "Anas"))
-
-
-```

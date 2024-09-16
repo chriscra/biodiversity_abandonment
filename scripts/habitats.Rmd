@@ -10,8 +10,9 @@ editor_options:
 This script is part of the **Effects of cropland abandonment on biodiversity** project, developed by Christopher L. Crawford (chris.L.crawford@gmail.com) at Princeton University beginning in Fall 2021.
 See https://github.com/chriscra/biodiversity_abandonment.
 
-Contents:
+This document contains code to prepare the underlying spatial habitat data required to calculate species' Area of Habitat (interpolating the annual Yin et al. 2020 land cover types to match the IUCN Level 2 habitat types mapped by Jung et al. 2020) and analyze landscape configuration and fragmentation metrics via {landscapemetrics}.
 
+Contents:
 1. Prepping the Jung et al. 2020 map of IUCN Level 2 Habitats (for the year 2015)
 2. Interpolating Yin et al. 2020 Land Covers to IUCN Level 2 Habitat Types (Jung et al. 2020)
 3. Analyzing Landscape Configuration and Fragmentation via {landscapemetrics} (see "cluster/lsm_2024.R" and "cluster/lsm_two_2024.R")
@@ -74,7 +75,7 @@ site_area_ha <- lapply(
 names(site_area_ha) <- site_df$site
 ```
 
-```{r crop_elevation_map}
+```{r crop-elevation-map}
 # download SRTM 30 m elevation data from Google Earth Engine (https://developers.google.com/earth-engine/datasets/catalog/USGS_SRTMGL1_003). Multiple variables include: a. Elevation; b. Slope; c. Terrain Ruggedness Index (TRI); d. Topographic Wetness Index
 p_predictors <- "/Volumes/GoogleDrive/My Drive/data/Abandonment/predictors"
 
@@ -1016,6 +1017,7 @@ site_jung_l2_30_freq <- read_csv(file = paste0(p_derived, "site_jung_l2_30_freq.
 ```
 
 ```{r calc-area-per-habitat-type}
+# this chunk creates "jung_hab_type_area_df" - used when calculating AOH for land cover classes [class_type == "lc"], instead of iucn habitat types directly.
 
 # load jung maps
 site_jung_l2_30
@@ -1761,11 +1763,11 @@ terra::tmpFiles(current=TRUE, orphan=TRUE, old=TRUE, remove=TRUE)
 
 # Note: the pixels in "abn_lcc_iucn_habitat" are NA until they are abandoned... therefore, exclusively consist of non-cropland habitat.
 
-# The "max_abn_lcc_iucn_habitat" includes values for all pixels that are abandoned at any point during the time series, and includes a habitat type for each year of the time series. So, it includes the habitat before and after abandonment. This is produced in the next chunk
+# The "max_abn_lcc_iucn_habitat" includes values for all pixels that are abandoned at any point during the time series, and includes a habitat type for each year of the time series. So, it includes the habitat before and after abandonment. This is produced in the next chunk.
 
 # A third layer, "crop_to_abn_iucn_observed" (aka "crop_abn_iucn") contains IUCN habitats for the abandonment period as well as the immediately preceding period of cultivation (to allow for a proper before and after comparison). These are the final input maps for Calculations 1a and 1b ("crop_to_abn_iucn_observed" and "crop_to_abn_iucn_potential"). These maps are created in the script "cluster/noncrop_precrop_mask.R".
 
-# The three calculations producing final results in the manuscript rely on 1) crop_abn_iucn ("_crop_to_abn_iucn_observed."), 2) max_abn_iucn ("_max_abn_lcc_iucn_habitat."), and 3) full_iucn ("_lcc_iucn_habitat.").
+# The three calculations producing final results in the manuscript rely on 1) crop_abn_iucn ("_crop_to_abn_iucn_observed."), 2) max_abn_iucn ("_max_abn_lcc_iucn_habitat."), and 3) full_iucn ("_lcc_iucn_habitat").
 
 # reload
 lcc_iucn_habitat <- lapply(1:11, function(i) {
@@ -2543,6 +2545,37 @@ ggsave(gg_frag_trends_para_mn,
        width = 7, height = 5, units = "in"
        )
 ```
+
+```{r frag-df}
+# load fragmentation data (from landscape metrics functions) derived from computing clusters
+
+frag_df <- 
+  lapply(site_df$site, function(i) {
+    read_csv(file = paste0(p_derived, "frag/frag_", i, ".csv")) %>%
+      mutate(site = i)
+    }) %>% 
+  bind_rows() %>%
+  mutate(year = case_when(
+    site == "nebraska" ~ layer + 1985,
+    TRUE ~ layer + 1986)
+  ) #%>% filter(year > 1986, year < 2018)
+
+write_csv(frag_df, paste0(p_derived, "frag/frag_df.csv"))
+
+
+# hypothetical, assuming no abandonment through the year 2017
+frag_hypo_df <- 
+  lapply(site_df$site, function(i) {
+    read_csv(file = paste0(p_derived, "frag/frag_", i, "_hypo_no_abn_2017.csv")) %>%
+      mutate(site = i)
+  }) %>% 
+  bind_rows() %>%
+  mutate(year = 2017)
+
+write_csv(frag_hypo_df, paste0(p_derived, "frag/frag_hypo_no_abn_2017_df.csv"))
+
+```
+
 
 ```{r frag-lm}
 frag_lm_test <- 

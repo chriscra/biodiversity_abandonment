@@ -1,6 +1,6 @@
 # --------------------------------------------------------------- #
 #
-# Loading required files ("biodiversity_abandonment")
+# Loading files ("biodiversity_abandonment"), some required, some optional
 # 
 # --------------------------------------------------------------- #
 
@@ -15,7 +15,7 @@ run_label # check "_util_main.R"
 
 
 # ------------------------------------------------------------ # 
-# -------------------------- Site Extent --------------------- 
+# -------------------------- Site Data ----------------------- 
 # ------------------------------------------------------------ # 
 
 # # to create site extent as sf object
@@ -41,6 +41,30 @@ site_sf <- site_sf %>% st_make_valid()
 
 
 
+
+# ----------------------- #
+# --- pixel area (ha) --- #
+# ----------------------- #
+# See "AOH.Rmd" chunk {r calculate-area-ha}
+site_area_ha <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "site_area_ha/", site_df$site[i], "_area_ha.tif"))
+})
+names(site_area_ha) <- site_df$site
+
+
+# ----------------------- #
+# --- pixel elevation (m) --- #
+# ----------------------- #
+# See "AOH.Rmd" chunk {r crop_elevation_map}
+elevation_map <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "elevation/", 
+              site_df$site[i], "_srtm_crop.tif")
+  )
+})
+names(elevation_map) <- site_df$site
+
+
+
 # Ecoregions & Biomes
 # Data available from: https://ecoregions.appspot.com/
 # Dinerstein, E. et al. An Ecoregion-Based Approach to Protecting Half the Terrestrial Realm. BioScience 67, 534–545 (2017).
@@ -55,7 +79,7 @@ ecoregions2017_simple <- st_read(paste0(p_derived, "sf/ecoregions2017_simple.shp
 
 
 # ------------------------------------------------------------ # 
-# ------------------- Derived Abandonment datasets ---------------------  
+# ---------------- Derived Abandonment data ------------------  
 # ------------------------------------------------------------ # 
 # Data available from: https://zenodo.org/records/5348287
 
@@ -80,7 +104,7 @@ abn_prop_lc_2017 <- read_csv(file = paste0(
   left_join(site_labels)
 
 # ------------------------------------------------------------ # 
-# -------------------- Raster data --------------------
+# -------------------- Land cover data --------------------
 # ------------------------------------------------------------ # 
 
 # Land use class codes:
@@ -193,7 +217,7 @@ for (i in seq_along(potential_age_t)) {names(potential_age_t[[i]]) <- paste0("y"
 # --- abandonment masks (>5 years) --- #
 # ----------------------- #
 
-# created in script: "AOH.Rmd" code chunk {r create-abn-age-masks}
+# created in script: "habitats.Rmd" code chunk {r create-abn-age-masks}
 
 abn_mask <- lapply(1:11, function(i){
   rast(paste0(p_dat_derived, "age_rasters/", run_label, "/",
@@ -220,7 +244,9 @@ names(max_age_mask) <- site_df$site
 # ----------------------- #
 # --- land cover class of abandoned land --- #
 # ----------------------- #
-# created in script: "AOH.Rmd" chunk {r land-cover-of-abn-pixels} 
+# created in script: "habitats.Rmd" chunk {r land-cover-of-abn-pixels} 
+# These are not strictly required for the lc to iucn interpolation, 
+# but are sometimes useful for reference.
 
 abn_lcc <- lapply(1:11, function(i) {
   rast(paste0(p_derived, "abn_lcc/",
@@ -240,35 +266,15 @@ names(max_abn_lcc) <- site_df$site
 # ------------------------------------------------------------ # 
 # ---------------- Fragmentation data --------------------------- 
 # ------------------------------------------------------------ # 
-# created in script: "habitats.Rmd" ## "Fragmentation" section
+# created in script: "habitats.Rmd" - Section 4. Fragmentation - chunk {r frag-df}
 
-frag_df <- 
-  lapply(site_df$site, function(i) {
-    read_csv(file = paste0(p_derived, "frag/frag_", i, ".csv")) %>%
-      mutate(site = i)
-    }) %>% 
-  bind_rows() %>%
-  mutate(year = case_when(
-    site == "nebraska" ~ layer + 1985,
-    TRUE ~ layer + 1986)
-  ) #%>% filter(year > 1986, year < 2018)
-
-# hypo no abandonment through 2017
-frag_hypo_df <- 
-  lapply(site_df$site, function(i) {
-    read_csv(file = paste0(p_derived, "frag/frag_", i, "_hypo_no_abn_2017.csv")) %>%
-      mutate(site = i)
-  }) %>% 
-  bind_rows() %>%
-  mutate(year = 2017)
-
-
-
-
+frag_df <- read_csv(paste0(p_derived, "frag/frag_df.csv"))
+frag_hypo_df <- read_csv(paste0(p_derived, "frag/frag_hypo_no_abn_2017_df.csv"))
 
 # ------------------------------------------------------------ # 
-# ---------------- Derived Habitat Rasters --------------------------- 
+# -------------- Derived Habitat Rasters --------------------- 
 # ------------------------------------------------------------ # 
+# Data available from:  
 
 # ----------------------- #
 # -------- IUCN habitat types (Jung et al. 2021) 
@@ -277,24 +283,31 @@ frag_hypo_df <-
 # back together. -------- #
 # ----------------------- #
 
-# Created in "habitats.Rmd" chunk {r lcc-iucn-habitat-composite}
-lcc_iucn_habitat <- lapply(1:11, function(i) {
+# The three AOH calculations producing final results in the manuscript rely on 1) crop_abn_iucn ("_crop_to_abn_iucn_observed."), 2) max_abn_iucn ("_max_abn_lcc_iucn_habitat."), and 3) full_iucn ("_lcc_iucn_habitat").
+
+
+# "crop_to_abn_iucn_observed" (aka "crop_abn_iucn") contains IUCN habitats for the abandonment period as well as the immediately preceding period of cultivation (to allow for a proper before and after comparison). These are the final input maps for Calculations 1a and 1b ("crop_to_abn_iucn_observed" and "crop_to_abn_iucn_potential"). These maps were created directly on the Princeton HPC in the script "cluster/noncrop_precrop_mask.R".
+
+# .tif raster files for each of the 11 sites
+crop_to_abn_iucn_observed <- lapply(1:11, function(i) {
   rast(paste0(p_derived, "lcc_iucn_habitat/",
-              site_df$site[i], "_lcc_iucn_habitat.tif"))
+              site_df$site[i], "_crop_to_abn_iucn_observed", run_label, ".tif"))
 })
-names(lcc_iucn_habitat) <- site_df$site
+names(crop_to_abn_iucn_observed) <- site_df$site
 
-
-# IUCN habitat types interpolated to only abandoned pixels
-# Created in "habitats.Rmd" chunk {r mask-lcc-iucn-habitat-to-abn}
-abn_lcc_iucn_habitat <- lapply(1:11, function(i) {
+crop_to_abn_iucn_potential <- lapply(1:11, function(i) {
   rast(paste0(p_derived, "lcc_iucn_habitat/",
-              site_df$site[i], "_abn_lcc_iucn_habitat", run_label, ".tif"))
+              site_df$site[i], "_crop_to_abn_iucn_potential", run_label, ".tif"))
 })
-names(abn_lcc_iucn_habitat) <- site_df$site
+names(crop_to_abn_iucn_potential) <- site_df$site
 
-# IUCN habitat types in the max_abn extent, showing IUCN habitat types for each pixel that was abandoned at any point during the time series.
+
+
+# The "max_abn_lcc_iucn_habitat" includes values for all pixels that are abandoned at any point during the time series, and includes a habitat type for each year of the time series. So, it includes the habitat before and after abandonment.
+
+# IUCN habitat types in the max_abn extent, showing IUCN habitat types throughout the time series for each pixel that was abandoned at any point during the time series.
 # Created in "habitats.Rmd" chunk {r mask-lcc-iucn-habitat-to-abn}
+# For Calculation 2a in manuscript.
 max_abn_lcc_iucn_habitat <- 
   lapply(1:11, function(i) {
     rast(paste0(p_derived, "lcc_iucn_habitat/",
@@ -302,19 +315,9 @@ max_abn_lcc_iucn_habitat <-
   })
 names(max_abn_lcc_iucn_habitat) <- site_df$site
 
-
-# IUCN habitat types interpolated to only *potential* abandoned pixels
-# {r *create-potential-abn-iucn}
-potential_abn_lcc_iucn_habitat <- lapply(1:11, function(i){
-  rast(paste0(p_derived, "lcc_iucn_habitat/",
-              site_df$site[i], "_potential_abn_lcc_iucn_habitat",
-              run_label, ".tif"))
-})
-names(potential_abn_lcc_iucn_habitat) <- site_df$site
-
-
 # IUCN habitat types for the scenario of potential abandonment, for the full max_abn extent, therefore allowing for the before and after comparison of abandonment
 # Created in "habitats.Rmd" chunk {r *potential_max}
+# For Calculation 2b in manuscript.
 max_potential_abn_lcc_iucn_habitat <- lapply(1:11, function(i){
   rast(paste0(p_derived, "lcc_iucn_habitat/",
               site_df$site[i], "_max_potential_abn_lcc_iucn_habitat",
@@ -322,10 +325,49 @@ max_potential_abn_lcc_iucn_habitat <- lapply(1:11, function(i){
 })
 names(max_potential_abn_lcc_iucn_habitat) <- site_df$site
 
-# Developed in "habitats.Rmd" chunk {r *potential-lcc-full},
-# Run directly Princeton's computing cluster Della, see script: "potential_full_iucn.R"
-# lcc_iucn_habitat_potential
-# e.g., /scratch/gpfs/clc6/biodiversity_abn/derived/lcc_iucn_habitat/belarus_lcc_iucn_habitat_potential_2022_02_07.tif
+
+# Created in "habitats.Rmd" chunk {r lcc-iucn-habitat-composite}
+# These are the full site maps of iucn level 2 habitat types, for "Calculation 3" in final manuscript (aka "full_iucn", files ending in "_lcc_iucn_habitat.tif")
+
+lcc_iucn_habitat <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "lcc_iucn_habitat/",
+              site_df$site[i], "_lcc_iucn_habitat.tif"))
+})
+names(lcc_iucn_habitat) <- site_df$site
+
+# "lcc_iucn_habitat_potential" mirrors the above habitat map, but for a scenario without recultivation of abandoned pixels.
+# This is used for Calculation 3b in manuscript.
+# Developed in "habitats.Rmd" chunk {r *potential-lcc-full}, and
+# run directly Princeton's computing cluster Della, see script: "potential_full_iucn.R"
+# Not strictly necessary to load.
+lcc_iucn_habitat_potential <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "lcc_iucn_habitat/",
+              site_df$site[i], "_lcc_iucn_habitat_potential", run_label, ".tif"))
+})
+names(lcc_iucn_habitat_potential) <- site_df$site
+
+
+# IUCN habitat types interpolated to only abandoned pixels
+# Created in "habitats.Rmd" chunk {r mask-lcc-iucn-habitat-to-abn}
+# Not used in manuscript / optional.
+# Note: the pixels in "abn_lcc_iucn_habitat" are NA until they are abandoned... therefore, exclusively consist of non-cropland habitat.
+
+abn_lcc_iucn_habitat <- lapply(1:11, function(i) {
+  rast(paste0(p_derived, "lcc_iucn_habitat/",
+              site_df$site[i], "_abn_lcc_iucn_habitat", run_label, ".tif"))
+})
+names(abn_lcc_iucn_habitat) <- site_df$site
+
+# IUCN habitat types interpolated to only *potential* abandoned pixels
+# {r *create-potential-abn-iucn}
+# Not used in manuscript / optional.
+potential_abn_lcc_iucn_habitat <- lapply(1:11, function(i){
+  rast(paste0(p_derived, "lcc_iucn_habitat/",
+              site_df$site[i], "_potential_abn_lcc_iucn_habitat",
+              run_label, ".tif"))
+})
+names(potential_abn_lcc_iucn_habitat) <- site_df$site
+
 
 
 # ----------------------- #
@@ -376,7 +418,7 @@ names(site_jung_l2_30) <- site_df$site
 site_jung_l2_freq <- read_csv(file = paste0(p_derived, "site_jung_l2_30_freq.csv"))
 
 
-# distribution of habitat types at each site, for adjusting area of habitat estimates
+# Distribution of habitat types at each site, for an early method of adjusting area of habitat estimates by proportion. (Note that we did not use this for our final analysis, we assigned land cover to iucn habitat types directly using a model moving window filter.)
 # created in "habitats.Rmd" chunk {r calc-area-per-habitat-type}
 jung_hab_type_area_df <- read_csv(file = paste0(p_derived, "jung_hab_type_area_df.csv")) %>%
   mutate(code = as.character(code)) %>%
@@ -391,28 +433,6 @@ site_habitats <- jung_hab_type_area_df %>%
 
 
 
-
-
-# ----------------------- #
-# --- pixel area (ha) --- #
-# ----------------------- #
-# See "AOH.Rmd" chunk {r calculate-area-ha}
-site_area_ha <- lapply(1:11, function(i) {
-  rast(paste0(p_derived, "site_area_ha/", site_df$site[i], "_area_ha.tif"))
-  })
-names(site_area_ha) <- site_df$site
-
-
-# ----------------------- #
-# --- pixel elevation (m) --- #
-# ----------------------- #
-# See "AOH.Rmd" chunk {r crop_elevation_map}
-elevation_map <- lapply(1:11, function(i) {
-  rast(paste0(p_derived, "elevation/", 
-              site_df$site[i], "_srtm_crop.tif")
-  )
-})
-names(elevation_map) <- site_df$site
 
 
 # ------------------------------------------------------------ # 
@@ -430,14 +450,11 @@ load(file = paste0(p_derived, "species_ranges/species_ranges.RData"), verbose = 
 
 
 # list of unique species-site combinations at my sites
-species_list <- read_csv(file = paste0(p_derived, "/species_list.csv"))
-final_species_list <- read_csv(file = paste0(p_proj, "zenodo/final_species_list.csv")) # see "AOH.Rmd" chunk {r generate-final-species-list}
-
-# old_species_list <- read_csv(file = paste0(p_derived, "/species_list_2021_12_08.csv"))
+species_list <- read_csv(file = paste0(p_derived, "/species_list.csv")) # see "IUCN.Rmd" chunks {r species_list}; {r parallelize-aoh-for-hpc}; and {r write-filtered-species-list}.
+final_species_list <- read_csv(file = paste0(p_derived, "/final_species_list.csv")) # see "AOH.Rmd" chunk {r generate-final-species-list}
 
 
 # -- assessment data -- #
-
 iucn_crosswalk <- read_csv(paste0(p_derived, "iucn_lc_crosswalk.csv")) %>%
   mutate(code = as.character(code)) %>%
   # fix 5.10 being converted to 5.1 issue:
@@ -461,14 +478,11 @@ common_names <- read_csv(file = paste0(p_derived, "iucn_common_names_subset.csv"
 
 # -- habitat age requirement determinations -- #
 # created by Alex Wiebe and Christopher Crawford
-habitat_age_req <- read_csv(paste0(p_derived, "habitat_age_req/iucn_habitat_age_req.csv"))
+# habitat_age_req <- read_csv(paste0(p_derived, "habitat_age_req/iucn_habitat_age_req.csv")) # old version
 habitat_age_req_coded <- read_csv(paste0(p_derived, "habitat_age_req/", "habitat_age_req_coded.csv"))
-#
-# habitat_age_req_coded %>%
-  # filter(str_detect(mature_forest_obl, "NA") | is.na(mature_forest_obl))
 
-# habitat_age_req_coded %>%
 
+# calculated in QGIS, loaded and prepped in "traits.Rmd" {r range-centroid}
 centroids_df <- read_csv(file = paste0(p_derived, "/sf/centroids_df.csv")) %>% 
   as.data.frame() %>%
   tibble::as_tibble()
@@ -573,47 +587,46 @@ aoh_type_labels_minimal <-
     "crop_abn_iucn" = "Calc. 1a",
     "crop_abn_potential_iucn" = "Calc. 1b")
 
+
 # see "AOH.Rmd" chunk {r load-all-AOH} (and "cluster/aoh.R")
 aoh_l <- read_parquet(paste0(p_derived, "aoh_l.parquet"))
-aoh_species_list <- read_parquet(paste0(p_derived, "aoh_species_list.parquet"))
+# this file contains all of the raw AOH results produced using the cluster script: "aoh.R." This file contains the area of each suitable habitat for each species at each site in each year of our time series (1987-2017), calculated for a range of calculations and scenarios, and including or excluding passage areas for migratory bird species. 
+
+# created in "AOH.Rmd" chunk {r load-all-aoh}
+aoh_species_list <- read_parquet(paste0(p_derived, "aoh_species_list.parquet")) 
 
 # see "AOH.Rmd" chunk {r load-all-AOH}
 aoh_filter <- read_parquet(paste0(p_derived, "aoh_filter.parquet"))
 
 # see "AOH.Rmd" chunk {r calc-aoh}
 aoh <- read_parquet(paste0(p_derived, "aoh.parquet"))
+# This file shows just the overall area of habitat (summed across suitable habitat types) for each species in each year at each site and is the input data for the linear models used to extract linear trends and test for significance, and can be easily calculated from "aoh_l" using the script "AOH.Rmd," in chunks "filter-aoh-suitability-by-season" and "**calculate-aoh".
 
 # added 2022.11.28 after confirming the use of fixest::feols() and the Newey-West estimator to calculate standard errors
-aoh_feols <- read_parquet(paste0(p_derived, "aoh_feols.parquet"))
-aoh_feols_trends <- read_parquet(paste0(p_derived, "aoh_feols_trends.parquet"))
-aoh_feols_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_feols_trends_by_sp.parquet"))
+aoh_feols <- read_parquet(paste0(p_derived, "aoh_feols.parquet")) # see "AOH.Rmd" chunk {r **feols}. This file is used to produce the following two files: aoh_feols_trends and aoh_feols_trends_by_sp
+aoh_feols_trends <- read_parquet(paste0(p_derived, "aoh_feols_trends.parquet")) # see "AOH.Rmd" chunk {r **feols-trends}
+aoh_feols_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_feols_trends_by_sp.parquet")) # see "AOH.Rmd" chunk {r **feols-trends}
+# these two files serve as inputs for aoh_ms_tmp_trends and aoh_ms_tmp_trends_by_sp - see below. 
 
-aoh_lm <- read_parquet(paste0(p_derived, "aoh_lm.parquet"))
-aoh_trends <- read_parquet(paste0(p_derived, "aoh_trends.parquet"))
-aoh_trends_by_sp <- read_parquet(paste0(p_derived, "aoh_trends_by_sp.parquet"))
 
-run_indices <- read_parquet(paste0(p_derived, "aoh_run_indices.parquet"))
+run_indices <- read_parquet(paste0(p_derived, "aoh_run_indices.parquet")) # see "AOH.Rmd" chunk {r **calculate-aoh}. This is used to run linear models to extract AOH trends
 
-# effect sizes (estimated from model trends)
+# effect sizes (estimated from model trends), calculated in "AOH.Rmd" chunk {r estimated-changes-aoh-change-df}
 aoh_change_df <- read_parquet(paste0(p_derived, "aoh_change_df.parquet"))
 
-# observed effect sizes (derived directly from observations from the start and end of the time series)
-aoh_start_end_l <- read_parquet(paste0(p_derived, "aoh_start_end_l.parquet"))
+# observed effect sizes (derived directly from observations from the start and end of the time series), both calculated in "AOH.Rmd" chunk: {r observed-change-in-aoh-by-window-size}
+aoh_start_end_l <- read_parquet(paste0(p_derived, "aoh_start_end_l.parquet")) 
 aoh_start_end_trends_l <- read_parquet(paste0(p_derived, "aoh_start_end_trends_l.parquet"))
 
 
-aoh_p_change_obs_v_pot_ols <- read_csv(paste0(p_derived, "aoh_p_change_obs_v_pot_ols.csv"))
-aoh_p_change_obs_v_pot_summary_ols <- read_csv(paste0(p_derived, "aoh_p_change_obs_v_pot_summary_ols.csv"))
+# created in "figures.Rmd" chunk {r diff-area-2017}
 aoh_p_change_obs_v_pot_feols <- read_csv(paste0(p_derived, "aoh_p_change_obs_v_pot_feols.csv"))
 aoh_p_change_obs_v_pot_summary_feols <- read_csv(paste0(p_derived, "aoh_p_change_obs_v_pot_summary_feols.csv"))
-
-i <- "crop_abn_iucn"
 
 
 # ------------------------------------------------------------ # 
 # ------- Temp AOH files for MS and AOH.Rmd --------------------- 
 # ------------------------------------------------------------ # 
-
 aoh_ms_tmp_trends_incl_mature <- 
   aoh_feols_trends %>%
   mutate(
@@ -638,7 +651,8 @@ aoh_ms_tmp_trends_incl_mature <-
   )
 
 # exclude mature forest obligates
-aoh_ms_tmp_trends <- aoh_ms_tmp_trends_incl_mature %>%
+aoh_ms_tmp_trends <- 
+  aoh_ms_tmp_trends_incl_mature %>%
   filter(mature_forest_obl < 0.5)
 
 
@@ -668,22 +682,18 @@ aoh_ms_tmp_trends_by_sp <- aoh_ms_tmp_trends_by_sp_incl_mature %>%
   filter(mature_forest_obl < 0.5)
 
 # ------------------------------------------------------------ # 
-# ------- Traits: temp files ------- 
-# ------------------------------------------------------------ # 
+# ------- Traits analysis: temp files ------- 
+# ------------------------------------------------------------ #
+# "traits.Rmd" chunks {r load-traits-data} and {r update-etard}
 taxonomy_df <- read_parquet(paste0(p_derived, "taxonomy_df.parquet"))
 etard_updated <- read_parquet(paste0(p_derived, "etard_updated.parquet"))
 
-habitat_occurrence_df2 <- read_parquet(paste0(p_derived, "habitat_occurrence_df.parquet")) #%>%
-  # left_join(habitat_prefs %>% 
-  #             separate(code, into = c("lvl1", "lvl2"), sep = "\\.", extra = "merge") %>%
-  #             select(binomial, lvl1) %>% unique() %>% mutate(lvl1 = as.integer(lvl1)) %>%
-  #             group_by(binomial) %>%
-  #             summarise(n_lvl1_habitats = n(), lvl1_habitats = str_flatten(lvl1, collapse = ", ")) %>% ungroup()
-  # )
+
+habitat_occurrence_df2 <- read_parquet(paste0(p_derived, "habitat_occurrence_df.parquet")) # see "traits.Rmd" chunk {r extract-habitat-preferences}
 
 
 habitat_occurrence_df <-
-  habitat_prefs %>% 
+  habitat_prefs %>%  # see "IUCN.Rmd" chunk {r habitat_prefs}
   filter(suitability == "Suitable") %>%
   separate(code, into = c("lvl1", "lvl2"), sep = "\\.", extra = "merge") %>%
   select(binomial, lvl1) %>% unique() %>% 
@@ -718,7 +728,6 @@ habitat_occurrence_df <-
       group_by(binomial) %>% summarise(n_suitable_habitats_lvl2 = n()) %>% ungroup()
     ) %>%
   left_join(habitat_occurrence_df2 %>% select(binomial, arable_occ, ag_occ, farmland_occ, urban_occ))
-
 
 # ---------------------------------------------- #
 # Categorical trends in AOH (one trend per species)
@@ -774,6 +783,67 @@ aoh_mod_tmp_trends_by_sp %>%
   select(vert_class, binomial, Habitat_breadth_IUCN, n_suitable_habitats_lvl2) %>%
   filter(Habitat_breadth_IUCN != n_suitable_habitats_lvl2)
 
+
+# ---------------------------------------------- #
+# Observed change in AOH based on mean values for 
+# start and end of time series (for various window sizes).
+# This is used for response variables such as:
+# abs_change (change in AOH)
+# abs_change_as_prop_site_area (change in AOH as proportion of site area)
+# abs_change_percent_site (change in AOH as percent of site area)
+# Ratio change in AOH
+# # ---------------------------------------------- #
+
+aoh_obs_change_tmp_all <-
+  aoh_start_end_l %>%
+  filter(str_detect(passage_type, "excl"),
+         vert_class != "amp", 
+         mature_forest_obl < 0.5,
+         window_size == 5 # filter to only five year window size
+  ) %>%
+  left_join(taxonomy_df) %>%
+  left_join(select(etard_updated,
+                   #dataset, etard_id, 
+                   vert_class, binomial, Body_mass_g, Trophic_level, Habitat_breadth_IUCN),
+            by = c("vert_class", "binomial")
+  ) %>%
+  left_join(aoh_mod_tmp_trends_by_sp_all %>% 
+              select(binomial, total_range_area) %>%
+              unique()) %>%
+  left_join(centroids_df) %>%
+  # add habitat specialties
+  left_join(habitat_occurrence_df) %>%
+  mutate(
+    vert_class = as_factor(case_when(vert_class == "bird" ~ "Birds", vert_class == "mam" ~ "Mammals")),
+    max_abn_extent_div_site_area = 
+      area_ever_abn_ha / total_site_area_ha_2017,
+    max_abn_ext_percent_site = 100* max_abn_extent_div_site_area,
+    abs_change_percent_site = abs_change_as_prop_site_area * 100,
+    binary_trend_gain = case_when(trend == "gain" ~ 1, TRUE ~ 0),
+    binary_trend_loss = case_when(trend == "loss" ~ 1, TRUE ~ 0),
+    binary_trend_no_trend = case_when(trend == "no trend" ~ 1, TRUE ~ 0),
+    
+    # create a binary variable with 1 for gain, 0 for loss, and NA for no trend
+    binary_gain_v_loss = case_when(trend == "gain" ~ 1, trend == "loss" ~ 0)
+  ) %>%
+  arrange(aoh_type, vert_class, site, passage_type, run_index)
+
+# subset based on aoh_type
+aoh_obs_change_tmp <- 
+  aoh_obs_change_tmp_all %>%
+  filter(aoh_type == "crop_abn_iucn")
+
+aoh_obs_change_potential_tmp <-
+  aoh_obs_change_tmp_all %>%
+  filter(aoh_type == "crop_abn_potential_iucn")
+
+
+# save model input files for traits analysis:
+# write_csv(aoh_obs_change_tmp_all,
+#           file = paste0(p_proj, "zenodo/", 
+#                         "aoh_obs_change_tmp_all", ".csv"))
+aoh_obs_change_tmp_all
+
 # ---------------------------------------------- #
 # Estimated changes in AOH based on ols regression with NW estimator.
 # For response variables:
@@ -815,6 +885,7 @@ aoh_est_change_tmp_all_incl_mature <-
     ) %>%
   arrange(aoh_type, vert_class, site, passage_type, run_index)
 
+
 aoh_est_change_tmp_all <- aoh_est_change_tmp_all_incl_mature %>%
   filter(mature_forest_obl < 0.5)
 
@@ -827,70 +898,11 @@ aoh_est_change_potential_tmp <-
   aoh_est_change_tmp_all %>%
   filter(aoh_type == "crop_abn_potential_iucn")
 
-
-# ---------------------------------------------- #
-# Observed change in AOH based on mean values for 
-# start and end of time series (for various window sizes).
-# This is used for response variables such as:
-# abs_change (change in AOH)
-# abs_change_as_prop_site_area (change in AOH as proportion of site area)
-# abs_change_percent_site (change in AOH as percent of site area)
-# Ratio change in AOH
-# # ---------------------------------------------- #
-
-aoh_obs_change_tmp_all <-
-  aoh_start_end_l %>%
-  filter(str_detect(passage_type, "excl"),
-         vert_class != "amp", 
-         mature_forest_obl < 0.5,
-         window_size == 5 # filter to only five year window size
-  ) %>%
-  left_join(taxonomy_df) %>%
-  left_join(select(etard_updated,
-                   #dataset, etard_id, 
-                   vert_class, binomial, Body_mass_g, Trophic_level, Habitat_breadth_IUCN),
-            by = c("vert_class", "binomial")
-  ) %>%
-  left_join(aoh_mod_tmp_trends_by_sp_all %>% 
-              select(binomial, total_range_area) %>%
-              unique()) %>%
-  left_join(centroids_df) %>%
-  # add habitat specialities
-  left_join(habitat_occurrence_df) %>%
-  mutate(
-    vert_class = as_factor(case_when(vert_class == "bird" ~ "Birds", vert_class == "mam" ~ "Mammals")),
-    max_abn_extent_div_site_area = 
-      area_ever_abn_ha / total_site_area_ha_2017,
-    max_abn_ext_percent_site = 100* max_abn_extent_div_site_area,
-    abs_change_percent_site = abs_change_as_prop_site_area * 100,
-    binary_trend_gain = case_when(trend == "gain" ~ 1, TRUE ~ 0),
-    binary_trend_loss = case_when(trend == "loss" ~ 1, TRUE ~ 0),
-    binary_trend_no_trend = case_when(trend == "no trend" ~ 1, TRUE ~ 0),
-    
-    # create a binary variable with 1 for gain, 0 for loss, and NA for no trend
-    binary_gain_v_loss = case_when(trend == "gain" ~ 1, trend == "loss" ~ 0)
-    ) %>%
-  arrange(aoh_type, vert_class, site, passage_type, run_index)
-
-# subset based on aoh_type
-aoh_obs_change_tmp <- 
-  aoh_obs_change_tmp_all %>%
-  filter(aoh_type == "crop_abn_iucn")
-
-aoh_obs_change_potential_tmp <-
-  aoh_obs_change_tmp_all %>%
-  filter(aoh_type == "crop_abn_potential_iucn")
-
-p_proj
 # save model input files for traits analysis:
-write_csv(aoh_est_change_tmp_all,
-          file = paste0(p_proj, "zenodo/", 
-                        "aoh_est_change_tmp_all", ".csv"))
-write_csv(aoh_obs_change_tmp_all,
-          file = paste0(p_proj, "zenodo/", 
-                        "aoh_obs_change_tmp_all", ".csv"))
-aoh_obs_change_tmp_all
-
+# write_csv(aoh_est_change_tmp_all,
+#           file = paste0(p_proj, "zenodo/",
+#                         "aoh_est_change_tmp_all", ".csv"))
+# 
 # -------------------------- #
 # model results: see traits.Rmd
 # note, this is a big file, so only load it if you need it!
