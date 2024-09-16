@@ -1,6 +1,9 @@
 # Effects of cropland abandonment on biodiversity
 ## Cropland abandonment benefits most birds and mammals but rarely compensates for habitat loss
 
+Code archive: [![DOI](https://zenodo.org/badge/416459669.svg)](https://zenodo.org/doi/10.5281/zenodo.13766406) | 
+Data archive: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13766321.svg)](https://doi.org/10.5281/zenodo.13766321)
+
 This repository houses analysis scripts and documentation for:
 
 > Crawford CL\*, Wiebe RA, Yin H, Radeloff VC, and Wilcove DS. 2024. Effects of cropland abandonment on biodiversity. *Nature Sustainability*.
