@@ -2458,8 +2458,8 @@ Models were fit using the fixest [@R-fixest] package and R's base statistical fu
 
 ## Data availability {.unnumbered}
 
-The annual land cover maps [@Yin2020] and abandonment maps [@Crawford2022] that were the foundation for our analysis are archived at Zenodo (<https://doi.org/10.5281/zenodo.5348287>). 
-Derived data products supporting this analysis are archived at Zenodo (<https://doi.org/10.5281/zenodo.5348287>).
+The annual land cover maps [@Yin2020] and abandonment maps [@Crawford2022] that were the foundation for our analysis are archived at Zenodo (<https://doi.org/10.5281/zenodo.5348287>).
+Derived data products supporting this analysis are archived at Zenodo (<https://doi.org/10.5281/zenodo.13766321>).
 Bird and mammal range maps are available upon request from BirdLife International (<http://datazone.birdlife.org/species/requestdis>) and IUCN (<https://www.iucnredlist.org/resources/spatial-data-download>), respectively.
 Species assessment data (including habitat and elevation preferences) are freely available from IUCN (<https://www.iucnredlist.org/>).
 The 2015 global map of IUCN habitat types developed by Jung et al. [@Jung2020a] is freely available at <https://zenodo.org/record/4058819>.
@@ -2467,7 +2467,7 @@ Elevation data is freely available <https://developers.google.com/earth-engine/d
 
 ## Code availability {.unnumbered}
 
-Code to replicate these analyses is freely available on GitHub (<https://github.com/chriscra/biodiversity_abandonment>) and is archived at Zenodo (<https://doi.org/10.5281/zenodo.13766408>).
+Code to replicate these analyses is freely available on GitHub (<https://github.com/chriscra/biodiversity_abandonment>) and is archived at Zenodo (<https://doi.org/10.5281/zenodo.13777205>).
 
 # Acknowledgements {.unnumbered}
 
