@@ -1,14 +1,14 @@
 ---
-title: "Cropland abandonment benefits most birds and mammals but rarely compensates for habitat loss"
-author: Christopher L. Crawford,$^a$$^*$, R. Alex Wiebe,$^{b}$ He Yin,$^c$ Volker C. Radeloff,$^d$ and David S. Wilcove$^{a, b}$
+title: "Effects of cropland abandonment on biodiversity"
+author: Christopher L. Crawford,$^1$$^5$, R. Alex Wiebe,$^{2}$ He Yin,$^3$ Volker C. Radeloff,$^4$ and David S. Wilcove$^{1,2}$
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 abstract: |
-  | $^a$Princeton School of Public and International Affairs, Princeton University, Princeton, NJ
-  | $^b$Department of Ecology & Evolutionary Biology, Princeton University, Princeton, NJ
-  | $^c$Department of Geography, Kent State University, Kent, OH
-  | $^d$SILVIS Lab, Department of Forest & Wildlife Ecology, University of Wisconsin - Madison, Madison, WI
+  | $^1$Princeton School of Public and International Affairs, Princeton University, Princeton, NJ
+  | $^2$Department of Ecology & Evolutionary Biology, Princeton University, Princeton, NJ
+  | $^3$Department of Geography, Kent State University, Kent, OH
+  | $^4$SILVIS Lab, Department of Forest & Wildlife Ecology, University of Wisconsin - Madison, Madison, WI
   |
-  | $^*$Corresponding Author, ccrawford@princeton.edu, Robertson Hall, Princeton University, Princeton, NJ
+  | $^5$Corresponding Author, ccrawford@alumni.princeton.edu, Robertson Hall, Princeton University, Princeton, NJ
 output:
   bookdown::html_document2: 
     self_contained: true
@@ -1817,8 +1817,8 @@ While cropland abandonment represents an important conservation opportunity, lim
 Habitat loss through the clearing of land for agriculture is the most widespread threat to terrestrial biodiversity [@Tilman2017] and it continues to degrade many ecosystems [@Potapov2022].
 Yet agricultural land-use change is not unidirectional: amidst continued cropland expansion, vast areas of cropland have been abandoned around the world in recent decades due to socioeconomic, demographic, and technological changes [@ReyBenayas2007; @Li2017; @Potapov2022; @Chazdon2020; @Zheng2023].
 Global estimates vary widely, but recent satellite-based estimates place global cropland abandonment at 79 million ha (Mha) since 2003 [@Potapov2022] and 101 Mha since 1992 [@Zheng2023], with as much as 385-472 Mha of abandonment from 1700 to 2000 when considering historical reconstructions of both cropland and pastures [@Campbell2008].
-Whereas expansion has been largely, but not exclusively, concentrated in the tropics, abandonment has primarily occurred in the Global North [@Potapov2022; @Li2017; @Chazdon2020], resulting in slower net expansion [@Potapov2022; @Isbell2019].
-As agriculture intensifies and rural outmigration, urbanization, and globalization continue, abandonment is likely to accelerate [@Sanderson2018; @Taylor2021], and former croplands could offer low-cost opportunities to restore ecosystems [@Navarro2012], sequester carbon [@Griscom2017; @Yang2020], and recover biodiversity [@Chazdon2020; @Xie2019; @Baumann2020].
+Whereas recent expansion has been largely, but not exclusively, concentrated in the tropics, abandonment has primarily occurred in the Global North [@Potapov2022; @Li2017; @Chazdon2020], resulting in slower net expansion [@Potapov2022; @Isbell2019].
+As agriculture intensifies and rural outmigration, urbanization, and globalization continue, abandonment will likely accelerate [@Sanderson2018; @Taylor2021], and former croplands could offer low-cost opportunities to restore ecosystems [@Navarro2012], sequester carbon [@Griscom2017; @Yang2020], and recover biodiversity [@Chazdon2020; @Xie2019; @Baumann2020].
 
 However, biodiversity is not guaranteed to benefit when cropland is abandoned.
 Spatial and temporal variation in the distribution of abandonment substantially affects biodiversity outcomes because species have unique ranges and habitat requirements.
@@ -1829,14 +1829,14 @@ Together, these factors have fueled a controversy about the extent to which aban
 This controversy is especially strong in Europe and East Asia [@Li2017; @Queiroz2014; @Daskalova2023], where conservation often focuses on "farmland biodiversity," including species that depend on open habitats and low-intensity farmland as a result of centuries of cultivation, disruption of natural disturbance regimes, and cultural preferences [@Batary2015; @Fischer2008; @Fischer2012a].
 In those settings, abandonment is often viewed negatively because it reduces landscape heterogeneity and the amount of open habitats, notwithstanding its potential to benefit other types of species [@Queiroz2014; @Navarro2012; @Daskalova2023].
 In contrast, abandonment is often viewed positively in Central and South America, where it provides an opportunity for forest habitats to recover [@Queiroz2014; @Chazdon2020].
-Given species' unique responses to land-use change [@Sirami2008; @Finch2019; @Sugimoto2022; @VanderZanden2017; @Koshida2018], conservationists must assess the effects of abandonment across diverse landscapes
+Given species' unique responses to land-use change [@Sirami2008; @Finch2019; @Sugimoto2022; @VanderZanden2017; @Koshida2018], conservationists must assess the effects of abandonment across diverse landscapes.
 
 Though many studies have investigated abandonment's effect on local biodiversity [@Bowen2007; @Sirami2008; @Uchida2014; @Plieninger2014; @Regos2016; @Isbell2019], few have investigated how abandonment affects biodiversity at the landscape scale across multiple regions of the world (though see reviews by Rey Benayas et al. [@ReyBenayas2007] and Queiroz et al. [@Queiroz2014]).
 Crucially, prior studies have generally lacked the spatial and temporal resolution required to track abandonment dynamics through time and evaluate trends for individual species [@Daskalova2023].
 Given the highly dynamic nature of abandonment and the importance of regeneration time for ecosystem recovery, these details are critical to understanding abandonment's implications for biodiversity [@Daskalova2023].
 
 Recent efforts to more accurately and precisely map abandonment from satellite imagery now provide annual maps of cropland abandonment with 30-m spatial resolution for many regions across the globe [@Yin2020] (mapping pasture abandonment from satellite imagery remains a technical challenge and is not captured in these data). 
-Here, we combine high-resolution annual land-cover time series covering the years 1987-2017 for 11 sites on four continents [@Yin2020] (Fig. \@ref(fig:global-map-w-wisc)) with range maps and habitat preferences for 1,322 species of birds and mammals to calculate changes in habitat area (range maps refined to Area of Habitat [AOH], hereafter "habitat") [@Brooks2019] resulting from cropland abandonment that occurred between 1988 and 2017 and which satisfied a five-year abandonment definition.
+Here, we combine high-resolution annual land-cover time series covering the years 1987-2017 for 11 sites on four continents [@Yin2020] (Fig. \@ref(fig:global-map-w-wisc)) with range maps and habitat preferences for 1,322 species of birds and mammals to calculate changes in habitat area (range maps refined to Area of Habitat [AOH], hereafter "habitat") [@Brooks2019] resulting from cropland abandonment that occurred between 1988 and 2017 and satisfied a five-year abandonment definition.
 
 We address three questions: 
 (i) How did cropland abandonment affect habitat availability for bird and mammal species, and how did the number of species that gained ("winners") or lost ("losers") habitat differ across sites and for different species traits?
@@ -1850,16 +1850,16 @@ Together, these results illuminate the limited but tangible conservation benefit
 
 # Results {.unnumbered}
 
-## Changes in area of habitat resulting from cropland abandonment {.unnumbered}
+## Changes in area of habitat due to cropland abandonment {.unnumbered}
 
 Overall, we found that most bird (`r aoh_stats_main$n_gain_bird_percent`%) and mammal (`r aoh_stats_main$n_gain_mam_percent`%) species at our sites consistently gained area of habitat (AOH) from abandonment, experiencing statistically significant (p < 0.05) and positive trends in habitat everywhere they occurred (Table \@ref(tab:main-aoh-stats-table), Fig. \@ref(fig:aoh-by-site-crop-abn-prop)).
 In contrast, only `r aoh_stats_main$n_loss_bird_percent`% of birds and `r aoh_stats_main$n_loss_mam_percent`% of mammals lost habitat consistently across sites due to abandonment (Table \@ref(tab:main-aoh-stats-table), Fig. \@ref(fig:aoh-by-site-crop-abn-prop)).
 However, some species exhibited contrasting trends at different sites: `r aoh_stats_main$n_w_gain_bird_percent`% of birds and `r aoh_stats_main$n_w_gain_mam_percent`% of mammals gained habitat at some sites but showed no trend (p > 0.05) at others (i.e., “weak” gains), while `r aoh_stats_main$n_w_loss_bird_percent`% and `r aoh_stats_main$n_w_loss_mam_percent`% respectively lost habitat at some sites with no trend at others (i.e., “weak” losses, Table \@ref(tab:main-aoh-stats-table)).
-Additionally, `r aoh_stats_main$n_opposite_bird_percent`% of birds and `r aoh_stats_main$n_opposite_mam_percent`% of mammals exhibited significant gains at some sites but significant losses at others (i.e., "mixed").
+Additionally, `r aoh_stats_main$n_opposite_bird_percent`% of birds and `r aoh_stats_main$n_opposite_mam_percent`% of mammals exhibited significant gains at some sites but significant losses at others (i.e., "mixed" effects).
 
-The ratio of winners to losers varied among sites, but was always greater than one (Fig. \@ref(fig:aoh-by-site-crop-abn-prop), Table \@ref(tab:aoh-stats-by-site)), except for birds in Iraq (the site with the lowest species richness; Fig. \@ref(fig:richness-by-site)), where `r 100*(1-aoh_stats_main$wl_iraq)`% more species lost than gained habitat (Figs. \@ref(fig:aoh-by-site-crop-abn-prop), \@ref(fig:aoh-by-site-crop-abn)).
-In general, a greater share of mammal species gained habitat than bird species did, both at individual sites (Fig. \@ref(fig:aoh-by-site-stacked)) and overall (Fig. \@ref(fig:aoh-overall-w-pot)) [two-sample proportion test: $X^2$ (df = `r p_test_gain_m_v_b$parameter`, *N* = `r sum(aoh_gain_bird_v_mam_tmp$N)`) = `r round(p_test_gain_m_v_b$statistic, digits = 2)`, *p* `r ifelse(p_test_gain_m_v_b$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_gain_m_v_b$p.value, digits = 2)))`].
-Of the 66 threatened species (see Methods) occurring at our sites (Fig. \@ref(fig:richness-by-site)), `r prettyNum(round(100*p_test_iucn_all$estimate[2], 1), nsmall = 1)`% gained habitat following abandonment (Fig. \@ref(fig:aoh-iucn-by-site-crop-abn)), nearly the same proportion as for non-threatened species [`r prettyNum(round(100*p_test_iucn_all$estimate[1], 1), nsmall = 1)`%; two-sample proportion test: $X^2$ (df = `r p_test_iucn_all$parameter`, *N* = `r aoh_gain_by_iucn_tmp %>% filter(aoh_type == "crop_abn_iucn") %>% .$N %>% sum()`) = `r prettyNum(round(p_test_iucn_all$statistic, digits = 2), nsmall = 2)`, *p* `r ifelse(p_test_iucn_all$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_iucn_all$p.value, digits = 2)))`].
+The ratio of winners to losers varied among sites, but was always greater than one (Fig. \@ref(fig:aoh-by-site-crop-abn-prop), Table \@ref(tab:aoh-stats-by-site)), except for birds in Iraq (the site with the lowest species richness; Fig. \@ref(fig:richness-by-site)), where `r 100*(1-aoh_stats_main$wl_iraq)`% more species lost habitat than gained (Figs. \@ref(fig:aoh-by-site-crop-abn-prop), \@ref(fig:aoh-by-site-crop-abn)).
+In general, a greater share of mammal species gained habitat than bird species, both at individual sites (Figs. \@ref(fig:aoh-by-site-crop-abn-prop), \@ref(fig:aoh-by-site-stacked)) and overall (Fig. \@ref(fig:aoh-overall-w-pot)) [two-sample proportion test: $X^2$ (df = `r p_test_gain_m_v_b$parameter`, *N* = `r sum(aoh_gain_bird_v_mam_tmp$N)`) = `r round(p_test_gain_m_v_b$statistic, digits = 2)`, *p* `r ifelse(p_test_gain_m_v_b$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_gain_m_v_b$p.value, digits = 2)))`].
+Of the 66 threatened species (see Methods) occurring at our sites (Fig. \@ref(fig:richness-by-site)), `r prettyNum(round(100*p_test_iucn_all$estimate[2], 1), nsmall = 1)`% gained habitat following abandonment (Fig. \@ref(fig:aoh-iucn-by-site-crop-abn)), nearly the same proportion as non-threatened species [`r prettyNum(round(100*p_test_iucn_all$estimate[1], 1), nsmall = 1)`%; two-sample proportion test: $X^2$ (df = `r p_test_iucn_all$parameter`, *N* = `r aoh_gain_by_iucn_tmp %>% filter(aoh_type == "crop_abn_iucn") %>% .$N %>% sum()`) = `r prettyNum(round(p_test_iucn_all$statistic, digits = 2), nsmall = 2)`, *p* `r ifelse(p_test_iucn_all$p.value < 0.01,"< 0.01", paste0("= ", round(p_test_iucn_all$p.value, digits = 2)))`].
 Only nine small-ranged species (3 birds and 6 mammals with ranges smaller than their respective Class's global median) occurred at our sites (Fig. \@ref(fig:richness-by-site-small)), of which eight gained habitat (Fig. \@ref(fig:aoh-by-range)).
 
 ```{r effect-size-stats, include = FALSE}
@@ -1963,10 +1963,10 @@ effect_size_stats_tmp <- list(
 )
 ```
 
-Though the vast majority of species’ AOH trends were positive, those with declining trends lost a larger amount of habitat on average (-`r effect_size_stats_tmp$mean_aoh_lost_percent_obs`% of site area) than those with increasing trends gained (+`r effect_size_stats_tmp$mean_aoh_gained_percent_obs`% of site area; Fig. \@ref(fig:aoh-change-percent-by-trend)).
+Most species gained AOH, yet these gains were smaller in magnitude (+`r effect_size_stats_tmp$mean_aoh_gained_percent_obs`% of site area, on average; Fig. \@ref(fig:aoh-change-percent-by-trend)) than the losses experienced by species with negative AOH trends (-`r effect_size_stats_tmp$mean_aoh_lost_percent_obs`% of site area).
 However, the opposite pattern played out for species' habitat changes relative to the beginning of the time series: `r effect_size_stats_tmp$share_doubled_obs`% of winners doubled their habitat (or more), while only `r effect_size_stats_tmp$share_halved_obs`% of losers halved their habitat (or worse; Fig. \@ref(fig:log-ratio-aoh-change-by-site)).
 
-(ref:caption-global-map-w-wisc) Site locations and a representative example of area of habitat (AOH) trends following cropland abandonment at one (Wisconsin, USA) of our 11 study sites from Yin et al. 2020 @Yin2020. (*a*, map adapted from Crawford et al. 2022 [@Crawford2022], projected with the Equal Earth projection [@savric_equal_2019]). *b*, habitat trends (AOH, in $10^6$ ha) following cropland abandonment for all birds (n = 137) and mammals (n = 54) affected by abandonment in our site in Wisconsin (USA). Trends are grouped and colored according to statistical significance (p < 0.05) and the direction of a species' habitat trend over the course of the time series, with statistically significant increases shown in green, significant declines in gold, and no trend (p > 0.05) in black. Bold lines highlight example species in each category: *c*, House Wren (*Troglodytes aedon*; photo by Tyler Beames, [ML469603381](https://macaulaylibrary.org/asset/469603381)); *d*, Eastern Meadowlark (*Sturnella magna*; photo by Brad Imhoff, [ML225564911](https://macaulaylibrary.org/asset/225564911)); *e*, Downy Woodpecker (*Dryobates pubescens*; photo by Ryan Brady, [ML304722431](https://macaulaylibrary.org/asset/304722431)).
+(ref:caption-global-map-w-wisc) Site locations and a representative example of area of habitat (AOH) trends following cropland abandonment at one (Wisconsin, USA) of our 11 study sites from Yin et al. 2020 @Yin2020. (*a*, map adapted from Crawford et al. 2022 [@Crawford2022], projected with the Equal Earth projection [@savric_equal_2019]). *b*, habitat trends (AOH, in $10^6$ ha) following cropland abandonment for all birds (n = 137) and mammals (n = 54) affected by abandonment in our site in Wisconsin (USA). Trends are categorized according to statistical significance (two-sided t-test, p < 0.05) and the direction of a species' habitat trend through time, with statistically significant increases shown in green, significant declines in gold, and no trend (p > 0.05) in black. Bold lines highlight example species in each category: *c*, House Wren (*Troglodytes aedon*; photo by Tyler Beames, [ML469603381](https://macaulaylibrary.org/asset/469603381)); *d*, Eastern Meadowlark (*Sturnella magna*; photo by Brad Imhoff, [ML225564911](https://macaulaylibrary.org/asset/225564911)); *e*, Downy Woodpecker (*Dryobates pubescens*; photo by Ryan Brady, [ML304722431](https://macaulaylibrary.org/asset/304722431)). Photos provided by the Macaulay Library at the Cornell Lab of Ornithology.
 
 ```{r global-map-w-wisc, fig.cap = '(ref:caption-global-map-w-wisc)'}
 knitr::include_graphics(path = paste0(
@@ -2050,14 +2050,14 @@ aoh_table_tmp1 %>%
       "Trends in area of habitat (AOH) for birds and mammals following cropland abandonment for three spatial and temporal scales: ", 
       as_b("1a"), ", habitat changes directly attributable to cropland abandonment (tracking habitat provided by these lands from the year of first cultivation through 2017); ",
       as_b("2a"), ", net habitat change in abandoned croplands across the entire temporal extent (1987-2017), accounting for cropland expansion and habitat loss that occurred during the time series but prior to abandonment; ",
-      as_b("3a"), ", net habitat change across the entire temporal (1987-2017) and spatial extent at each site, accounting for persistent cropland expansion (see visual representation in Fig. 5). For each of these three calculations, we also show AOH trends for a scenario in which no recultivation occurred, labelled ", 
-      as_b("1b, 2b, and 3b"),", respectively. Species that occur at multiple sites are listed as \"gain\" when they show consistent and significant (p < 0.05) gains at each site in which they occur. Species with significant gains at some sites and no significant trend (p > 0.05) at others are listed as \"weak gain.\" \"Loss\" and \"weak loss\" follow the same convention. Species that show significant gains at some sites and significant losses at others are listed as \"mixed.\" See Table S1 for the area of cropland abandoned at each site and Table S3 for individual species-site trends."),
+      as_b("3a"), ", net habitat change across the entire temporal (1987-2017) and spatial extent at each site, accounting for persistent cropland expansion (see visual representation in Fig. 4). For each of these three calculations, we also show AOH trends for a scenario in which no recultivation occurred, labelled ", 
+      as_b("1b, 2b, and 3b"),", respectively. Species that occur at multiple sites are listed as \"gain\" when they show consistent and significant (two-sided t-test, p < 0.05) gains at each site in which they occur. Species with significant gains at some sites and no significant trend (p > 0.05) at others are listed as \"weak gain.\" \"Loss\" and \"weak loss\" follow the same convention. Species that show significant gains at some sites and significant losses at others are listed as \"mixed.\" See Table S1 for the area of cropland abandoned at each site and Table S3 for individual species-site trends."),
     html_escape = TRUE) %>%
   autofit(.)
 
 ```
 
-(ref:caption-aoh-by-site-crop-abn-prop) Species’ responses to cropland abandonment shown as the proportion of bird and mammal species with various trends in area of habitat (AOH). Habitat changes are calculated by tracking habitat provided by abandoned croplands from the year of first cultivation through 2017 (Calculation 1a, see Methods). The number of bird and mammal species at each site is listed in x-axis labels, and the total number of species across all sites is shown at far left ("Overall"). The number of species in each trend at each site are shown in Fig. \@ref(fig:aoh-by-site-crop-abn). Observed and modeled habitat (AOH) trends for individual species are shown in Figs. \@ref(fig:aoh-sp-obs-crop-abn)-\@ref(fig:aoh-trend-lines-crop-abn). Trends are labeled according to the conventions listed in Table 1.
+(ref:caption-aoh-by-site-crop-abn-prop) Species’ responses to cropland abandonment shown as the proportion of bird and mammal species with various trends in area of habitat (AOH). Habitat changes are calculated by tracking habitat provided by abandoned croplands from the year of first cultivation through 2017 (Calculation 1a, see Methods). The number of bird and mammal species at each site is listed in x-axis labels, and the total number of species across all sites is shown at far left ("Overall"). The number of species in each trend at each site are shown in Fig. \@ref(fig:aoh-by-site-crop-abn). Observed and modeled habitat (AOH) trends for individual species are shown in Figs. \@ref(fig:aoh-sp-obs-crop-abn)-\@ref(fig:aoh-trend-lines-crop-abn). Trends are categorized according to statistical significance (two-sided t-test, p < 0.05) and labeled according to the conventions listed in Table 1.
 
 ```{r aoh-by-site-crop-abn-prop, fig.cap = '(ref:caption-aoh-by-site-crop-abn-prop)'}
 # ^[Note: this could be replaced with a stacked proportion figure like Fig. \@ref(fig:aoh-by-site-stacked-crop-abn).]
@@ -2069,15 +2069,6 @@ knitr::include_graphics(path = paste0(
   # # "aoh/aoh_overall_w_site_combo_crop_abn_iucn", # absolute
   # "aoh/aoh_overall_w_site_prop_combo_crop_abn_iucn", # proportional
   # aoh_run_date, "_no_lab_no_border.png"
-  ))
-```
-
-(ref:caption-aoh-change-percent-by-trend) The distribution of changes in area of habitat (AOH) as a percent of site area for species with gains, losses, and no trend in habitat (Calculation 1a, see Methods). Change in AOH was calculated as the difference in mean AOH during the first five years and the last five years of the time series. Note differing y-axis scales. Distributions at each site are shown in Fig. \@ref(fig:aoh-change-percent-by-site).
-
-```{r aoh-change-percent-by-trend, fig.cap = '(ref:caption-aoh-change-percent-by-trend)'}
-knitr::include_graphics(path = paste0(
-  p_output, "figures/figure_3.png"
-  # p_plots, "aoh/effect_size/hist_aoh_change_percent_site_obs_by_trend_5.pdf"
   ))
 ```
 
@@ -2115,10 +2106,10 @@ To explore which ecological factors are associated with species' responses to cr
 We found that species habitat preferences (i.e., which habitats can be occupied by a species and are therefore considered "suitable") had a significant effect on responses to abandonment.
 The ability to occupy grassland, forest, or savanna habitats all increased the odds of a species gaining habitat, with grassland suitability (i.e., the ability to occupy abandoned croplands that return to grassland) having the most substantial effect, increasing the odds of being a winner by a factor of `r filter(trait_mod_coefs, response == "binary", str_detect(term, "grassland")) %>% pull(estimate)`, compared to `r filter(trait_mod_coefs, response == "binary", str_detect(term, "forest")) %>% pull(estimate)` and `r filter(trait_mod_coefs, response == "binary", str_detect(term, "savanna")) %>% pull(estimate)` for forest and savanna suitability, respectively (Table \@ref(tab:traits-mod-table-main)).
 Grassland and savanna suitability were also associated with larger overall increases in habitat: on average, species that can occupy grasslands and savannas gained an additional area of habitat equal to `r filter(trait_mod_coefs, response == "percent", str_detect(term, "grassland")) %>% pull(estimate)`% and `r filter(trait_mod_coefs, response == "percent", str_detect(term, "sav")) %>% pull(estimate)`% of site area, respectively (an increase of `r filter(trait_mod_coefs, response == "percent", str_detect(term, "grassland")) %>% pull(estimate)`% of site area represents an increase in absolute area of `r filter(trait_mod_coefs, response == "percent", str_detect(term, "grassland")) %>% pull(estimate)` percentage points, e.g., from 10% to `r filter(trait_mod_coefs, response == "percent", str_detect(term, "grassland")) %>% pull(estimate) + 10`%).
-Species that occupy grassland and forest habitats saw larger relative increases in habitat over time (by a factor of `r filter(trait_mod_coefs, response == "log_ratio", str_detect(term, "grassland")) %>% pull(estimate)` and `r filter(trait_mod_coefs, response == "log_ratio", str_detect(term, "for")) %>% pull(estimate)`, respectively), but species associated with savannas and shrublands experienced smaller relative changes (reducing AOH by factors of `r filter(trait_mod_coefs, response == "log_ratio", str_detect(term, "sav")) %>% pull(estimate)` and `r filter(trait_mod_coefs, response == "log_ratio", str_detect(term, "shrub")) %>% pull(estimate)`, respectively; Table \@ref(tab:traits-mod-table-main)).
-Wetland, rocky habitat, and urban area suitability were each associated with losing habitat, but arable land suitability was by far the strongest predictor that a species would lose habitat following abandonment, being associated with a `r filter(trait_mod_coefs, response == "binary", str_detect(term, "arable")) %>% pull(estimate)` factor reduction in the odds of gaining habitat, an absolute habitat reduction of `r -1 * (filter(trait_mod_coefs, response == "percent", str_detect(term, "arable")) %>% pull(estimate))`% of site area, and a relative reduction in the habitat by a factor of `r filter(trait_mod_coefs, response == "log_ratio", str_detect(term, "arable")) %>% pull(estimate)`.
+Species that occupy grassland and forest habitats saw larger relative increases in habitat over time (by factors of `r filter(trait_mod_coefs, response == "log_ratio", str_detect(term, "grassland")) %>% pull(estimate)` and `r filter(trait_mod_coefs, response == "log_ratio", str_detect(term, "for")) %>% pull(estimate)`, respectively), but species associated with savannas and shrublands experienced smaller relative changes (reducing AOH by factors of `r filter(trait_mod_coefs, response == "log_ratio", str_detect(term, "sav")) %>% pull(estimate)` and `r filter(trait_mod_coefs, response == "log_ratio", str_detect(term, "shrub")) %>% pull(estimate)`, respectively; Table \@ref(tab:traits-mod-table-main)).
+Wetland, rocky habitat, and urban area suitability were each associated with losing habitat, but arable land suitability was by far the strongest predictor that a species would lose habitat following abandonment, being associated with a `r filter(trait_mod_coefs, response == "binary", str_detect(term, "arable")) %>% pull(estimate)` factor reduction in the odds of gaining habitat, an absolute habitat reduction of `r -1 * (filter(trait_mod_coefs, response == "percent", str_detect(term, "arable")) %>% pull(estimate))`% of site area, and a relative reduction in habitat by a factor of `r filter(trait_mod_coefs, response == "log_ratio", str_detect(term, "arable")) %>% pull(estimate)`.
 
-Species using a greater number of habitats or with larger geographical ranges had larger increases in AOH, with species' habitat increasing by `r filter(trait_mod_coefs, response == "percent", str_detect(term, "n_suitable")) %>% pull(estimate)`% of site area for each additional suitable habitat type and `r filter(trait_mod_coefs, response == "percent", str_detect(term, "range")) %>% pull(estimate)`% of site area for each order of magnitude increase in range size.
+Species using a greater variety of habitats or with larger geographical ranges had larger increases in AOH, with species' habitat increasing by `r filter(trait_mod_coefs, response == "percent", str_detect(term, "n_suitable")) %>% pull(estimate)`% of site area for each additional suitable habitat type and `r filter(trait_mod_coefs, response == "percent", str_detect(term, "range")) %>% pull(estimate)`% of site area for each order of magnitude increase in range size.
 Tropical species benefited more than temperate species: For each additional degree of latitude the center of a species' range is from the equator, AOH declined by `r -1*(filter(trait_mod_coefs, response == "percent", str_detect(term, "latitude")) %>% pull(estimate))`% of site area.
 Range area and latitude were also associated with larger relative habitat gains.
 Preferences for cave or desert habitats, vertebrate class, IUCN threat status, trophic level, and body mass did not have significant associations across any of our models (Table \@ref(tab:traits-mod-table-main)).
@@ -2229,7 +2220,7 @@ bind_rows(trait_tab_tmp[1,],
     ) %>%
   align(i = c(1,2), align = "center", part = "header") %>%
   set_caption(.,
-              caption = "Regression coefficients for three linear models predicting species' responses to cropland abandonment with various traits.") %>%
+              caption = "Regression coefficients for three linear models predicting species' responses to cropland abandonment with various traits. Statistical significance was determined using two-sided t-tests with a threshold of p < 0.05 (shown in bold).") %>%
   autofit(.) %>%
   hline(i = 25, part = "body")
   
@@ -2240,29 +2231,27 @@ bind_rows(trait_tab_tmp[1,],
 
 Many abandoned croplands were recultivated during our study period (38.05% on average across sites @Crawford2022), which affected species’ habitat trends substantially.
 Had no recultivation occurred, the percentage of consistent winners would have been `r obs_v_pot_stats$n_gain_bird_pot_percent`% instead of `r aoh_stats_main$n_gain_bird_percent`% for birds and `r obs_v_pot_stats$n_gain_mam_pot_percent`% instead of `r aoh_stats_main$n_gain_mam_percent`% for mammals (Table \@ref(tab:main-aoh-stats-table), Fig. \@ref(fig:aoh-obs-v-pot-by-site); both statistically significant increases, see SI Section \@ref(si-prop-test-results)).
-However, a lack of recultivation would have also slightly increased the number of losers (from `r aoh_stats_main$n_loss_bird_percent`% to `r obs_v_pot_stats$n_loss_bird_pot_percent`% for birds and `r aoh_stats_main$n_loss_mam_percent`% to `r obs_v_pot_stats$n_loss_mam_pot_percent`% for mammals, Table \@ref(tab:main-aoh-stats-table)).
+However, limiting recultivation would have also slightly increased the number of losers (from `r aoh_stats_main$n_loss_bird_percent`% to `r obs_v_pot_stats$n_loss_bird_pot_percent`% for birds and `r aoh_stats_main$n_loss_mam_percent`% to `r obs_v_pot_stats$n_loss_mam_pot_percent`% for mammals, Table \@ref(tab:main-aoh-stats-table)).
 
 Species in Mato Grosso were most dramatically affected by recultivation, where an additional `r filter(n_aoh_trend_changes_by_site_df, site == "mato_grosso")$gain` species would have gained habitat while only an additional `r filter(n_aoh_trend_changes_by_site_df, site == "mato_grosso")$loss` would have lost habitat had recultivation not occurred.
 Aside from Chongqing (`r filter(n_aoh_trend_changes_by_site_df, site == "chongqing")$gain` additional winners, `r filter(n_aoh_trend_changes_by_site_df, site == "chongqing")$loss` additional losers) and Nebraska/Wyoming (`r filter(n_aoh_trend_changes_by_site_df, site == "nebraska")$gain` additional winners), all other sites experienced fewer than 3 additional winners or losers in our scenario without recultivation (Table \@ref(tab:aoh-changes-obs-v-pot), Fig. \@ref(fig:aoh-obs-v-pot-by-site)).
-Preventing recultivation also would have amplified the magnitude of habitat changes, with winners gaining and losers losing relatively more habitat (Fig. \@ref(fig:aoh-change-percent-by-trend-obs-v-pot)).
-This effect was more intense for losers, which lost `r obs_v_pot_stats$mean_p_loss_same`% more habitat on average, whereas winners only gained `r obs_v_pot_stats$mean_p_gain_same`% more habitat on average.
+Preventing recultivation also would have amplified the magnitude of habitat changes, with winners gaining `r obs_v_pot_stats$mean_p_gain_same`% more habitat and losers losing `r obs_v_pot_stats$mean_p_loss_same`% more habitat on average (Fig. \@ref(fig:aoh-change-percent-by-trend-obs-v-pot)).
 
 ## Abandonment in the context of broader land-cover changes {.unnumbered}
 
 Thus far, we have examined whether abandonment results in more or less habitat relative to actively cultivated cropland (Calculation 1, Table \@ref(tab:main-aoh-stats-table), Fig. \@ref(fig:aoh-sample-trajectories)).
 However, the original land cover at the beginning of our study period is another important consideration when evaluating the magnitude of benefits from abandonment.
-Accordingly, we examine whether the benefits of abandonment could compensate for (i) the initial habitat cleared for the cultivation of croplands that were later abandoned (Calculation 2) or (ii) habitat loss that occurred elsewhere in our study areas due to cropland expansion (Calculation 3).
+Accordingly, we examine whether habitat changes following abandonment compensated for (i) the initial habitat cleared for the cultivation of croplands that were later abandoned (Calculation 2) or (ii) habitat loss that occurred elsewhere in our study areas due to cropland expansion (Calculation 3).
 In other words, did abandonment return habitat levels on abandoned croplands to their pre-cultivation baseline (i.e., relative to the start of the time series, Calculation 2), or compensate for cropland expansion taking place across the entire site (Calculation 3)?
-When considering the net habitat change after incorporating these processes, the ratio of winners to losers became much less favorable (Fig. \@ref(fig:aoh-overall)): about equal numbers of mammal species experienced habitat gains as experienced losses, and more bird species experienced habitat losses than those with gains (Table \@ref(tab:main-aoh-stats-table), Fig. \@ref(fig:aoh-overall-w-pot)).
+When considering the net habitat change after incorporating these processes, the ratio of winners to losers became much less favorable (Fig. \@ref(fig:aoh-overall)): mammal species experienced habitat gains and losses in about equal numbers, and more bird species experienced habitat losses than gains (Table \@ref(tab:main-aoh-stats-table), Fig. \@ref(fig:aoh-overall-w-pot)).
 Both declines in the share of winning species were statistically significant (see SI Section \@ref(si-prop-test-results)).
 
 While the number of "loser" species increased at every site when factoring in the pre-cultivation baseline and cropland expansion alongside abandonment (Fig. \@ref(fig:aoh-by-site-stacked)), these increases were most pronounced in Mato Grosso, Brazil, where less abandonment and much more cropland expansion occurred than at the other sites (Figs. \@ref(fig:aoh-by-site-max-abn), \@ref(fig:aoh-by-site-full)).
 Our sites in Bosnia & Herzegovina; Chongqing, China; and Goiás, Brazil also had unfavorable ratios of winners to losers after accounting for cropland expansion, but the other sites had narrowly favorable ratios (particularly for mammal species; Fig. \@ref(fig:aoh-by-site-full)).
-Similarly, a greater share of threatened species lost habitat when factoring in cropland expansion prior to or alongside abandonment, but not statistically more so than non-threatened species (Fig. \@ref(fig:aoh-by-iucn-lumped)).
-Limiting recultivation would have reduced the number of losing species in both of these broader habitat calculations (Calculations 2 and 3) and would have resulted in a favorable ratio of winners to losers even after factoring in habitat clearing for agriculture prior to abandonment (Calculations 2 and 3; Fig. \@ref(fig:aoh-overall-w-pot)).
-However, limiting recultivation would have had a positive but much smaller effect when considering habitat changes across the entire spatial extent (Calculation 3).
+Similarly, a greater share of threatened species lost habitat when factoring in cropland expansion, but not statistically more so than non-threatened species (Fig. \@ref(fig:aoh-by-iucn-lumped)).
+Limiting recultivation would have reduced the number of losing species in both broader habitat calculations and produced a favorable ratio of winners to losers when factoring in habitat clearing for agriculture prior to abandonment (Calculation 2), but had a much smaller (though positive) effect when considering habitat changes across the entire spatial extent (Calculation 3; Fig. \@ref(fig:aoh-overall-w-pot)).
 
-(ref:caption-aoh-overall) The number of bird and mammal species with various trends in area of habitat (AOH) across our 11 study sites from 1987-2017. Columns correspond to three different habitat calculations: *1a*, habitat changes due to cropland abandonment (from first cultivation through 2017), accounting for recultivation; *1b*, habitat changes from abandonment, but assuming no recultivation occurred; *2a*, net habitat changes in abandoned croplands across the entire temporal extent (1987-2017), accounting for habitat cleared for agriculture prior to abandonment; and *3a*, habitat changes across the entire spatial extent at each site (1987-2017). Results for all habitat (AOH) calculations are shown as raw counts in Fig. \@ref(fig:aoh-overall-w-pot). Site-specific proportions are shown in Fig. \@ref(fig:aoh-by-site-stacked) and raw counts are shown for habitat calculations 1b, 2, and 3 in Figs. \@ref(fig:aoh-by-site-crop-abn-potential)-\@ref(fig:aoh-by-site-full-potential), respectively.
+(ref:caption-aoh-overall) The number of bird and mammal species with various trends in area of habitat (AOH) across our 11 study sites from 1987-2017. Trends are categorized according to statistical significance (two-sided t-test, p < 0.05) and labeled according to the conventions listed in Table 1. Columns correspond to three different habitat calculations: *1a*, habitat changes due to cropland abandonment (from first cultivation through 2017), accounting for recultivation; *1b*, habitat changes from abandonment, but assuming no recultivation occurred; *2a*, net habitat changes in abandoned croplands across the entire temporal extent (1987-2017), accounting for habitat cleared for agriculture prior to abandonment; and *3a*, habitat changes across the entire spatial extent at each site (1987-2017). Results for all habitat (AOH) calculations are shown as raw counts in Fig. \@ref(fig:aoh-overall-w-pot). Site-specific proportions are shown in Fig. \@ref(fig:aoh-by-site-stacked) and raw counts are shown for habitat calculations 1b, 2, and 3 in Figs. \@ref(fig:aoh-by-site-crop-abn-potential)-\@ref(fig:aoh-by-site-full-potential), respectively.
 
 ```{r aoh-overall, fig.cap = '(ref:caption-aoh-overall)'}
 knitr::include_graphics(path = paste0(
@@ -2283,58 +2272,58 @@ While these findings are not by themselves surprising, our analysis of species�
 For example, our models indicate that grassland suitability has a stronger association with gains in AOH following abandonment than forest suitability, even though both are associated with positive trends.
 
 However, the habitat gains we observe from abandonment were not uniform across species and sites.
-Our multi-continental results echo the heterogeneous species responses shown in prior studies [@Koshida2018; @VanderZanden2017; @Daskalova2023; @Sirami2008; @Regos2016; @Queiroz2014], but provide a more generally positive assessment of abandonment: using consistent data and methodologies across our diverse sites, we show that more species benefited from abandonment than suffered from it in 10 of our 11 sites.
-From a conservation perspective, these findings are encouraging, especially given that most threatened and small-ranged species, which are typically of greatest conservation concern, experienced gains in habitat due to cropland abandonment (though not significantly more so than non-threatened or large-ranged species; Figs. \@ref(fig:aoh-iucn-by-site-crop-abn), \@ref(fig:aoh-by-range)), despite conservation related concerns about the loss of agricultural land [@Wright2012].
+Our multi-continental results echo the heterogeneous species responses shown in prior studies [@Koshida2018; @VanderZanden2017; @Daskalova2023; @Sirami2008; @Regos2016; @Queiroz2014], but provide a more generally positive assessment of abandonment: using consistent data and methodologies, we show that more species benefited from abandonment than suffered from it in 10 of our 11 sites.
+From a conservation perspective, these findings are encouraging, especially given that most threatened and small-ranged species, which are typically of greatest conservation concern, experienced gains in habitat following cropland abandonment (though not significantly more so than non-threatened or large-ranged species; Figs. \@ref(fig:aoh-iucn-by-site-crop-abn), \@ref(fig:aoh-by-range)), despite conservation-related concerns about the loss of farmland [@Wright2012].
 
-Our finding of overall positive outcomes of abandonment contrasts with much of the existing literature on biodiversity and abandonment.
+Our finding of overall positive biodiversity outcomes following abandonment contrasts with much of the existing literature.
 One review of existing studies, [@Queiroz2014] most of which focus on Europe, showed that most site-specific studies reported that abandonment had negative effects on biodiversity overall, but outcomes varied substantially by taxon, biodiversity metric, agricultural system, and how biodiversity changes were framed.
 Research perspectives on abandonment also varied by region (with predominantly negative views of abandonment in Europe and East Asia dominating the literature), potentially the result of differences in conservation focus (e.g., which species are considered, and at what scale), or geographic differences in biodiversity responses [@Queiroz2014; @Batary2015; @Fischer2012a].
 
 We also show that benefits from abandonment were dampened by frequent recultivation and rarely compensated for habitat lost to ongoing cropland expansion.
 This suggests that, despite the clear potential for abandonment to generate habitat for many bird and mammal species, any expectation that it will reverse trends for declining species must be tempered because most landscapes are still also experiencing habitat loss and recultivation of previously abandoned agricultural land [@Potapov2022; @Schwartz2020; @Crawford2022; @Daskalova2023].
 
-Our sites represented nine different biomes with different abandonment histories, species communities, species richness, and distributions of habitats (Fig. \@ref(fig:site-biomes), Table \@ref(tab:site-info-table)) [@Yin2020].
+Our sites represented nine different biomes with unique abandonment histories, species communities, species richness, and distributions of habitats (Fig. \@ref(fig:site-biomes), Table \@ref(tab:site-info-table)) [@Yin2020].
 The three tropical sites (Figs. \@ref(fig:global-map-w-wisc)a, \@ref(fig:site-biomes)), showed the largest overall benefits from abandonment with the highest absolute numbers of species gaining area of habitat, led by Mato Grosso and Goiás, Brazil (Table \@ref(tab:aoh-stats-by-site); Fig. \@ref(fig:aoh-by-site-crop-abn)).
 This is likely due to high species richness in the tropics (Fig. \@ref(fig:richness-by-site)) [@Jenkins2013] and relatively higher sensitivity of tropical species to habitat modification (Figs. \@ref(fig:p-arable-suitability)-\@ref(fig:latitude-v-arable-suitability)) [@Newbold2020a].
-We note that Mato Grosso experienced the least cropland abandonment of any site and thus remained dominated by habitat loss (like much of the tropics [@Potapov2022]), which led to relatively small gains in AOH for individual species (one or two orders of magnitude smaller than in other sites, whether measured in absolute area or percent of site extent; Fig. \@ref(fig:aoh-sp-obs-crop-abn)) and the greatest share of species with losing trends when accounting for land-cover changes throughout the site (Fig. \@ref(fig:aoh-by-site-stacked)).
+We note that Mato Grosso experienced the least cropland abandonment and thus remained dominated by habitat loss (like much of the tropics [@Potapov2022]), which led to relatively small gains in AOH for individual species (one or two orders of magnitude smaller than in other sites; Fig. \@ref(fig:aoh-sp-obs-crop-abn)) and the greatest share of species with losing trends when accounting for broader land-cover changes (Fig. \@ref(fig:aoh-by-site-stacked)).
 Though less speciose, sites in temperate grassland biomes (Volgograd, Russia; Orenburg, Russia/Uralsk, Kazakhstan; Nebraska/Wyoming, USA) had among the highest shares of winners overall ($\geq 80$%; Table \@ref(tab:aoh-stats-by-site), Fig. \@ref(fig:aoh-by-site-crop-abn-prop)).
 The fact that even species inhabiting open habitats like grasslands and savannas benefited from abandonment offers a notable contrast with concerns that these species might typically be “losers” in land abandonment scenarios [@Batary2015; @Fischer2012a; @Wright2012].
 Interestingly, Iraq showed the most unfavorable response to abandonment, with the highest proportion of species declining following abandonment of any site (Fig. \@ref(fig:aoh-by-site-crop-abn-prop), Table \@ref(tab:aoh-stats-by-site)).
-This may be due to the relative refuge provided by croplands amidst a harsh desert environment or Iraq's long history of human cultivation [@Balter2007; @Batary2015].
+This may be due to the relative refuge provided by croplands amidst a harsh desert environment or Iraq's long history of cultivation [@Balter2007; @Batary2015].
 
-The negative responses to abandonment observed in some of our sites (e.g., in our Iraqi site, or Europe and Japan, as reported in the literature) may underscore regional patterns that are not adequately captured by our limited number of study sites.
+The negative responses to abandonment observed in some of our sites (e.g., Iraq), or reported in the literature (e.g., in Europe and Japan) may underscore regional patterns that are not adequately captured by our limited number of sites.
 Indeed, we lacked study sites in Western or Central Europe and Japan, where previous studies have shown abandonment-related biodiversity declines [@Koshida2018; @Uchida2014; @VanderZanden2017; @Queiroz2014; @Otero2015].
-This should be explored at a broader range of sites to ensure we have not missed any regional patterns.
+This should be explored at a broader range of sites to ensure that regional patterns are captured.
 Though habitat regeneration following abandonment would appear to benefit most birds and mammals at almost all of our sites, species that stand to lose habitat from this process merit monitoring, and when necessary, should be incorporated into species-specific conservation planning efforts [@Batary2015; @Fischer2012a; @Tscharntke2012a].
 <!-- In these cases, habitat heterogeneity is crucial to better maintain overall regional species diversity. -->
 
 Our study has some additional limitations.
 First, we analyzed remotely-sensed land cover data interpolated to specific habitat types delineated by IUCN [@IUCN2021] and BirdLife International [@BirdLife2021].
 This approach does not provide a wholly reliable proxy for habitat quality, particularly when quality is related to post-abandonment regeneration time (e.g., distinguishing intact old-growth forests from young secondary forests [@Crouzeilles2016]). 
-Abandoned cropland can become suitable habitat for species associated with natural ecosystems, but regeneration may take many decades to achieve conditions whereby species richness or community composition is comparable to those of an intact ecosystem [@Acevedo-Charry2019; @Isbell2019; @Nerlekar2020; @Crouzeilles2017].
-Moreover, each site has a unique distribution of habitat ages, which would affect the amount of habitat available to species with different age requirements (Fig. \@ref(fig:habitat-age-profile)).
-We manually excluded species that require habitats older than 30 years (the length of our study period).
-However, if post-abandonment successional habitats are protected from recultivation, species that require old-growth habitats will benefit eventually from abandonment, while species characteristic of earlier successional stages are likely to decline at those sites and establish in more recently abandoned land.
+Abandoned cropland can become suitable habitat for species associated with natural ecosystems, but regeneration may take many decades to achieve conditions whereby species richness or community composition is comparable to intact ecosystems [@Acevedo-Charry2019; @Isbell2019; @Nerlekar2020; @Crouzeilles2017].
+Moreover, each site has a unique distribution of habitat ages, which would affect habitat availability for species with different age requirements (Fig. \@ref(fig:habitat-age-profile)).
+We excluded species that require habitats older than 30 years (the length of our study period).
+However, if post-abandonment successional habitats are protected from recultivation, species that require old-growth habitats will benefit eventually from abandonment, while species characteristic of earlier successional stages will likely decline at those sites and establish in more recently abandoned land.
 
 Second, post-abandonment habitats will not be uniformly suitable for species, regardless of age.
 Several factors affect the speed and success of natural regeneration [@Chazdon2016; @Crouzeilles2016; @Isbell2019], including land-use intensity and other legacies of cultivation (e.g., invasive plants, residual pesticides, etc.), proximity of source populations of plants and animals, and changes to natural disturbance regimes (e.g., fire) [@Mantero2020].
 Moreover, abandoned croplands that return to grassland or forest may still be subject to human influence, in the form of extensive grazing, selective logging, or silviculture, which affect habitat quality but are difficult to detect in satellite imagery.
-These factors as well as differences in dispersal ability among bird and mammal species will affect which species actually occupy and persist at a given abandoned site.
+These factors and differences in dispersal ability among bird and mammal species will affect which species establish and persist at a given abandoned site.
 Regeneration of grasslands and other open habitats is especially hard to forecast, as such habitats are frequently maintained through grazing or fire.
 When these disturbances are absent, as is common following cropland abandonment, shrub and tree regrowth may dominate over grasses, at the expense of open-habitat species [@ReyBenayas2007; @Nerlekar2020; @VanderZanden2017].
 
 Third, we recognize that our analysis is affected by uncertainties stemming from our underlying spatial data.
-Our analysis is built on species range maps refined to Area of Habitat [@Brooks2019] maps to address errors of commission that commonly affect such maps [@DiMarco2017].
-This approach relies heavily on a map of IUCN Level 2 habitat types [@Jung2020a], which is itself subject to uncertainty (72 ± 15% accuracy), and our maps of cropland abandonment have some inherent uncertainty as well [@Yin2020].
-Our results need to be interpreted with that uncertainty in mind. 
-We expected some errors of commission to be present across all habitat types, and thus also present in our estimates of both habitat loss and habitat gain.
-However, because the main results of our analysis are based on the relative magnitudes of habitat gains and losses of individual species and across different species, some level of systematic but unbiased errors of commission should not affect our broad results. 
-Habitat suitability models or species distribution models provide alternative methods for reducing commission errors, but these require the availability of species occurrence data, which vary substantially in quantity and quality across species and are subject to a range of complex methodological decisions that substantially affect outcomes [@Muscatello2021].
+Our analysis builds on species range maps refined to Area of Habitat [@Brooks2019] maps to address errors of commission that commonly affect such maps [@DiMarco2017].
+This approach relies heavily on a map of IUCN Level 2 habitat types [@Jung2020a], which is itself subject to uncertainty (72 ± 15% accuracy), and our maps of cropland abandonment also have some inherent uncertainty [@Yin2020].
+Our results must be interpreted with that uncertainty in mind. 
+We expect some errors of commission to be present across all habitat types, and thus also present in our estimates of both habitat loss and habitat gain.
+However, because our primary results are based on the relative magnitudes of habitat gains and losses across species, some level of systematic but unbiased errors of commission should not affect our broad conclusions. 
+Habitat suitability models or species distribution models provide alternative methods for reducing commission errors, but these require the availability of species occurrence data, which vary substantially in quantity and quality across species and are subject to many complex methodological decisions that substantially affect outcomes [@Muscatello2021].
 Future studies should consider these and other methods for reducing commission errors alongside a greater quantification of uncertainties.
 
 Fourth, habitat availability alone is an imperfect proxy for species population trends. 
-Species populations can respond non-linearly to habitat availability, particularly when accounting for landscape configuration (e.g. size and isolation of habitat patches).
-We analyzed changes in landscape configuration at our sites over time and found that while abandonment increased grassland and forest area overall, those land cover types became less aggregated over time, while cropland became more aggregated (though these trends were only statistically significant at half of our sites; see SI, Fig. \@ref(fig:frag-heatmap)).
+Species populations can respond non-linearly to habitat availability, particularly when accounting for landscape configuration (e.g., size and isolation of habitat patches).
+We analyzed changes in landscape configuration at our sites over time and found that while abandonment increased grassland and forest area overall, those land cover types became less aggregated over time, while cropland became more aggregated (though these trends were only statistically significant at half of our sites; SI Section 1.5, Fig. \@ref(fig:frag-heatmap)).
 We note, however, that an increase in overall fragmentation arising from new patches of forest or grassland developing in abandoned croplands is biologically distinct from an increase stemming from the active destruction of existing patches of forest and grassland.
 If abandonment results in the regeneration of relatively isolated patches of forest or grassland, the value of those patches for biodiversity may be tempered due to their small size and isolation. 
 More detailed analyses that connect abandonment with population data and account for species-specific impacts of fragmentation can build on our study. 
@@ -2344,15 +2333,15 @@ For example, the abandonment of paddy fields in Japan has been associated with l
 We excluded amphibians and reptiles from our study due to greater uncertainty about their distributions and habitat requirements, but these and other taxa deserve future study.
 
 Finally, we recognize that our 11 sites do not fully capture the entire spectrum of regions experiencing abandonment around the globe.
-They do, however, represent a mix of environmental, climatic, economic, and sociopolitical settings, in which abandonment is driven by a range of major drivers (Table S2 [@Yin2020]). 
+They do, however, represent a mix of environmental, climatic, economic, and sociopolitical settings and a range of major drivers of abandonment (Table S2 [@Yin2020]). 
 Furthermore, although our study sites covered four continents, they were restricted in area, and we therefore could not assess how cropland abandonment affected habitat availability across the full range of any species, which would be required to estimate changes in global extinction risk and population trends.
 Recent abandonment maps with increased geographic coverage (e.g., Xie et al. @Xie2024) make such analyses possible over a broader area and should be a priority for researchers and policymakers.
 
 By connecting high-resolution time-series data on cropland abandonment with species-specific distribution and habitat data, we find that cropland abandonment produced substantial gains in area of habitat for a majority of bird and mammal species over a 30-year period in 11 sites spread over four continents.
-After accounting for the unique responses of individual species, we show that abandonment represents an opportunity to increase habitat availability for most bird and mammal species, including species of conservation concern.
+After accounting for individual species' unique responses, we show that abandonment represents an opportunity to increase habitat availability for most bird and mammal species, including species of conservation concern.
 Yet despite these encouraging results, our analysis of abandonment in the context of broader land-cover changes and cropland expansion reinforces an inconvenient truth in conservation: habitat loss due to agriculture remains a fundamental threat to species around the world.
 Even in regions with substantial amounts of cropland abandonment, potential gains in habitat were limited by recultivation and outweighed by habitat losses from cropland expansion.
-In order to unlock the conservation potential of abandoned croplands, policymakers will need to create incentives and community initiatives that both prevent the recultivation of abandoned croplands and sustain and enhance habitat gains, while stopping further losses of natural and semi-natural ecosystems.
+To unlock the conservation potential of abandoned croplands, policymakers will need to create incentives and community initiatives that both reduce recultivation and sustain and enhance habitat gains, while stopping further losses of natural and semi-natural ecosystems.
 Doing so will be critical to slowing and ultimately reversing biodiversity loss.
 
 # Methods {.unnumbered}
@@ -2371,12 +2360,12 @@ See more details in Table \@ref(tab:site-info-table).
 We excluded three of the 14 sites mapped by Yin et al. [@Yin2020] due to low classification accuracy, following Crawford et al. [@Crawford2022].
 The time series mapped four land-cover classes at high accuracy (average overall accuracy of $85\pm4$% [@Yin2020]): (i) cropland, (ii) herbaceous vegetation (e.g., grassland), (iii) woody vegetation (e.g., forest), and (iv) non-vegetation (e.g., water, barren, or urban land) (Figs. \@ref(fig:lc-1987)-\@ref(fig:lc-2017)).
 Pasture abandonment is much harder to map accurately from satellite imagery because grasslands are diverse (e.g., encompassing pastures, grazed rangelands, abandoned grasslands, and undisturbed natural grasslands) yet their spectral responses might be similar.
-Such abandonment is not captured in our data [@Yin2020; @Crawford2022], so we focus on the abandonment of croplands exclusively.
+Such abandonment is not captured in our data [@Yin2020; @Crawford2022], so we focus exclusively on cropland abandonment.
 Previous work [@Crawford2022] mapped abandoned croplands by identifying periods of non-cropland (i.e., herbaceous or woody vegetation) that followed periods of cultivation and remained non-cropland for five or more consecutive years, following a commonly used five-year abandonment definition designed to exclude short-term fallow cycles [@FAO2016].
 Accordingly, the first year a cropland could be considered “abandoned” was 1988, so long as it remained non-cropland for continuously through at least 1992.
 We used these abandonment maps to identify all pixels that were abandoned at least once during the time series (which we refer to as "abandoned pixels;" Figs. \@ref(fig:abn-lc-1987)-\@ref(fig:abn-lc-2017)).
 
-## Calculating area of habitat from species range maps and habitat preferences {.unnumbered}
+## Calculating area of habitat (AOH) {.unnumbered}
 
 We calculated each species' area of habitat (AOH [@Brooks2019], sometimes referred to as "suitable habitat" or simply "habitat"), defined as the total area of a species' range that falls within suitable habitat types and elevations.
 We sourced range maps for all bird and mammal species from Birdlife International [@BirdLife2021] and the IUCN [@IUCN2021], respectively, and extracted elevation and Level 2 habitat preferences from individual IUCN assessments (e.g., the ability to occupy temperate forests, subtropical/tropical dry grasslands, arable land, etc.; see Table \@ref(tab:iucn-crosswalk-table)).
@@ -2401,7 +2390,7 @@ Because AOH is calculated from habitat, not land cover, we translated the Yin et
 First, we developed a simple crosswalk between the generalized land cover types (e.g., forest) mapped by Yin et al. [@Yin2020] and the specific IUCN Level 2 habitat types (e.g., temperate forest), based on how each habitat type would likely be classified from satellite imagery (see Table \@ref(tab:iucn-crosswalk-table)).
 Because this crosswalk delineates "one to many" relationships (i.e., one land cover class could be multiple IUCN habitat types), we next assigned individual pixels of land cover to the most common corresponding IUCN habitat type within the surrounding pixels in the Jung et al. [@Jung2020a] habitat map (SI Section \@ref(si-habitat-assignment)).
 
-## Calculating area of habitat across multiple temporal and spatial scales {.unnumbered}
+## Calculating AOH across multiple temporal and spatial scales {.unnumbered}
 
 To isolate the direct effect of cropland abandonment on habitat availability (i.e., the change from cropland to abandoned cropland), we first calculated the area of habitat provided by pixels that were abandoned at some point during the time series ("Calculation 1a;" Figs. \@ref(fig:abn-lc-1987)-\@ref(fig:abn-lc-2017)). 
 For this calculation, we excluded any habitat provided by these pixels before each pixel's first year of cultivation during the time series.
@@ -2467,9 +2456,23 @@ Models were fit using the fixest [@R-fixest] package and R's base statistical fu
 
 <!-- RStudio version `r rstudioapi::versionInfo()$version` [@RStudio], using `r R.Version()$version.string` [@R-base] -->
 
+## Data availability {.unnumbered}
+
+The annual land cover maps [@Yin2020] and abandonment maps [@Crawford2022] that were the foundation for our analysis are archived at Zenodo (<https://doi.org/10.5281/zenodo.5348287>). 
+Derived data products supporting this analysis are archived at Zenodo (<https://doi.org/10.5281/zenodo.5348287>).
+Bird and mammal range maps are available upon request from BirdLife International (<http://datazone.birdlife.org/species/requestdis>) and IUCN (<https://www.iucnredlist.org/resources/spatial-data-download>), respectively.
+Species assessment data (including habitat and elevation preferences) are freely available from IUCN (<https://www.iucnredlist.org/>).
+The 2015 global map of IUCN habitat types developed by Jung et al. [@Jung2020a] is freely available at <https://zenodo.org/record/4058819>.
+Elevation data is freely available <https://developers.google.com/earth-engine/datasets/catalog/USGS_SRTMGL1_003>.
+
+## Code availability {.unnumbered}
+
+Code to replicate these analyses is freely available on GitHub (<https://github.com/chriscra/biodiversity_abandonment>) and is archived at Zenodo (<https://doi.org/10.5281/zenodo.13766408>).
+
 # Acknowledgements {.unnumbered}
 
 We thank the following researchers at the University of Wisconsin-Madison, who generously shared the land cover maps that made our analysis possible: A Brandão, J Buchner, D Helmers, BG Iuliano, NE Kimambo, KE Lewińska, E Razenkova, A Rizayeva, N Rogova, SA Spawn-Lee, and Y Xie.
+We thank three anonymous reviewers and editor Yamini Kashimshetty, whose thoughtful suggestions greatly improved our manuscript.
 We thank the Drongos research group for advice and companionship.
 We thank T Bearpark and U Srinivasan for invaluable statistical advice, and D Liang for advice on our traits analysis.
 Our analysis would not be possible without the dedication of the IUCN, BirdLife International, and numerous individual experts who contributed to species assessments.
@@ -2487,14 +2490,6 @@ CLC produced figures, and wrote initial draft, with all authors contributing to 
 
 The authors declare no competing interests.
 
-## Data and code availability {.unnumbered}
-
-The annual land cover maps [@Yin2020] and abandonment maps [@Crawford2022] that were the foundation for our analysis are archived at Zenodo (<https://doi.org/10.5281/zenodo.5348287>). 
-Code to replicate these analyses will be available on GitHub at <https://github.com/chriscra/biodiversity_abandonment> and archived at Zenodo (URL TBD) upon publication.
-Bird and mammal range maps are available upon request from BirdLife International (<http://datazone.birdlife.org/species/requestdis>) and IUCN (<https://www.iucnredlist.org/resources/spatial-data-download>), respectively.
-Species assessment data (including habitat and elevation preferences) are freely available from IUCN (<https://www.iucnredlist.org/>).
-The 2015 global map of IUCN habitat types developed by Jung et al. [@Jung2020a] is freely available at <https://zenodo.org/record/4058819>.
-
 # References {.unnumbered}
 
 ::: {#refs}
@@ -2505,18 +2500,18 @@ The 2015 global map of IUCN habitat types developed by Jung et al. [@Jung2020a] 
 
 <!-- \beginsupplement -->
 
-# Supplementary Information: Cropland abandonment benefits most birds and mammals but rarely compensates for habitat loss
+# Supplementary Information: Effects of cropland abandonment on biodiversity
 
-Authors: Christopher L. Crawford,$^a$$^*$, R. Alex Wiebe,$^{b}$ He Yin,$^c$ Volker C. Radeloff,$^d$ and David S. Wilcove$^{a, b}$
+Authors: Christopher L. Crawford,$^1$$^5$, R. Alex Wiebe,$^{2}$ He Yin,$^3$ Volker C. Radeloff,$^4$ and David S. Wilcove$^{1,2}$
 
 `r format(Sys.time(), '%B %d, %Y')`
 
-$^a$Princeton School of Public and International Affairs, Princeton University, Princeton, NJ  
-$^b$Department of Ecology & Evolutionary Biology, Princeton University, Princeton, NJ  
-$^c$Department of Geography, Kent State University, Kent, OH  
-$^d$SILVIS Lab, Department of Forest & Wildlife Ecology, University of Wisconsin - Madison, Madison, WI  
+$^1$Princeton School of Public and International Affairs, Princeton University, Princeton, NJ  
+$^2$Department of Ecology & Evolutionary Biology, Princeton University, Princeton, NJ  
+$^3$Department of Geography, Kent State University, Kent, OH  
+$^4$SILVIS Lab, Department of Forest & Wildlife Ecology, University of Wisconsin - Madison, Madison, WI  
 
-$^*$Corresponding Author, ccrawford@princeton.edu, Robertson Hall, Princeton University, Princeton, NJ  
+$^5$Corresponding Author, ccrawford@alumni.princeton.edu, Robertson Hall, Princeton University, Princeton, NJ  
 
 
 \tableofcontents
@@ -2637,7 +2632,7 @@ While it is possible that this represents a true relationship, indicating that m
 
 ## Landscape configuration and habitat fragmentation
 
-We calculated three common metrics of landscape configuration to assess whether cropland abandonment led to more, larger, and less fragmented habitats: 1) Did land cover patches become more aggregated in the landscape? 2) Did land cover patches get larger over time? 3) Were land cover patches subject to less fragmentation over time?
+We calculated three common metrics of landscape configuration to answer the following questions: 1) Did land cover patches become more aggregated in the landscape? 2) Did land cover patches get larger over time? 3) Were land cover patches subject to less fragmentation over time?
 To answer our first question, we calculated the “clumpiness index,” a measure of the spatial aggregation of habitat that is highly correlated with spatial aggregation but only weakly correlated with the area of a given class [@Wang2014] (Fig. \@ref(fig:frag-clumpy)). 
 To answer our second and third questions, we calculated mean patch area and mean perimeter-area ratio, respectively [@Wang2014] (Figs. \@ref(fig:frag-patch-area) & \@ref(fig:frag-perimeter-area-ratio).
 Metrics were calculated for each land cover class at each site for each year of our time series, and trends were extracted via linear regression (based on a 95% confidence interval; p < 0.05) using the Newey-West estimator to account for temporal autocorrelation [@Newey1987].
@@ -3083,14 +3078,10 @@ bind_rows(trait_tab_tmp_s8[1,],
     ) %>%
   align(i = c(1,2), align = "center", part = "header") %>%
   set_caption(.,
-              caption = "Trait model coefficients for binary trend response variables. Model descriptions correspond to the how trends were coded (i.e., Gain / Loss corresponding to 1 / 0).") %>%
+              caption = "Trait model coefficients for binary trend response variables. Model descriptions correspond to the how trends were coded (i.e., Gain / Loss corresponding to 1 / 0). Statistical significance was determined using two-sided t-tests with a threshold of p < 0.05 (shown in bold).") %>%
   autofit(.) %>%
   hline(i = 25, part = "body")
-  
-
-
 ```
-
 
 ```{r traits-mod-table-magnitude, echo = FALSE, message = FALSE, eval = FALSE}
 # No longer included.
@@ -3117,7 +3108,6 @@ trait_mod_df %>%
               html_escape = TRUE) %>%
   autofit(.)
 ```
-
 
 ```{r traits-mod-table-slope, echo = FALSE, message = FALSE, eval = TRUE}
 
@@ -3239,11 +3229,9 @@ bind_rows(trait_tab_tmp_s9[1,],
     ) %>%
   align(i = c(1,2), align = "center", part = "header") %>%
   set_caption(.,
-              caption = "Trait model coefficients for binary trend response variables. Model descriptions correspond to the how trends were coded (i.e., Gain / Loss corresponding to 1 / 0).") %>%
+              caption = "Trait model coefficients for slope response variables. Statistical significance was determined using two-sided t-tests with a threshold of p < 0.05 (shown in bold).") %>%
   autofit(.) %>%
   hline(i = 25, part = "body")
-  
-
 ```
 
 ```{r traits-mod3-table, eval = TRUE, echo = FALSE, message = FALSE}
@@ -3344,7 +3332,7 @@ bind_rows(trait_tab_mod3_tmp[1,],
     ) %>%
   align(i = c(1,2), align = "center", part = "header") %>%
   set_caption(.,
-              caption = "Trait model coefficients for primary response variables, for a model specification excluding arable and urban land suitability as predictor variables.") %>%
+              caption = "Trait model coefficients for primary response variables, for a model specification excluding arable and urban land suitability as predictor variables. Statistical significance was determined using two-sided t-tests with a threshold of p < 0.05 (shown in bold).") %>%
   autofit(.) %>%
   hline(i = 23, part = "body")
   
@@ -3430,7 +3418,7 @@ knitr::include_graphics(path = paste0(p_plots, "aoh/aoh_sp_obs_by_site_crop_abn_
                                       aoh_run_date,".pdf"))
 ```
 
-(ref:caption-aoh-trend-lines-crop-abn) AOH trends for all bird and mammals species occurring at each site, derived from linear regressions of AOH (Fig. \@ref(fig:aoh-sp-obs-crop-abn)) as a function of time. AOH is calculated for only pixels that were abandoned at least once, from the year of first cultivation through 2017 (Calculation 1a).
+(ref:caption-aoh-trend-lines-crop-abn) AOH trends for all bird and mammals species occurring at each site, derived from linear regressions of AOH (Fig. \@ref(fig:aoh-sp-obs-crop-abn)) as a function of time. AOH is calculated for only pixels that were abandoned at least once, from the year of first cultivation through 2017 (Calculation 1a). Bold, dashed trend lines represent the simple linear trend in AOH across all species within each trend group (Gain, Loss, or No Trend), and shaded regions represent the 95% confidence interval around the trends.
 
 ```{r aoh-trend-lines-crop-abn, fig.cap = '(ref:caption-aoh-trend-lines-crop-abn)'}
 knitr::include_graphics(path = paste0(p_plots, "aoh/trend_lines_by_site_crop_abn_iucn",
@@ -3705,6 +3693,14 @@ knitr::include_graphics(path = paste0(p_plots, "aoh/dw_stat_crop_abn_iucn",
 knitr::include_graphics(path = paste0(p_plots, "habitat_age_profile_2017.pdf"))
 ```
 
+(ref:caption-aoh-change-percent-by-trend) The distribution of changes in area of habitat (AOH) as a percent of site area for species with gains, losses, and no trend in habitat (Calculation 1a, see Methods). Change in AOH was calculated as the difference in mean AOH during the first five years and the last five years of the time series. Note differing y-axis scales. Distributions at each site are shown in Fig. \@ref(fig:aoh-change-percent-by-site).
+
+```{r aoh-change-percent-by-trend, fig.cap = '(ref:caption-aoh-change-percent-by-trend)'}
+knitr::include_graphics(path = paste0(
+  p_output, "figures/figure_3.png"
+  # p_plots, "aoh/effect_size/hist_aoh_change_percent_site_obs_by_trend_5.pdf"
+  ))
+```
 
 (ref:caption-aoh-change-percent-by-trend-obs-v-pot) The distribution of changes in area of habitat (AOH) as a percent of total area, shown for observed abandonment and a scenario of abandonment assuming no recultivation took place. Changes in AOH are calculated using the mean AOH during the first and last 5 years of the time series.
 
@@ -3757,7 +3753,7 @@ knitr::include_graphics(path = paste0(p_plots, "aoh/traits/prop_sp_w_habitat_sui
 knitr::include_graphics(path = paste0(p_plots, "aoh/traits/prop_sp_w_arable_suitability.pdf"))
 ```
 
-(ref:caption-latitude-v-arable-suitability) Distribution of range centroid latitude shown according to whether arable land is listed as suitable habitat by the IUCN. Boxplot notches represent a 95% confidence interval around the median, calculated as the median ± 1.58 * Interquartile Range / sqrt(n). Notches that do not overlap provide strong evidence that medians differ.
+(ref:caption-latitude-v-arable-suitability) Distribution of range centroid latitude shown according to whether arable land is listed as suitable habitat by the IUCN. The box center line represents the median. The left and right box boundaries (hinges) correspond to the first and third quartiles (25th and 75th percentiles), respectively. Boxplot notches represent a 95% confidence interval around the median, calculated as the median ± 1.58 * IQR / sqrt(n) [where IQR is the inter-quartile range, or distance between the first and third quartiles]. Notches that do not overlap provide strong evidence that medians differ. The right whisker extends from the third quartile to the largest value no further than 1.5 * IQR from the third quartile. The left whisker extends from the first quartile to the smallest value at most 1.5 * IQR from the first quartile.
 
 ```{r latitude-v-arable-suitability, fig.cap = '(ref:caption-latitude-v-arable-suitability)'}
 knitr::include_graphics(path = paste0(p_plots, "aoh/traits/", 
@@ -3765,7 +3761,7 @@ knitr::include_graphics(path = paste0(p_plots, "aoh/traits/",
 ```
 
 
-(ref:caption-p-gain-by-n-suitable) Proportion of bird and mammal species with significant gains in AOH following cropland abandonment from 1987-2017, shown according to the number of IUCN Level 2 habitats listed as suitable by IUCN. This measure follows the "habitat breadth" measure developed by @Etard2020. Number of species in each group are shown above each bar.
+(ref:caption-p-gain-by-n-suitable) Proportion of bird and mammal species with significant gains in AOH following cropland abandonment from 1987-2017, shown according to the number of IUCN Level 2 habitats listed as suitable by IUCN. This measure follows the "habitat breadth" measure developed by @Etard2020. Number of species in each group are shown above each bar. Blue trend lines represent simple linear regression trends. Gray shaded regions represent the 95% confidence intervals around the trends.
 
 ```{r p-gain-by-n-suitable, fig.cap = '(ref:caption-p-gain-by-n-suitable)'}
 knitr::include_graphics(path = paste0(p_plots, "aoh/traits/", 
